@@ -5,6 +5,7 @@ mod db_toasty;
 mod error;
 mod extract;
 mod logger;
+mod mail;
 mod models;
 mod repo;
 mod response;
@@ -88,6 +89,11 @@ async fn main() {
         .route("/api/auth/2fa/confirm", post(routes::totp::confirm_activation))
         .route("/api/auth/2fa/verify", post(routes::totp::verify_totp))
         .route("/api/auth/2fa/disable", post(routes::totp::disable_totp))
+        .route("/api/auth/sessions", get(routes::sessions_reset::get_sessions))
+        .route("/api/auth/sessions/{sessionId}", delete(routes::sessions_reset::delete_session))
+        .route("/api/auth/logout/all", post(routes::sessions_reset::logout_all_devices))
+        .route("/api/auth/request-reset", post(routes::sessions_reset::request_reset))
+        .route("/api/auth/reset-password", post(routes::sessions_reset::reset_password))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/user/{userId}", get(routes::nodes::get_user_nodes))
         .route("/api/nodes/shared/{userId}", get(routes::nodes::get_shared_nodes))

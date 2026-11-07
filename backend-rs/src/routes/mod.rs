@@ -3,6 +3,7 @@ pub mod health;
 pub mod nodes;
 pub mod permissions;
 pub mod resources;
+pub mod sessions_reset;
 pub mod totp;
 pub mod users;
 pub mod users_patch;
