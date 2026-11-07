@@ -30,7 +30,7 @@
 
 | # | 项 | 跟踪 |
 |---|---|---|
-| B1 | Rust 重写 + pg(Toasty + sqlx 逃逸)。**P0 完成(2026-11-08)**:Snowflake=字符串序列化、bcrypt(10,兼容 Rust 校验零迁移)、集成测试补齐(编译/vet 过,运行时待人工) | issue #1;`rust-migration/RESEARCH.md` §8 |
+| B1 | Rust 重写 + pg(Toasty + sqlx 逃逸)。**P0 ✅(2026-11-08)**;**P1 ✅(2026-11-08,commits c9fae7c0/4993e160)**:backend-rs 骨架(axum+config+snowflake+0001 pg schema+health)、Toasty spike **PASS**(编译门 + 共存审查;运行时验证移 P2 首查点) | issue #1;`rust-migration/RESEARCH.md` §8 |
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
 | B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
 | B4 | Dataview 查询引擎(随 B1) | issue #5;spec `features/dataview.md` |
@@ -40,9 +40,10 @@
 
 ## 3. 续接点
 
-- **批次 B 已开工,P0 完成(2026-11-08)**:核实结论入 RESEARCH.md §8;测试已写未跑(本机无 mysql/minio,待人工 `go test ./tests/...`)。
-- **下一步 = 批次 B 的 P1**(axum 骨架 + 配置 + DB 连接 + pg init migration + Toasty spike + snowflake + logger),**待用户放行 P1**;批次 A 仍待开工令。
-- 用户侧待办:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`);有 docker 的机器跑自托管 smoke + 集成测试。
+- **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
+- **下一步(按序)**:① P2.5 请求上下文(ClientIP/UA 进 login)+ ADMIN_ACCOUNTS 启动期角色提升;② PATCH /users/@me 与 /users/:id(密码修改分支);③ TOTP 域(/auth/totp + pre_auth 消费 + backup codes,totp-rs);④ P3 内容域(nodes CRUD + 树 + FTS)。
+- **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
+- 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
 
 ## 4. 机制配置指针
 

@@ -118,7 +118,7 @@
 - [x] **密码哈希 = bcrypt DefaultCost(10)**(user.service/auth.service;**backup codes 亦 bcrypt**)。→ Rust `bcrypt` crate 可直接校验 `$2a$/$2b$` 哈希,**现有用户零迁移**;Rust 侧新哈希维持 cost 10。
 - [x] **集成测试补齐**:`tests/nodes_test.go`(doc 生命周期+search+未授权 401)、`tests/permissions_test.go`(读→写升级/撤销/邀请 join/非法输入)、`resources_test.go`(multipart 上传/更新/头像/删除);helpers 增 `NewClient/DoPut/DoPostMultipart/SignupAndLogin(唯一用户名,可重跑)/ResultIDString`。**编译过(`go test -c`)+ vet 过;运行时验证待人工**(需 mysql + minio + 活后端,本机均无)。
 - [x] 用户 go/no-go 确认(2026-11-07 go,ORM = Toasty;回填 issue #1)
-- [ ] P1 内 Toasty spike:sqlx migrate 手管 schema + Toasty 模型映射 + raw SQL 逃逸链路;不通过则 P1 末决策回退 sqlx 为主
+- [x] **P1 Toasty spike:PASS(2026-11-08,commit 4993e160)**——`#[derive(Model)]` + `#[table]/#[column]` 映射手管 schema;`#[key]` 无 `#[auto]` = 应用侧 Snowflake(i64 边界);`#[unique]` 生成 filter_by_/upsert_by_;`Builder::build()` 源码审查 = 零 DDL(仅能力校验 + 试连接),`push_schema` 不调用即共存;依赖摩擦一处已解(js-sys --precise 0.3.85);CRUD 生成面编译门过。**回退 sqlx 为主未触发**。运行时正确性(生成 SQL vs 既有表)= P2 首个活 pg 检查点
 
 ## 附:生态参考
 
