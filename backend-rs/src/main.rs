@@ -1,16 +1,18 @@
+mod auth;
 mod config;
 mod db;
 mod db_toasty;
 mod error;
 mod logger;
 mod models;
+mod response;
 mod routes;
 mod state;
 mod types;
 
 use std::net::SocketAddr;
 
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::Router;
 
 pub use state::AppState;
@@ -46,10 +48,17 @@ async fn main() {
         }
     };
 
-    let state = AppState { db: pool, toasty: toasty_db };
+    let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
+    let state = AppState { db: pool, toasty: toasty_db, snowflake };
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
+        .route("/api/auth", post(routes::auth::login))
+        .route("/api/auth/refresh", get(routes::auth::refresh))
+        .route("/api/auth/logout", post(routes::auth::logout))
+        .route("/api/users", post(routes::users::create_user))
+        .route("/api/users/@me", get(routes::users::get_me))
+        .route("/api/users/{id}", get(routes::users::get_user))
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
