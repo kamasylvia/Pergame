@@ -13,3 +13,5 @@ main.exe
 test.vue
 
 .idea
+# ZCode session data (not repo content)
+.zcode/

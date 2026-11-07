@@ -1,0 +1,40 @@
+# GOAL-STATE — alexandrie-infra(自托管基建改造)
+
+## 1. 任务总览
+
+- 目标:fork 侧自托管基建现代化——对象存储环境变量中立化(`S3_*`)、数据库 MySQL → PostgreSQL(随 Rust 后端重写落地)。
+- 流程链:issue 登记 → 小步实施(每主题一 commit)→ 调研裁决 → Rust 重写(后续批次)。
+
+## 2. 队列与状态
+
+| # | 项 | 状态 | 产物/跟踪 |
+|---|---|---|---|
+| 1 | workspace 基建(AGENTS.md + .work/) | done(本批) | commit |
+| 2 | issue ×2(pg / S3 重命名) | done(本批) | origin issue |
+| 3 | `MINIO_*` → `S3_*` 重命名 | done(2026-11-07,smoke 待人工) | commit;验证见 TODO |
+| 4 | Rust 技术栈调研 | done(2026-11-07,结论 go) | `.work/rust-migration/RESEARCH.md` |
+| 5 | Rust 后端重写 + pg | pending(阻塞:调研裁决 + 用户 go/no-go) | issue A |
+
+## 3. 续接点
+
+- 本批收尾后下一步:**用户读调研报告 → 裁决 Rust 重写 go/no-go** → go 则开新批次(阶段拆分见报告 §工作量)。
+- 部署侧待用户手动:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`)。
+
+## 4. 机制配置指针
+
+- 编排/裁决:全局 `~/.zcode/AGENTS.md` §10-12;本任务暂未接入 `/matrix --review`。
+- 项目约定:根 `AGENTS.md`。
+
+## 5. Automation 登记
+
+- 无(本批为会话内同步实施,无定时任务)。
+
+## 6. 环境备忘
+
+- origin = `git@github.com:kamasylvia/Alexandrie.git`(公开 fork);upstream = Smaug6739。
+- compose backend = 本地构建(`build: ./backend`);上游预构建镜像不认 `S3_*`/pg。
+- 本地开发对象存储:`make minio`(minio 二进制,9000/9001);compose 默认 rustfs。
+
+## 7. 教训索引
+
+- → `.work/LESSONS.md`
