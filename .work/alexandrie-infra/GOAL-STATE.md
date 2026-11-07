@@ -1,48 +1,61 @@
-# GOAL-STATE — alexandrie-infra(自托管基建改造)
+# GOAL-STATE — alexandrie-infra(fork 现代化改造)
 
 ## 1. 任务总览
 
-- 目标:fork 侧自托管基建现代化——对象存储环境变量中立化(`S3_*`)、数据库 MySQL → PostgreSQL(随 Rust 后端重写落地)。
-- 流程链:issue 登记 → 小步实施(每主题一 commit)→ 调研裁决 → Rust 重写(后续批次)。
+- 目标:fork 侧现代化——S3 中立命名(已完成)、MySQL → PostgreSQL(Rust 重写承载)、markdown/插件/MCP 功能域建设。
+- 结构:**双批次**。批次 A = 前端(纯前端,独立开工);批次 B = 重写 + 功能域(等用户开工令)。
 
 ## 2. 队列与状态
 
-| # | 项 | 状态 | 产物/跟踪 |
-|---|---|---|---|
-| 1 | workspace 基建(AGENTS.md + .work/) | done(本批) | commit |
-| 2 | issue ×2(pg / S3 重命名) | done(本批) | origin issue |
-| 3 | `MINIO_*` → `S3_*` 重命名 | done(2026-11-07,smoke 待人工) | commit;验证见 TODO |
-| 4 | Rust 技术栈调研 | done(2026-11-07,结论 go) | `.work/rust-migration/RESEARCH.md` |
-| 5 | Rust 后端重写 + pg | pending(go 已裁决 2026-11-07;db 层 = Toasty + sqlx 逃逸;P0 前置待办) | issue #1 |
-| 6 | MCP server(读写全量,内置 HTTP) | pending(随 #5 实施) | issue #3;spec `.work/features/mcp-server.md` |
-| 7 | 目录索引文件(dataview) | pending(随 #5 实施;index 块 = #8 预设) | issue #4;spec `.work/features/directory-index.md` |
-| 8 | Dataview 查询引擎(DQL 子集) | pending(随 #5 实施) | issue #5;spec `.work/features/dataview.md` |
-| 9 | ob 插件兼容性盘点 | done(2026-11-07;决策门待用户) | `.work/obsidian-compat/RESEARCH.md` |
-| 10 | M0 语法/数据兼容(wikilinks/callout/properties/导入导出) | pending(阻塞:用户裁决并入重写否) | 盘点报告 §6 |
-| 11 | 自建插件系统 | pending(**已批准** 2026-11-07,issue #8;PS-A..E 排重写主体后) | `.work/plugin-system/DESIGN.md`(§9 已定案) |
-| 12 | 媒体播放器内置化(video-md) | pending(排进大批次,随重写) | issue #6;spec `features/markdown-parity.md` §2 |
-| 13 | Joplin md 特性集对齐 | pending(排进大批次,随重写) | issue #7;spec 同上 §3 |
-| 14 | M0 ob 语法兼容 | pending(orchestrator 建议做,待用户拍板) | 兼容盘点报告 §6;TODO 条目 |
+**已完成(2026-11-07 会话,详见 commit 历史)**
+
+| # | 项 | 产物 |
+|---|---|---|
+| 1 | workspace 基建(AGENTS.md + .work/) | commit `2fc8f27e` |
+| 2 | issue 登记(#1-#8) | origin |
+| 3 | `MINIO_*` → `S3_*` 重命名全链 | commit `4fdd3279`(smoke 待人工) |
+| 4 | Rust 技术栈调研(结论 go,Toasty) | `rust-migration/RESEARCH.md` |
+| 5 | ob 插件兼容性盘点(结论:不做生态复用) | `obsidian-compat/RESEARCH.md` |
+| 6 | 插件系统设计提案(**已批准**) | `plugin-system/DESIGN.md` §9 已定案;issue #8 |
+
+**批次 A — 前端批次(待开工令,共 ≈ 8-11 天)**
+
+| # | 项 | 跟踪 |
+|---|---|---|
+| A1 | 媒体播放器内置化(video-md) | issue #6;spec `features/markdown-parity.md` §2 |
+| A2 | Joplin md 特性集对齐 | issue #7;spec 同上 §3 |
+| A3 | M0 ob 语法兼容(全量四件,已采纳;properties schema 与 #5 同批设计) | 兼容盘点报告 §6 |
+
+**批次 B — 重写批次(等用户开工令,共 ≈ 5-7 周)**
+
+| # | 项 | 跟踪 |
+|---|---|---|
+| B1 | Rust 重写 + pg(Toasty + sqlx 逃逸;P0 前置:Snowflake 序列化/密码哈希/集成测试补齐) | issue #1;`rust-migration/RESEARCH.md` §6/§8 |
+| B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
+| B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
+| B4 | Dataview 查询引擎(随 B1) | issue #5;spec `features/dataview.md` |
+| B5 | 插件系统 PS-A..E(排 B1 主体后,与 B2-B4 合流;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` |
 
 ## 3. 续接点
 
-- go 已裁决(2026-11-07,ORM = Toasty)。下一步:**新批次开工 Rust 重写**,从 P0 前置开始(核实 Snowflake 序列化、密码哈希算法、补集成测试),P1 做 Toasty spike(不过则回退 sqlx 为主);阶段拆分见报告 §6。
-- 部署侧待用户手动:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`)。
+- **等待两个开工令**:批次 A(可立即开工,三件按 A1→A2→A3 顺序)与批次 B(先跑 B1 P0 前置,再进 P1 Toasty spike)。
+- 用户侧待办:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`);有 docker 的机器跑自托管 smoke。
 
 ## 4. 机制配置指针
 
 - 编排/裁决:全局 `~/.zcode/AGENTS.md` §10-12;本任务暂未接入 `/matrix --review`。
-- 项目约定:根 `AGENTS.md`。
+- 项目约定:根 `AGENTS.md`(含决策记录表)。
 
 ## 5. Automation 登记
 
-- 无(本批为会话内同步实施,无定时任务)。
+- 无(会话内同步实施;批次开工后若长跑可评估巡检 automation)。
 
 ## 6. 环境备忘
 
 - origin = `git@github.com:kamasylvia/Alexandrie.git`(公开 fork);upstream = Smaug6739。
 - compose backend = 本地构建(`build: ./backend`);上游预构建镜像不认 `S3_*`/pg。
 - 本地开发对象存储:`make minio`(minio 二进制,9000/9001);compose 默认 rustfs。
+- 本机(macOS M2)无可用 docker runtime(`/usr/local/bin/docker` 死链)。
 
 ## 7. 教训索引
 
