@@ -142,24 +142,6 @@ pub async fn get_public_node(
     })))
 }
 
-/// GET /nodes/:nodeId/permissions — node permission rows (Go GetNodePermissions).
-pub async fn get_node_permissions(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(node_id): Path<String>,
-) -> Result<impl IntoResponse, ApiError> {
-    let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
-    // Read guard mirrors Go GetNodePermissions' access check.
-    guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
-    let perms: Vec<crate::models::PermissionRow> =
-        node_repo::permissions_for_nodes(&state.db, actor.user_id, &[id])
-            .await?
-            .into_iter()
-            .collect();
-    Ok(ApiOk::ok(perms))
-}
-
 #[derive(Debug, Deserialize)]
 pub struct NodeInput {
     #[serde(default)]
