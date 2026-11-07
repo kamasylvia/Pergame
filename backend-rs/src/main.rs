@@ -1,7 +1,9 @@
 mod config;
 mod db;
+mod db_toasty;
 mod error;
 mod logger;
+mod models;
 mod routes;
 mod state;
 mod types;
@@ -35,7 +37,16 @@ async fn main() {
     }
     tracing::info!("migrations applied");
 
-    let state = AppState { db: pool };
+    // Toasty data layer over the same database (schema stays sqlx-owned).
+    let toasty_db = match db_toasty::connect(cfg).await {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to initialize toasty");
+            std::process::exit(1);
+        }
+    };
+
+    let state = AppState { db: pool, toasty: toasty_db };
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
