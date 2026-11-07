@@ -42,7 +42,7 @@
 | 项 | 建议 | 说明 |
 |---|---|---|
 | 查询工具 | **sqlx-rs 0.8+** | `query!` 宏编译期校验 SQL(离线 `cargo sqlx prepare` 进 CI);async 原生;与现有「SQL 平铺在 repo 层」的形态最接近,迁移心智负担最小 |
-| ORM 备选 | 不建议(SeaORM/diesel) | 上手成本高、生成代码风格与手写 SQL 差异大;本项目 SQL 密度低(52 路由/10 repo),宏校验已够 |
+| ORM 备选 | 不建议(SeaORM/diesel/**Toasty**) | 上手成本高、生成代码风格与手写 SQL 差异大;本项目 SQL 密度低(52 路由/10 repo),宏校验已够。**Toasty**(tokio-rs 同门,2026-04 首发 crates.io):与 axum 生态契合,但无 1.0、API 未稳;本项目 FTS/权限排序/聚合/upsert 均需 raw SQL 逃逸 → 双轨制反增复杂度。列入观察名单,达 1.0 后再评估 |
 | Migration | **sqlx migrate**(`migrations/*.sql`,embed + 启动自动跑,语义与 golang-migrate 等价) | refinery 备选(嵌入式、多 runner),此处无多后端需求,取简单者 |
 | 首次 schema | **全新 000001_init(pg 方言),不照搬 21 个 mysql migration 链** | 已定决策:全新空库无数据迁移;mysql 链中的历史弯路(改 bigint、加索引等)一次到位;上游后续 migration 再手工对齐 |
 | 全文搜索 | `to_tsvector('simple', ...)` STORED 生成列 + GIN 索引;`websearch_to_tsquery` + `ts_rank` 排序;`ts_headline` 出 snippet(替代 mysql 的 LOCATE/SUBSTRING 截断,质量更好) | `'simple'` 配置对多语言(含 CJK)行为与 mysql FULLTEXT 相当(都不分词 CJK),不引入额外依赖 |
