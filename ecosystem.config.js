@@ -9,10 +9,10 @@ module.exports = {
         COOKIE_DOMAIN: "alexandrie-hub.fr",
         ADMIN_ACCOUNTS: "152981937240150016",
 
-        MINIO_ENDPOINT: "cdn.alexandrie-hub.fr",
-        MINIO_PUBLIC_URL: "https://cdn.alexandrie-hub.fr",
-        MINIO_BUCKET: "alexandrie",
-        MINIO_SECURE: "true",
+        S3_ENDPOINT: "cdn.alexandrie-hub.fr",
+        S3_PUBLIC_URL: "https://cdn.alexandrie-hub.fr",
+        S3_BUCKET: "alexandrie",
+        S3_SECURE: "true",
 
         DATABASE_HOST: "localhost",
         DATABASE_PORT: 3306,

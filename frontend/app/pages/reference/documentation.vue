@@ -177,7 +177,7 @@ MYSQL_ROOT_PASSWORD=rootpassword
 RUSTFS_ACCESS_KEY=alexandrie-key
 RUSTFS_SECRET_KEY=alexandrie-secret
 
-MINIO_BUCKET=alexandrie
+S3_BUCKET=alexandrie
 </code></pre>
       </div>
       <p>These variables configure the RustFS object storage service.</p>
@@ -186,7 +186,7 @@ MINIO_BUCKET=alexandrie
         <li><code>RUSTFS_ACCESS_KEY</code>: The access key for the RustFS S3-compatible API.</li>
         <li><code>RUSTFS_SECRET_KEY</code>: The secret key for the RustFS S3-compatible API.</li>
         <li>
-          <code>MINIO_BUCKET</code>: The name of the default bucket created for Alexandrie. Note that this bucket name should match the
+          <code>S3_BUCKET</code>: The name of the default bucket created for Alexandrie. Note that this bucket name should match the
           <code>CDN_ENDPOINT</code> variable in the backend configuration. By default, it is set to <code>alexandrie</code> and the backend will create
           <code>alexandrie</code> and <code>alexandrie-backups</code> buckets.
         </li>
@@ -269,10 +269,10 @@ OIDC_{i}_PROVIDER_NAME= # e.g. Google, Discord, Microsoft...
         authorities (CA), and explicit TLS configuration.
       </p>
       <p>This section explains how TLS is handled and how to configure it correctly.</p>
-      <h4 id="https-vs-http-(minio_secure)">HTTPS vs HTTP (MINIO_SECURE)</h4>
+      <h4 id="https-vs-http-(s3_secure)">HTTPS vs HTTP (S3_SECURE)</h4>
 
       <div class="code-block-wrapper">
-        <pre><code class="hljs language-env">MINIO_SECURE=true|false
+        <pre><code class="hljs language-env">S3_SECURE=true|false
 </code></pre>
       </div>
       <p>
@@ -283,11 +283,11 @@ OIDC_{i}_PROVIDER_NAME= # e.g. Google, Discord, Microsoft...
         <li><code>true</code> → HTTPS is used (default)</li>
         <li><code>false</code> → HTTP is used (no TLS)</li>
       </ul>
-      <h4 id="custom-certificate-authorities-(minio_ca_path)">Custom Certificate Authorities (MINIO_CA_PATH)</h4>
+      <h4 id="custom-certificate-authorities-(s3_ca_path)">Custom Certificate Authorities (S3_CA_PATH)</h4>
       <p>If your S3 endpoint uses a certificate signed by an internal or private certificate authority, you must explicitly provide this CA to the backend.</p>
 
       <div class="code-block-wrapper">
-        <pre><code class="hljs language-env">MINIO_CA_PATH=/path/to/ca-certificate.pem
+        <pre><code class="hljs language-env">S3_CA_PATH=/path/to/ca-certificate.pem
 </code></pre>
       </div>
       <ul>
@@ -303,7 +303,7 @@ OIDC_{i}_PROVIDER_NAME= # e.g. Google, Discord, Microsoft...
       <p><em>TLS Verification Bypass (Not Recommended)</em></p>
 
       <div class="code-block-wrapper">
-        <pre><code class="hljs language-env">MINIO_INSECURE_TLS=true|false
+        <pre><code class="hljs language-env">S3_INSECURE_TLS=true|false
 </code></pre>
       </div>
       <p>This option disables TLS certificate verification while still using HTTPS.</p>

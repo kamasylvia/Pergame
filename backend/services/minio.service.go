@@ -34,7 +34,7 @@ func (s *minioService) DeleteAllFromUser(userId types.Snowflake) error {
 
 	prefix := fmt.Sprintf("%d/", userId)
 	ctx := context.Background()
-	objectCh := s.minioClient.ListObjects(ctx, os.Getenv("MINIO_BUCKET"), minio.ListObjectsOptions{
+	objectCh := s.minioClient.ListObjects(ctx, os.Getenv("S3_BUCKET"), minio.ListObjectsOptions{
 		Prefix:    prefix,
 		Recursive: true,
 	})
@@ -43,7 +43,7 @@ func (s *minioService) DeleteAllFromUser(userId types.Snowflake) error {
 		if object.Err != nil {
 			return object.Err
 		}
-		err := s.minioClient.RemoveObject(ctx, os.Getenv("MINIO_BUCKET"), object.Key, minio.RemoveObjectOptions{})
+		err := s.minioClient.RemoveObject(ctx, os.Getenv("S3_BUCKET"), object.Key, minio.RemoveObjectOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to delete object: %v", err)
 		}
@@ -63,7 +63,7 @@ func (s *minioService) DeleteNodeFiles(resources []*models.NodeResourceInfo) err
 	}
 
 	ctx := context.Background()
-	bucket := os.Getenv("MINIO_BUCKET")
+	bucket := os.Getenv("S3_BUCKET")
 	var lastErr error
 
 	for _, res := range resources {
@@ -104,7 +104,7 @@ func (s *minioService) DeleteSingleResource(userId types.Snowflake, nodeId types
 	}
 
 	ctx := context.Background()
-	bucket := os.Getenv("MINIO_BUCKET")
+	bucket := os.Getenv("S3_BUCKET")
 
 	// Try to get the exact path from metadata
 	if metadata != nil {

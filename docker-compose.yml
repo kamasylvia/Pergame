@@ -52,10 +52,11 @@ services:
 
   # Alexandrie Backend
   backend:
-    image: ghcr.io/smaug6739/alexandrie-backend:latest
-    #build:
-    #  context: ./backend
-    #  dockerfile: Dockerfile
+    # Fork build: the upstream prebuilt image does not support the S3_* env vars.
+    image: alexandrie-backend:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: alexandrie-backend
     environment:
       # General configuration
@@ -81,13 +82,13 @@ services:
 
       # Object storage configuration (S3 compatible like RustFS, MinIO, etc.)
       # OPTIONAL: If you don't want to use the CDN feature you can leave these variables empty
-      MINIO_ENDPOINT: rustfs:9000
-      MINIO_PUBLIC_URL: ${CDN_URL:-http://localhost:${RUSTFS_EXTERNAL_PORT:-9000}}
-      MINIO_SECURE: "${MINIO_SECURE:-false}" # Set to 'true' if your S3 endpoint uses HTTPS
-      MINIO_INSECURE_TLS: "${MINIO_INSECURE_TLS:-false}" # Set to 'true' if your S3 endpoint uses self-signed certificates
-      MINIO_ACCESSKEY: ${RUSTFS_ACCESS_KEY:-alexandrie-key}
-      MINIO_SECRETKEY: ${RUSTFS_SECRET_KEY:-alexandrie-secret}
-      MINIO_BUCKET: ${MINIO_BUCKET:-alexandrie}
+      S3_ENDPOINT: rustfs:9000
+      S3_PUBLIC_URL: ${CDN_URL:-http://localhost:${RUSTFS_EXTERNAL_PORT:-9000}}
+      S3_SECURE: "${S3_SECURE:-false}" # Set to 'true' if your S3 endpoint uses HTTPS
+      S3_INSECURE_TLS: "${S3_INSECURE_TLS:-false}" # Set to 'true' if your S3 endpoint uses self-signed certificates
+      S3_ACCESSKEY: ${RUSTFS_ACCESS_KEY:-alexandrie-key}
+      S3_SECRETKEY: ${RUSTFS_SECRET_KEY:-alexandrie-secret}
+      S3_BUCKET: ${S3_BUCKET:-alexandrie}
 
       # SMTP Configuration (only for password reset emails)
       # OPTIONAL: If you don't want to use email features, you can leave these variables empty

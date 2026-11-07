@@ -20,14 +20,14 @@ import (
 func MinioConnection() (*minio.Client, *minio.Client, error) {
 	ctx := context.Background()
 
-	internalEndpoint := os.Getenv("MINIO_ENDPOINT")
-	publicEndpoint := os.Getenv("MINIO_PUBLIC_URL")
+	internalEndpoint := os.Getenv("S3_ENDPOINT")
+	publicEndpoint := os.Getenv("S3_PUBLIC_URL")
 
-	accessKeyID := os.Getenv("MINIO_ACCESSKEY")
-	secretAccessKey := os.Getenv("MINIO_SECRETKEY")
+	accessKeyID := os.Getenv("S3_ACCESSKEY")
+	secretAccessKey := os.Getenv("S3_SECRETKEY")
 
 	if internalEndpoint == "" || accessKeyID == "" || secretAccessKey == "" {
-		return nil, nil, fmt.Errorf("MINIO NOT CONFIGURED")
+		return nil, nil, fmt.Errorf("S3 NOT CONFIGURED")
 	}
 
 	// TLS configuration
@@ -36,7 +36,7 @@ func MinioConnection() (*minio.Client, *minio.Client, error) {
 		rootCAs = x509.NewCertPool()
 	}
 
-	if caPath := os.Getenv("MINIO_CA_PATH"); caPath != "" {
+	if caPath := os.Getenv("S3_CA_PATH"); caPath != "" {
 		caCert, err := os.ReadFile(caPath)
 		if err != nil {
 			logger.Error("s3", "Failed to read CA certificate: "+err.Error())
@@ -47,7 +47,7 @@ func MinioConnection() (*minio.Client, *minio.Client, error) {
 		}
 	}
 
-	insecureTLS := os.Getenv("MINIO_INSECURE_TLS") == "true"
+	insecureTLS := os.Getenv("S3_INSECURE_TLS") == "true"
 
 	internalTLSConfig := &tls.Config{
 		RootCAs:            rootCAs,
@@ -69,7 +69,7 @@ func MinioConnection() (*minio.Client, *minio.Client, error) {
 
 	// Internal MinIO client
 	isSecure := true
-	if os.Getenv("MINIO_SECURE") != "" && os.Getenv("MINIO_SECURE") != "true" {
+	if os.Getenv("S3_SECURE") != "" && os.Getenv("S3_SECURE") != "true" {
 		isSecure = false
 	} else if strings.HasPrefix(internalEndpoint, "localhost") || strings.HasPrefix(internalEndpoint, "127.") {
 		isSecure = false
@@ -88,7 +88,7 @@ func MinioConnection() (*minio.Client, *minio.Client, error) {
 	// Signer client (public URLs / CDN)
 	publicURL, err := url.Parse(publicEndpoint)
 	if err != nil {
-		logger.Error("s3", "CONFIG: MINIO_PUBLIC_URL is not a valid URL")
+		logger.Error("s3", "CONFIG: S3_PUBLIC_URL is not a valid URL")
 		os.Exit(1)
 	}
 
@@ -102,12 +102,12 @@ func MinioConnection() (*minio.Client, *minio.Client, error) {
 	})
 	if err != nil {
 		logger.Error("s3", fmt.Sprintf("Failed to create signer client: %v", err))
-		logger.Error("s3", "Please check your MINIO_PUBLIC_URL is set correctly.")
+		logger.Error("s3", "Please check your S3_PUBLIC_URL is set correctly.")
 		os.Exit(1)
 	}
 
 	// Buckets setup
-	bucketName := os.Getenv("MINIO_BUCKET")
+	bucketName := os.Getenv("S3_BUCKET")
 	setupPublicBucket(ctx, minioClient, bucketName)
 
 	backupBucket := utils.GetBackupBucketName()

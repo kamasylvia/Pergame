@@ -136,7 +136,7 @@ RUSTFS_EXTERNAL_PORT=9000
 RUSTFS_ACCESS_KEY=alexandrie-key
 RUSTFS_SECRET_KEY=alexandrie-secret
 
-MINIO_BUCKET=alexandrie
+S3_BUCKET=alexandrie
 ```
 
 These variables configure the RustFS object storage service.
@@ -144,7 +144,7 @@ These variables configure the RustFS object storage service.
 - `RUSTFS_EXTERNAL_PORT`: The port exposed on your host machine for the RustFS service.
 - `RUSTFS_ACCESS_KEY`: The access key for the RustFS S3-compatible API.
 - `RUSTFS_SECRET_KEY`: The secret key for the RustFS S3-compatible API.
-- `MINIO_BUCKET`: The name of the default bucket created for Alexandrie. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `alexandrie` and the backend will create `alexandrie` and `alexandrie-backups` buckets.
+- `S3_BUCKET`: The name of the default bucket created for Alexandrie. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `alexandrie` and the backend will create `alexandrie` and `alexandrie-backups` buckets.
 
 ### 6. Email — SMTP (optional)
 
@@ -227,10 +227,10 @@ This client supports HTTPS, custom certificate authorities (CA), and explicit TL
 
 This section explains how TLS is handled and how to configure it correctly.
 
-#### HTTPS vs HTTP (MINIO_SECURE)
+#### HTTPS vs HTTP (S3_SECURE)
 
 ```env
-MINIO_SECURE=true|false
+S3_SECURE=true|false
 ```
 
 This variable controls whether HTTPS (TLS) is used at all when the backend connects to the S3 endpoint. It must explicitly match how your S3 server is exposed.
@@ -238,12 +238,12 @@ This variable controls whether HTTPS (TLS) is used at all when the backend conne
 - `true` → HTTPS is used (default)
 - `false` → HTTP is used (no TLS)
 
-#### Custom Certificate Authorities (MINIO_CA_PATH)
+#### Custom Certificate Authorities (S3_CA_PATH)
 
 If your S3 endpoint uses a certificate signed by an internal or private certificate authority, you must explicitly provide this CA to the backend.
 
 ```env
-MINIO_CA_PATH=/path/to/ca-certificate.pem
+S3_CA_PATH=/path/to/ca-certificate.pem
 ```
 
 - The file must contain the CA certificate (root or intermediate), in PEM format
@@ -256,7 +256,7 @@ MINIO_CA_PATH=/path/to/ca-certificate.pem
 _TLS Verification Bypass (Not Recommended)_
 
 ```env
-MINIO_INSECURE_TLS=true|false
+S3_INSECURE_TLS=true|false
 ```
 
 This option disables TLS certificate verification while still using HTTPS.

@@ -125,7 +125,7 @@ func (s *resourceService) UploadFile(ctx context.Context, filename string, fileS
 	}
 
 	objectName := fmt.Sprintf("%d/%d%s", userId, id, ext)
-	_, err = s.minioClient.PutObject(context.Background(), os.Getenv("MINIO_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
+	_, err = s.minioClient.PutObject(context.Background(), os.Getenv("S3_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (s *resourceService) UploadAvatar(filename string, fileSize int64, fileCont
 	}
 
 	objectName := fmt.Sprintf("%d/avatar", userId)
-	_, err := s.minioClient.PutObject(context.Background(), os.Getenv("MINIO_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
+	_, err := s.minioClient.PutObject(context.Background(), os.Getenv("S3_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
 	return err
 }
 
@@ -189,7 +189,7 @@ func (s *resourceService) UpdateFile(ctx context.Context, actor permissions.Acto
 
 		// Update the file in MinIO
 		objectName := fmt.Sprintf("%d/%s", actor.UserID, *node.ContentCompiled)
-		_, err = s.minioClient.PutObject(context.Background(), os.Getenv("MINIO_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
+		_, err = s.minioClient.PutObject(context.Background(), os.Getenv("S3_BUCKET"), objectName, bytes.NewReader(fileContent), fileSize, minio.PutObjectOptions{ContentType: mimeType})
 		if err != nil {
 			return nil, errors.New("failed to update file in storage")
 		}

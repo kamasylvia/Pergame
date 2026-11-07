@@ -83,8 +83,8 @@ jobs:
           DATABASE_USER=${{ secrets.DATABASE_USER }}
           DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}"
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          MINIO_ACCESSKEY=${{ secrets.MINIO_ACCESSKEY }}
-          MINIO_SECRETKEY=${{ secrets.MINIO_SECRETKEY }}
+          S3_ACCESSKEY=${{ secrets.S3_ACCESSKEY }}
+          S3_SECRETKEY=${{ secrets.S3_SECRETKEY }}
           OIDC_1_CONFIG_URL=${{ secrets.OIDC_GOOGLE_CONFIG }}
           OIDC_1_CLIENT_ID=${{ secrets.OIDC_GOOGLE_ID }}
           OIDC_1_CLIENT_SECRET=${{ secrets.OIDC_GOOGLE_SECRET }}

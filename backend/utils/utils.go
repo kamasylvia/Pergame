@@ -24,7 +24,7 @@ func IntPtr(i int) *int {
 
 // GetBackupBucketName returns the name of the private backup bucket
 func GetBackupBucketName() string {
-	baseBucket := os.Getenv("MINIO_BUCKET")
+	baseBucket := os.Getenv("S3_BUCKET")
 	return baseBucket + "-backups"
 }
 

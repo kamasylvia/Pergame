@@ -445,7 +445,7 @@ func (s *backupService) addJSONToZip(zipWriter *zip.Writer, filename string, dat
 }
 
 func (s *backupService) addFilesToZip(ctx context.Context, zipWriter *zip.Writer, files []*models.Node, job *types.BackupJob, minioClient *minio.Client, stats *types.BackupStats) error {
-	bucket := os.Getenv("MINIO_BUCKET")
+	bucket := os.Getenv("S3_BUCKET")
 
 	sem := make(chan struct{}, maxConcurrentFiles)
 	var wg sync.WaitGroup
