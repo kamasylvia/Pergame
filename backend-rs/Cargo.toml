@@ -6,7 +6,9 @@ description = "Alexandrie backend (Rust rewrite)"
 
 [dependencies]
 ammonia = "4.2.4"
-axum = "0.8.9"
+aws-config = "1.13.0"
+aws-sdk-s3 = "1.157.0"
+axum = { version = "0.8.9", features = ["multipart"] }
 bcrypt = "0.19.3"
 cookie = "0.18.2"
 dotenvy = "0.15.7"

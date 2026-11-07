@@ -52,6 +52,10 @@ pub struct CdnConfig {
     pub max_size: u64,
     #[serde(default = "default_max_uploads_size")]
     pub max_uploads_size: u64,
+    #[serde(default)]
+    pub supported_types: Option<Vec<String>>,
+    #[serde(default)]
+    pub supported_types_images: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

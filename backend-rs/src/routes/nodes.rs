@@ -363,11 +363,15 @@ pub async fn delete_node(
     let id = resolve_id(&node_id)?.as_i64();
     let node = guard::require_node_action(&state.db, &actor, id, NodeAction::Delete).await?;
 
-    let _resources = node_repo::descendant_resources(&state.db, node.id)
-        .await
-        .unwrap_or_default();
-    // P3.5: hand these to the storage service for S3 deletion (Go parity: failures
-    // logged and ignored).
+    // Storage cleanup: descendant role=4 files are removed before the DB
+    // cascade (Go parity: failures logged and ignored).
+    if let Some(storage) = &state.storage {
+        if let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await {
+            for (res_id, res_user, metadata) in resources {
+                storage.delete_resource_files(res_user, res_id, metadata.as_ref()).await;
+            }
+        }
+    }
 
     node_repo::delete(&state.db, node.id).await.map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("OK")))

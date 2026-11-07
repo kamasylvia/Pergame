@@ -8,6 +8,7 @@ mod logger;
 mod models;
 mod repo;
 mod response;
+mod storage;
 mod utils;
 mod routes;
 mod state;
@@ -52,11 +53,31 @@ async fn main() {
         }
     };
 
+    // S3 storage client (Go exits when unconfigured — parity).
+    let storage = match storage::parse_env() {
+        Ok(s) => {
+            tracing::info!("S3 storage configured");
+            Some(s)
+        }
+        Err(e) => {
+            tracing::error!(reason = %e, "S3 storage not configured; aborting");
+            std::process::exit(1);
+        }
+    };
+
     let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
-    let state = AppState { db: pool, toasty: toasty_db, snowflake };
+    let state = AppState { db: pool, toasty: toasty_db, snowflake, storage };
 
     // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
     auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
+
+    // S3 buckets bootstrap (public-read policy + backup lifecycle, Go parity).
+    if let Some(storage) = &state.storage {
+        if let Err(e) = storage.ensure_buckets().await {
+            tracing::error!(error = %e, "S3 buckets bootstrap failed");
+            std::process::exit(1);
+        }
+    }
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
@@ -88,6 +109,9 @@ async fn main() {
         .route("/api/users/{id}", get(routes::users::get_user))
         .route("/api/users/{id}", patch(routes::users_patch::update_user))
         .route("/api/users/{id}/password", patch(routes::users_patch::update_password))
+        .route("/api/resources", post(routes::resources::upload_file))
+        .route("/api/resources/avatar", post(routes::resources::upload_avatar))
+        .route("/api/resources/{id}", put(routes::resources::update_file))
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
