@@ -13,7 +13,7 @@ mod types;
 
 use std::net::SocketAddr;
 
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 use axum::Router;
 
 pub use state::AppState;
@@ -64,6 +64,8 @@ async fn main() {
         .route("/api/users", post(routes::users::create_user))
         .route("/api/users/@me", get(routes::users::get_me))
         .route("/api/users/{id}", get(routes::users::get_user))
+        .route("/api/users/{id}", patch(routes::users_patch::update_user))
+        .route("/api/users/{id}/password", patch(routes::users_patch::update_password))
         .with_state(state)
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
