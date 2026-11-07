@@ -41,7 +41,7 @@
 ## 3. 续接点
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
-- **下一步(按序)**:① P2.5 请求上下文(ClientIP/UA 进 login)+ ADMIN_ACCOUNTS 启动期角色提升;② PATCH /users/@me 与 /users/:id(密码修改分支);③ TOTP 域(/auth/totp + pre_auth 消费 + backup codes,totp-rs);④ P3 内容域(nodes CRUD + 树 + FTS)。
+- **下一步(按序)**:① ~~P2.5~~ ✅(f52262a5:RequestCtx + ADMIN_ACCOUNTS,16/16 单测);② PATCH /users/@me 与 /users/:id(密码修改分支);③ TOTP 域(/auth/totp + pre_auth 消费 + backup codes,totp-rs);④ P3 内容域(nodes CRUD + 树 + FTS)。
 - **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
 - 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
 
