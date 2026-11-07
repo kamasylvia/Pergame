@@ -75,41 +75,8 @@ pub async fn login(
         });
     }
 
-    let refresh = super::jwt::refresh_token();
-    let now = now_ms();
-    let session = Session {
-        id: new_id(generator).as_i64(),
-        user_id: user.id,
-        refresh_token: refresh.clone(),
-        expire_token: now + SESSION_TTL_MS,
-        last_refresh_timestamp: now,
-        active: 1,
-        ip_addr: Some(ip.to_string()),
-        user_agent: Some(user_agent.to_string()),
-        location: None, // IP geolocation is a P4 concern (Go: logRepo.GetLocationFromIP)
-        session_type: Some("login".into()),
-        login_timestamp: now,
-        logout_timestamp: 0,
-    };
-    Session::create()
-        .id(session.id)
-        .user_id(session.user_id)
-        .refresh_token(session.refresh_token.clone())
-        .expire_token(session.expire_token)
-        .last_refresh_timestamp(session.last_refresh_timestamp)
-        .active(session.active)
-        .ip_addr(session.ip_addr.clone())
-        .user_agent(session.user_agent.clone())
-        .location(session.location.clone())
-        .session_type(session.session_type.clone())
-        .login_timestamp(session.login_timestamp)
-        .logout_timestamp(session.logout_timestamp)
-        .exec(db)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "session create failed");
-            ApiError::Unauthorized("failed to create session".into())
-        })?;
+    let refresh =
+        super::totp::create_login_session(db, generator, user.id, ip, user_agent).await?;
 
     Ok(LoginOutcome::Full { user, refresh_token: refresh })
 }

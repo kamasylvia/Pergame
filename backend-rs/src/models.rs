@@ -108,6 +108,29 @@ pub struct Session {
     pub logout_timestamp: i64,
 }
 
+/// TOTP backup/recovery codes (8-digit, bcrypt-hashed; Go parity).
+#[derive(Debug, Model)]
+#[table = "user_totp_recovery_codes"]
+pub struct RecoveryCode {
+    #[key]
+    #[column("id")]
+    pub id: i64,
+
+    #[index]
+    #[column("user_id")]
+    pub user_id: i64,
+
+    /// bcrypt hash of the 8-digit code.
+    #[column("code")]
+    pub code: String,
+
+    #[column("used")]
+    pub used: bool,
+
+    #[column("created_timestamp")]
+    pub created_timestamp: i64,
+}
+
 /// P1 spike (compile-time gate): exercises the derive-generated query
 /// surface against a `Db` handle. Runtime verification follows with a
 /// live PostgreSQL.
@@ -145,6 +168,17 @@ async fn spike_compile(db: &mut toasty::Db) -> toasty::Result<()> {
     // Session lookups used by the auth domain.
     let _session = Session::filter_by_refresh_token("abc").first().exec(db).await?;
     let _by_user = Session::filter_by_user_id(1i64).exec(db).await?;
+
+    // Recovery codes used by the TOTP domain.
+    let _codes = RecoveryCode::filter_by_user_id(1i64).exec(db).await?;
+    let _rc = RecoveryCode::create()
+        .id(1i64)
+        .user_id(1i64)
+        .code("$2a$10$hash")
+        .used(false)
+        .created_timestamp(1)
+        .exec(db)
+        .await?;
 
     Ok(())
 }

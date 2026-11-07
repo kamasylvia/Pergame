@@ -1,0 +1,237 @@
+//! TOTP domain logic (Go `services/auth.service.go` TOTP section parity):
+//! secret generation (SHA1 / 6 digits / 30s step / skew 1 — pquerna/otp
+//! defaults), 8-digit backup codes (bcrypt-hashed), code validation that
+//! consumes a backup code on match, enable/disable flows.
+
+use toasty::Db;
+use totp_rs::{Algorithm, Secret, Totp};
+
+use crate::error::ApiError;
+use crate::models::{RecoveryCode, User};
+use crate::types::SnowflakeGenerator;
+
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Builds the TOTP instance for a base32 secret (Go `totp.Validate` parity:
+/// SHA1, 6 digits, 30s step, ±1 step skew).
+fn totp_for_secret(base32_secret: &str) -> Result<Totp, ApiError> {
+    let raw = Secret::try_from_base32(base32_secret)
+        .map_err(|_| ApiError::BadRequest("invalid TOTP secret".into()))?;
+
+    totp_rs::Builder::new()
+        .with_algorithm(Algorithm::SHA1)
+        .with_digits(6)
+        .with_skew(1)
+        .with_step_duration(30)
+        .with_secret(raw)
+        .with_account_name("alexandrie")
+        .build()
+        .map_err(|e| {
+            tracing::error!(error = %e, "totp build failed");
+            ApiError::BadRequest("invalid TOTP secret".into())
+        })
+}
+
+/// Generates a new secret + otpauth URL for enrollment (issuer "Alexandrie").
+pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
+    let totp = totp_rs::Builder::new()
+        .with_algorithm(Algorithm::SHA1)
+        .with_digits(6)
+        .with_skew(1)
+        .with_step_duration(30)
+        .with_secret(Secret::generate())
+        .with_account_name(username)
+        .with_issuer(Some("Alexandrie"))
+        .build()
+        .map_err(|e| {
+            tracing::error!(error = %e, "totp generate failed");
+            ApiError::Internal(Box::new(std::io::Error::other("failed to generate TOTP key")))
+        })?;
+    Ok((totp.secret().to_base32(), totp.to_string()))
+}
+
+/// 8 backup codes: 8-digit numbers in [10000000, 100000000), Go parity.
+fn generate_backup_codes() -> Vec<String> {
+    use rand::distr::{Distribution, Uniform};
+    use rand::RngExt;
+    let mut rng = rand::rng();
+    let dist = Uniform::new(10_000_000u32, 100_000_000).expect("uniform range");
+    (0..8).map(|_| format!("{:08}", dist.sample(&mut rng))).collect()
+}
+
+/// Validates a code against the user: 6 digits = TOTP, 8 digits = backup code
+/// (bcrypt match consumes the code, Go parity).
+pub async fn validate_code(db: &mut Db, user: &User, code: &str) -> bool {
+    if code.len() == 6 {
+        let Some(secret) = &user.totp_secret else {
+            return false;
+        };
+        return match totp_for_secret(secret) {
+            Ok(totp) => totp.check_current(code).is_some(),
+            Err(_) => false,
+        };
+    }
+    if code.len() == 8 {
+        let Ok(codes) = RecoveryCode::filter_by_user_id(user.id).exec(db).await else {
+            return false;
+        };
+        for rc in codes {
+            if rc.used {
+                continue;
+            }
+            if bcrypt::verify(code, &rc.code).unwrap_or(false) {
+                let _ = RecoveryCode::filter_by_id(rc.id)
+                    .update()
+                    .used(true)
+                    .exec(db)
+                    .await;
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Enables TOTP: verifies the enrollment code, stores 8 bcrypt-hashed backup
+/// codes, marks the user enabled with the secret. Returns the plain codes.
+pub async fn enable_totp(
+    db: &mut Db,
+    generator: &SnowflakeGenerator,
+    user_id: i64,
+    secret: &str,
+    code: &str,
+) -> Result<Vec<String>, ApiError> {
+    let totp = totp_for_secret(secret)?;
+    if !totp.check_current(code).is_some() {
+        return Err(ApiError::BadRequest("invalid verification code".into()));
+    }
+
+    let plain_codes = generate_backup_codes();
+    let now = now_ms();
+    for plain in &plain_codes {
+        let hash = bcrypt::hash(plain, bcrypt::DEFAULT_COST)
+            .map_err(|_| ApiError::BadRequest("failed to create backup codes".into()))?;
+        RecoveryCode::create()
+            .id(generator.generate().as_i64())
+            .user_id(user_id)
+            .code(hash)
+            .used(false)
+            .created_timestamp(now)
+            .exec(db)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "backup code insert failed");
+                ApiError::BadRequest("failed to create backup codes".into())
+            })?;
+    }
+
+    User::filter_by_id(user_id)
+        .update()
+        .totp_secret(Some(secret.to_string()))
+        .totp_enabled(true)
+        .exec(db)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "totp enable update failed");
+            ApiError::BadRequest("failed to enable TOTP".into())
+        })?;
+
+    Ok(plain_codes)
+}
+
+/// Disables TOTP: validates the code, clears the secret/flag, deletes the
+/// user's backup codes.
+pub async fn disable_totp(db: &mut Db, user_id: i64, code: &str) -> Result<(), ApiError> {
+    let user = User::filter_by_id(user_id)
+        .first()
+        .exec(db)
+        .await
+        .ok()
+        .flatten()
+        .ok_or(ApiError::BadRequest("failed to get user".into()))?;
+
+    if !validate_code(db, &user, code).await {
+        return Err(ApiError::BadRequest("invalid verification code".into()));
+    }
+
+    User::filter_by_id(user_id)
+        .update()
+        .totp_secret(None)
+        .totp_enabled(false)
+        .exec(db)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to disable TOTP");
+            ApiError::BadRequest("failed to disable TOTP".into())
+        })?;
+
+    // Delete all the user's backup codes.
+    if let Ok(codes) = RecoveryCode::filter_by_user_id(user_id).exec(db).await {
+        for rc in codes {
+            let _ = RecoveryCode::filter_by_id(rc.id).delete().exec(db).await;
+        }
+    }
+    Ok(())
+}
+
+/// Verifies a pre-auth token and completes the login (Go VerifyTOTPAndLogin):
+/// returns the user; the caller creates the session.
+pub async fn verify_pre_auth_and_user(
+    db: &mut Db,
+    pre_auth_token: &str,
+    code: &str,
+) -> Result<User, ApiError> {
+    let user_id = super::jwt::verify_pre_auth_token(pre_auth_token)
+        .map_err(|_| ApiError::Unauthorized("invalid pre-authentication token".into()))?;
+
+    let user = User::filter_by_id(user_id as i64)
+        .first()
+        .exec(db)
+        .await
+        .ok()
+        .flatten()
+        .ok_or(ApiError::Unauthorized("user not found".into()))?;
+
+    if !validate_code(db, &user, code).await {
+        return Err(ApiError::Unauthorized("invalid 2FA code".into()));
+    }
+    Ok(user)
+}
+
+/// Shared session-row creation for login / TOTP-verify paths.
+pub async fn create_login_session(
+    db: &mut Db,
+    generator: &SnowflakeGenerator,
+    user_id: i64,
+    ip: &str,
+    user_agent: &str,
+) -> Result<String, ApiError> {
+    use crate::models::Session;
+    let refresh = super::jwt::refresh_token();
+    let now = now_ms();
+    Session::create()
+        .id(generator.generate().as_i64())
+        .user_id(user_id)
+        .refresh_token(refresh.clone())
+        .expire_token(now + 30 * 24 * 3600 * 1000)
+        .last_refresh_timestamp(now)
+        .active(1)
+        .ip_addr(Some(ip.to_string()))
+        .user_agent(Some(user_agent.to_string()))
+        .location(None)
+        .session_type(Some("login".into()))
+        .login_timestamp(now)
+        .logout_timestamp(0)
+        .exec(db)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "session create failed");
+            ApiError::Unauthorized("failed to create session".into())
+        })?;
+    Ok(refresh)
+}

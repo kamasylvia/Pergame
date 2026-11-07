@@ -32,6 +32,20 @@ fn unauthorized(message: &str) -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
+impl axum::extract::OptionalFromRequestParts<crate::AppState> for AuthUser {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &crate::AppState,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        // Infallible rejection => always Ok; invalid/missing cookie = None.
+        Ok(<Self as FromRequestParts<crate::AppState>>::from_request_parts(parts, state)
+            .await
+            .ok())
+    }
+}
+
 impl FromRequestParts<crate::AppState> for AuthUser {
     type Rejection = (StatusCode, Json<serde_json::Value>);
 
