@@ -41,9 +41,10 @@
 
 | 项 | 建议 | 说明 |
 |---|---|---|
-| 查询工具 | **sqlx-rs 0.8+** | `query!` 宏编译期校验 SQL(离线 `cargo sqlx prepare` 进 CI);async 原生;与现有「SQL 平铺在 repo 层」的形态最接近,迁移心智负担最小 |
-| ORM 备选 | 不建议(SeaORM/diesel/**Toasty**) | 上手成本高、生成代码风格与手写 SQL 差异大;本项目 SQL 密度低(52 路由/10 repo),宏校验已够。**Toasty**(tokio-rs 同门,2026-04 首发 crates.io):与 axum 生态契合,但无 1.0、API 未稳;本项目 FTS/权限排序/聚合/upsert 均需 raw SQL 逃逸 → 双轨制反增复杂度。列入观察名单,达 1.0 后再评估 |
-| Migration | **sqlx migrate**(`migrations/*.sql`,embed + 启动自动跑,语义与 golang-migrate 等价) | refinery 备选(嵌入式、多 runner),此处无多后端需求,取简单者 |
+| 查询工具 | **Toasty**(2026-11-07 用户裁决:练手项目,直接上前沿) | tokio-rs 同门 ORM;模型即 struct,CRUD/关系走 ORM。**原评估为 sqlx(见下)**,权衡已记录:0.x 未达 1.0、复杂 SQL 需逃逸——用户知情后拍板 |
+| raw SQL 逃逸层 | **sqlx 保留为依赖** | FTS(tsvector/ts_rank/ts_headline)、权限 CASE WHEN 排序、动态 IN、月度聚合 to_char、ON CONFLICT upsert 走 sqlx raw SQL;Toasty 管 CRUD/关系。**P0 spike 验证**:Toasty 0.x 能否接受「sqlx migrate 手管 schema」模式(模型映射到既有表,不强制自带迁移) |
+| Migration | **sqlx migrate**(schema 主权不交给 Toasty 0.x) | embed + 启动自动跑,语义与 golang-migrate 等价;Toasty 迁移工具成熟后可再议交接 |
+| 首次 schema | **全新 000001_init(pg 方言),不照搬 21 个 mysql migration 链** | 已定决策:全新空库无数据迁移;mysql 链中的历史弯路(改 bigint、加索引等)一次到位;上游后续 migration 再手工对齐 |
 | 首次 schema | **全新 000001_init(pg 方言),不照搬 21 个 mysql migration 链** | 已定决策:全新空库无数据迁移;mysql 链中的历史弯路(改 bigint、加索引等)一次到位;上游后续 migration 再手工对齐 |
 | 全文搜索 | `to_tsvector('simple', ...)` STORED 生成列 + GIN 索引;`websearch_to_tsquery` + `ts_rank` 排序;`ts_headline` 出 snippet(替代 mysql 的 LOCATE/SUBSTRING 截断,质量更好) | `'simple'` 配置对多语言(含 CJK)行为与 mysql FULLTEXT 相当(都不分词 CJK),不引入额外依赖 |
 | pg 驱动 | sqlx 内置 postgres(tokio-postgres 系) | 无需额外驱动 |
@@ -64,7 +65,7 @@
 | middlewares/{authentification,admin}.go | axum middleware/extractor | 低 | JWT cookie 解析 + admin 校验 |
 | controllers ×11 | handlers 模块 | 低-中 | 参数校验:gin+validator → validator crate 或手写 |
 | services ×13 | service 层 | 中 | 业务逻辑 1:1;backup zip 并发流(files 并发下载打包)注意 tokio 语义 |
-| repositories ×10(~1.45k 行 SQL) | sqlx 查询(pg 方言) | 中 | `?`→`$n` 顺手;ON DUPLICATE KEY→ON CONFLICT;NOW 语义无(Go 侧生成时间戳,不变) |
+| repositories ×10(~1.45k 行 SQL) | Toasty 模型(CRUD)+ sqlx raw SQL(pg 方言,FTS/聚合/复杂排序) | 中 | `?`→`$n` 顺手;ON DUPLICATE KEY→ON CONFLICT;NOW 语义无(Go 侧生成时间戳,不变) |
 | app/migrations(21 mysql 文件) | 全新 pg init migration | 中 | 见 §3 |
 | app/minio.go + minio/resource/backup service 的 S3 面 | aws-sdk-s3 封装 | 中 | §4 语义保留点逐条过 |
 | pkg/snowflake + types.Snowflake | snowflake crate 或移植;**序列化行为对齐** | 低 | 待核 JSON 形状 |
@@ -82,7 +83,7 @@
 | 阶段 | 内容 | 估时 |
 |---|---|---|
 | P0 | 决策前置:Snowflake JSON 序列化核实、密码哈希算法核实、集成测试补齐(nodes/resources/oidc 用例) | 0.5-1 天 |
-| P1 | 骨架:axum + 配置 + DB 连接 + migration + snowflake + logger + 健康路由;docker compose 切 pg | 1-2 天 |
+| P1 | 骨架:axum + 配置 + DB 连接(sqlx migrate + Toasty 模型 spike)+ snowflake + logger + 健康路由;docker compose 切 pg | 1-2 天 |
 | P2 | 认证域:auth/session/TOTP/OIDC/admin(users、auth、oidc 路由) | 3-4 天 |
 | P3 | 内容域:nodes/permissions/resources/S3(CDN 上传、搜索、回收站) | 3-4 天 |
 | P4 | 外围:stats/user_settings/backup zip/emails | 2-3 天 |
@@ -99,13 +100,14 @@
 | Snowflake 序列化不一致 | ID 精度错乱 | P0 核实;Rust 侧自定义 Serialize |
 | 密码哈希不兼容 | 现有用户无法登录 | P0 核实算法;不兼容则保留旧算法验证层(仅校验)或通知重置 |
 | pg 全文搜索行为差异(相关度排序) | 搜索体验变化 | 'simple' + ts_rank 调参;验收用真实语料对比 |
+| Toasty 0.x breaking(API/驱动) | 重写周期内依赖漂移 | 固定版本(`=0.x.y`);DAO 收敛在 repo 层,breaking 只波及该层;P1 spike 先行验证 schema 映射与 escape hatch,不通过则回退 sqlx 为主(决策点在 P1 末) |
 | 自托管用户迁移成本(compose 变更 + 空库) | 丢数据预期管理 | issue #1 已声明 fresh DB;README 突出 BREAKING |
 | OIDC 边缘 case(issuer discovery、key rotation) | SSO 登录坏 | 对照 Go 版手测各 provider;保留 OIDC_N 配置形状 |
 | 上游同步断裂(backend 全换) | 吃不到上游后端修复 | 接受(fork 已定此路线);前端/docs 仍可跟上游 |
 
 ## 8. 结论与前置条件
 
-**建议:go**。理由:
+**结论(2026-11-07 用户裁决):go,db 层用 Toasty + sqlx 逃逸层**。项目定位为练手,接受前沿依赖的成熟度风险;原 sqlx-only 建议(§3)及理由保留作历史记录。其余理由:
 1. 重写窗口与 pg 切换合一,避免 Go 层白做 mysql 方言治理;
 2. 后端规模收敛(8.5k 行、SQL 集中、52 路由),12-17 天量级可控;
 3. Rust + pg + sqlx 组合对该形态(自托管单二进制、内存占用低)是长期收益;axum 为当前社区默认首选。
@@ -114,7 +116,8 @@
 - [ ] 核实 `types.Snowflake` JSON 序列化(字符串/数字)
 - [ ] 核实用户密码哈希算法与迁移策略
 - [ ] 集成测试补齐至覆盖 nodes/resources/permissions 路由(现仅 auth/user/admin)
-- [ ] 用户最终 go/no-go 确认(回填 issue #1)
+- [x] 用户 go/no-go 确认(2026-11-07 go,ORM = Toasty;回填 issue #1)
+- [ ] P1 内 Toasty spike:sqlx migrate 手管 schema + Toasty 模型映射 + raw SQL 逃逸链路;不通过则 P1 末决策回退 sqlx 为主
 
 ## 附:生态参考
 

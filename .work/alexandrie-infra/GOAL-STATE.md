@@ -13,11 +13,11 @@
 | 2 | issue ×2(pg / S3 重命名) | done(本批) | origin issue |
 | 3 | `MINIO_*` → `S3_*` 重命名 | done(2026-11-07,smoke 待人工) | commit;验证见 TODO |
 | 4 | Rust 技术栈调研 | done(2026-11-07,结论 go) | `.work/rust-migration/RESEARCH.md` |
-| 5 | Rust 后端重写 + pg | pending(阻塞:调研裁决 + 用户 go/no-go) | issue A |
+| 5 | Rust 后端重写 + pg | pending(go 已裁决 2026-11-07;db 层 = Toasty + sqlx 逃逸;P0 前置待办) | issue #1 |
 
 ## 3. 续接点
 
-- 本批收尾后下一步:**用户读调研报告 → 裁决 Rust 重写 go/no-go** → go 则开新批次(阶段拆分见报告 §工作量)。
+- go 已裁决(2026-11-07,ORM = Toasty)。下一步:**新批次开工 Rust 重写**,从 P0 前置开始(核实 Snowflake 序列化、密码哈希算法、补集成测试),P1 做 Toasty spike(不过则回退 sqlx 为主);阶段拆分见报告 §6。
 - 部署侧待用户手动:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`)。
 
 ## 4. 机制配置指针
