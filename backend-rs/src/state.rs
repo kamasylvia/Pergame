@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use toasty::Db;
 
+use crate::oidc::SharedManager;
 use crate::storage::S3Storage;
 use crate::types::SnowflakeGenerator;
 
@@ -13,4 +14,6 @@ pub struct AppState {
     pub snowflake: std::sync::Arc<SnowflakeGenerator>,
     /// S3-compatible storage (None = CDN features disabled).
     pub storage: Option<S3Storage>,
+    /// OIDC provider manager (None = OIDC disabled).
+    pub oidc: Option<SharedManager>,
 }

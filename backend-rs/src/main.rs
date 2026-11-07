@@ -7,6 +7,7 @@ mod extract;
 mod logger;
 mod mail;
 mod models;
+mod oidc;
 mod repo;
 mod response;
 mod storage;
@@ -66,8 +67,16 @@ async fn main() {
         }
     };
 
+    // OIDC provider discovery (GO OIDC_N_* env parity).
+    let oidc_manager = oidc::OidcManager::from_env().await;
+    let oidc_manager = if oidc_manager.enabled() {
+        Some(std::sync::Arc::new(oidc_manager))
+    } else {
+        None
+    };
+
     let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
-    let state = AppState { db: pool, toasty: toasty_db, snowflake, storage };
+    let state = AppState { db: pool, toasty: toasty_db, snowflake, storage, oidc: oidc_manager };
 
     // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
     auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
@@ -79,6 +88,14 @@ async fn main() {
             std::process::exit(1);
         }
     }
+
+    // OIDC provider discovery (GO OIDC_N_* env parity).
+    let oidc_manager = oidc::OidcManager::from_env().await;
+    let oidc_manager = if oidc_manager.enabled() {
+        Some(std::sync::Arc::new(oidc_manager))
+    } else {
+        None
+    };
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
@@ -94,6 +111,12 @@ async fn main() {
         .route("/api/auth/logout/all", post(routes::sessions_reset::logout_all_devices))
         .route("/api/auth/request-reset", post(routes::sessions_reset::request_reset))
         .route("/api/auth/reset-password", post(routes::sessions_reset::reset_password))
+        .route("/api/auth/oidc/providers", get(routes::oidc::get_providers))
+        .route("/api/auth/oidc/linked", get(routes::oidc::get_linked))
+        .route("/api/auth/oidc/{provider}/authorize", get(routes::oidc::authorize))
+        .route("/api/auth/oidc/{provider}/link", post(routes::oidc::link_provider))
+        .route("/api/auth/oidc/{provider}/callback", post(routes::oidc::callback))
+        .route("/api/auth/oidc/{provider}/unlink", delete(routes::oidc::unlink_provider))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/user/{userId}", get(routes::nodes::get_user_nodes))
         .route("/api/nodes/shared/{userId}", get(routes::nodes::get_shared_nodes))

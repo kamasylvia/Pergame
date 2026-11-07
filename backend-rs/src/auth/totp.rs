@@ -203,13 +203,25 @@ pub async fn verify_pre_auth_and_user(
     Ok(user)
 }
 
-/// Shared session-row creation for login / TOTP-verify paths.
+/// Shared session-row creation for login / TOTP-verify / OIDC paths.
 pub async fn create_login_session(
     db: &mut Db,
     generator: &SnowflakeGenerator,
     user_id: i64,
     ip: &str,
     user_agent: &str,
+) -> Result<String, ApiError> {
+    create_login_session_type(db, generator, user_id, ip, user_agent, "login").await
+}
+
+/// Session creation with an explicit `type` column value.
+pub async fn create_login_session_type(
+    db: &mut Db,
+    generator: &SnowflakeGenerator,
+    user_id: i64,
+    ip: &str,
+    user_agent: &str,
+    session_type: &str,
 ) -> Result<String, ApiError> {
     use crate::models::Session;
     let refresh = super::jwt::refresh_token();
@@ -224,7 +236,7 @@ pub async fn create_login_session(
         .ip_addr(Some(ip.to_string()))
         .user_agent(Some(user_agent.to_string()))
         .location(None)
-        .session_type(Some("login".into()))
+        .session_type(Some(session_type.to_string()))
         .login_timestamp(now)
         .logout_timestamp(0)
         .exec(db)
