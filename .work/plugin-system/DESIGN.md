@@ -65,7 +65,8 @@ export interface PluginContext {
   api: { version: 1; host: HostInfo };
 
   // L1 数据 —— 类型化 REST 客户端,身份 = 当前登录用户,权限天然受 actor 约束
-  nodes: NodeClient;                    // get/list_children/create/update/move/delete
+  nodes: NodeClient;                    // get/list_children/create/update/append/move/delete
+  resources: ResourceClient;            // upload(file, parentId?) -> {url}(multipart,复用现有上传端点)
   search: SearchClient;                 // 全文搜索 + dataview query 端点(#5)
   user: { id; settings: KVStore };      // 插件私有 KV(后端 user_settings JSONB 隔离命名空间)
 
@@ -91,9 +92,13 @@ export interface PluginContext {
   };
 
   // 能力化网络 —— facade 级强制,非承诺
-  net: { fetch(url: URL | string, init?: RequestInit): Promise<Response> }; // manifest.net 白名单外直接拒绝
+  net: { fetch(url: URL | string, init?: RequestInit): Promise<Response> }; // 策略见下
 }
 ```
+
+**net 策略(2026-11-07 依 ReadItLater 用例细化)**:web clipper 类插件天然需访问任意域,逐域 manifest 白名单不够用 → 三级:① manifest `net:example.com` 静态白名单;② `net:*` 通配(安装时显著警告);③ **运行时逐域询问**——首遇新域弹确认(可"记住此域",记录进用户批准表)。推荐 ③ 为默认体验,①/② 供插件自选。
+
+**editor 事件钩子(可选增量)**:`editor.onPaste(handler)`——粘贴捕获场景(ReadItLater paste 对话框由命令触发,非必需,但属 L3 自然延伸,PS-C 顺带)。
 
 要点:
 - **一切注册返回 `Disposable`** —— unload 语义强制,杜绝 ob 插件卸不干净的普遍病。
@@ -129,6 +134,8 @@ export interface PluginContext {
 | emoji snippets / callout 容器 | `registerContainer` |
 
 首批官方插件(练手 + 生态种子):word count、recent files、kanban 视图、templater 简版(模板变量替换)。
+
+**生态验证头牌(2026-11-07 定)**:移植用户自研 [SiYuan-ReadItLater](https://github.com/kamasylvia/SiYuan-ReadItLater)(~5.7k 行,15+ 站点 parser,readability+turndown 纯 JS 可全复用;仅 repository 层思源 kernel API → `ctx.nodes/resources` 与 Dialog→modal 需改,≈3-5 天)。它已实测只用 Dialog/Notice/command/设置页(未触碰 dock/protyle)→ 反向印证 §1 砍工作区壳的决策,并驱动了 net 三级策略、`nodes.append`、`resources.upload` 三个 API 增量。
 
 ## 7. 开发者体验
 
