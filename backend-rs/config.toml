@@ -1,0 +1,17 @@
+# Alexandrie (Rust) default configuration. Override with CONFIG_PATH or env.
+
+[Database]
+Driver = "pgx"
+Host = "localhost"
+Name = "alexandrie"
+Port = 5432
+User = "alexandrie"
+Password = ""
+
+[Cdn]
+MaxSize = 20000000            # 20MB per file
+MaxUploadsSize = 1073741824   # 1GB total per user
+
+[Auth]
+AccessTokenExpiry = 1800      # 30 minutes
+RefreshTokenExpiry = 604800   # 7 days
