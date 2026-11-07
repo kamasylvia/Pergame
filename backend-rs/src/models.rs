@@ -6,7 +6,66 @@
 //! `#[auto]`), stored as BIGINT.
 
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use toasty::Model;
+
+/// Node row for reads (sqlx escape hatch). Mirrors `models.Node` JSON tags:
+/// ids are JSON strings (Snowflake), metadata is a JSON object.
+#[derive(Debug, Clone, FromRow, Serialize)]
+#[serde(default)]
+pub struct NodeRow {
+    pub id: i64,
+    pub user_id: i64,
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub role: i32,
+    pub color: Option<i32>,
+    pub icon: Option<String>,
+    pub thumbnail: Option<String>,
+    pub theme: Option<String>,
+    pub accessibility: Option<i32>,
+    pub access: i32,
+    pub display: Option<i32>,
+    #[serde(rename = "order")]
+    pub node_order: Option<i32>,
+    pub content: Option<String>,
+    pub content_compiled: Option<String>,
+    pub size: Option<i64>,
+    pub metadata: Option<serde_json::Value>,
+    pub created_timestamp: i64,
+    pub updated_timestamp: i64,
+}
+
+/// Permission row (reads only; permission CRUD is the P3.5 domain).
+#[derive(Debug, FromRow, Serialize)]
+pub struct PermissionRow {
+    pub id: i64,
+    pub node_id: i64,
+    pub user_id: i64,
+    pub permission: i32,
+    pub created_timestamp: i64,
+}
+
+/// Search hit (Go NodeSearchResult; content_snippet omitted when absent).
+#[derive(Debug, FromRow, Serialize)]
+pub struct NodeSearchRow {
+    pub id: i64,
+    pub user_id: i64,
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub role: i32,
+    pub accessibility: Option<i32>,
+    pub icon: Option<String>,
+    pub relevance: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_snippet: Option<String>,
+    pub created_timestamp: i64,
+    pub updated_timestamp: i64,
+}
 
 #[derive(Debug, Model, Serialize, Deserialize)]
 #[table = "users"]

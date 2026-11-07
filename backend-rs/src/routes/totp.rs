@@ -47,7 +47,7 @@ fn envelope_with_cookies(status: StatusCode, body: serde_json::Value, set_cookie
 /// Resolves the acting user id: session cookie when logged in, otherwise the
 /// `pre_auth_token` body field (forced-enrollment login flow).
 async fn resolve_user_id(
-    state: &AppState,
+    _state: &AppState,
     auth: Option<AuthUser>,
     pre_auth_token: Option<String>,
 ) -> Result<i64, ApiError> {

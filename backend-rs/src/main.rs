@@ -6,14 +6,16 @@ mod error;
 mod extract;
 mod logger;
 mod models;
+mod repo;
 mod response;
+mod utils;
 mod routes;
 mod state;
 mod types;
 
 use std::net::SocketAddr;
 
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post, put};
 use axum::Router;
 
 pub use state::AppState;
@@ -65,6 +67,15 @@ async fn main() {
         .route("/api/auth/2fa/confirm", post(routes::totp::confirm_activation))
         .route("/api/auth/2fa/verify", post(routes::totp::verify_totp))
         .route("/api/auth/2fa/disable", post(routes::totp::disable_totp))
+        .route("/api/nodes/search", get(routes::nodes::search))
+        .route("/api/nodes/user/{userId}", get(routes::nodes::get_user_nodes))
+        .route("/api/nodes/shared/{userId}", get(routes::nodes::get_shared_nodes))
+        .route("/api/nodes/public/{nodeId}", get(routes::nodes::get_public_node))
+        .route("/api/nodes/{nodeId}/permissions", get(routes::nodes::get_node_permissions))
+        .route("/api/nodes", post(routes::nodes::create_node))
+        .route("/api/nodes/{nodeId}", get(routes::nodes::get_node))
+        .route("/api/nodes/{nodeId}", put(routes::nodes::update_node))
+        .route("/api/nodes/{nodeId}", delete(routes::nodes::delete_node))
         .route("/api/users", post(routes::users::create_user))
         .route("/api/users/@me", get(routes::users::get_me))
         .route("/api/users/{id}", get(routes::users::get_user))

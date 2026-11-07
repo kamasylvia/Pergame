@@ -5,6 +5,7 @@ edition = "2024"
 description = "Alexandrie backend (Rust rewrite)"
 
 [dependencies]
+ammonia = "4.2.4"
 axum = "0.8.9"
 bcrypt = "0.19.3"
 cookie = "0.18.2"

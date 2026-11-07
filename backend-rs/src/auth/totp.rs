@@ -107,7 +107,7 @@ pub async fn enable_totp(
     code: &str,
 ) -> Result<Vec<String>, ApiError> {
     let totp = totp_for_secret(secret)?;
-    if !totp.check_current(code).is_some() {
+    if totp.check_current(code).is_none() {
         return Err(ApiError::BadRequest("invalid verification code".into()));
     }
 
