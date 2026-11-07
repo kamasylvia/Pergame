@@ -1,0 +1,30 @@
+# ==============================================================================
+# dr-backup configuration — copy to dr-backup.conf (chmod 600) and edit.
+# Format: bash-sourceable. Records are pipe-delimited; no field may contain "|".
+# ==============================================================================
+
+# ---- PostgreSQL sources ------------------------------------------------------
+# One record per database to back up. Every dump goes to EVERY destination.
+# pg|name|host|port|username|password|database
+SOURCES=(
+  "pg|alexandrie|localhost|5432|backup_user|change-me|alexandrie"
+  # "pg|second-db|db.example.com|5432|backup_user|change-me|other_app"
+)
+
+# ---- Destinations ------------------------------------------------------------
+# rclone remote paths (create the remotes once with `rclone config`; both S3
+# and WebDAV are native rclone backends). Every dump is copied to all of them.
+# Examples:
+#   S3:     rclone config create offsite-s3 s3 provider=AWS endpoint=https://s3.example.com access_key_id=... secret_access_key=...
+#   WebDAV: rclone config create nas-webdav webdav url=https://nas.example.com/dav/ vendor=nextcloud user=... pass=$(rclone obscure '...')
+DESTINATIONS=(
+  "offsite-s3:alexandrie-backups"
+  "nas-webdav:alexandrie/backups"
+)
+
+# ---- Retention ---------------------------------------------------------------
+# Days to keep dumps on destinations (pruned with rclone delete --min-age).
+RETAIN_DAYS=14
+
+# Optional: verify uploaded object size matches local dump (default on).
+VERIFY_UPLOAD=1
