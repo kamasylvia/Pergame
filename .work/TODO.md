@@ -6,7 +6,8 @@
 - [x] **Rust 后端技术栈调研**(2026-11-07):`.work/rust-migration/RESEARCH.md`;结论 = go(附 P0 前置条件),待回填 issue #1。
 - [ ] **Rust 后端重写 + PostgreSQL**(go 已裁决 2026-11-07):issue #1 跟踪;**db 层 = Toasty + sqlx 逃逸层**(练手项目直接上前沿,P1 spike 验证不过则回退 sqlx 为主);全新空库,无数据迁移;pg GIN + tsvector;P0 前置条件见报告 §8。
 - [ ] **MCP server**(随重写):issue #3;读写全量工具、streamable HTTP `/api/mcp`、rmcp、每用户 API token;spec = `.work/features/mcp-server.md`。
-- [ ] **目录索引文件**(随重写):issue #4;新建目录自动建 index、设置管文件名(批量改名)/可见性、dataview 块渲染与跳转;spec = `.work/features/directory-index.md`。
+- [ ] **目录索引文件**(随重写):issue #4;新建目录自动建 index、设置管文件名(批量改名)/可见性、永远置顶(order=-1 双端强制);**index 块 = #5 dataview 预设语法糖**;spec = `.work/features/directory-index.md`。
+- [ ] **Dataview 查询引擎**(随重写):issue #5;DQL 子集(LIST/TABLE+FROM/WHERE/SORT/LIMIT)、内置字段+metadata JSONB、后端 `POST /api/nodes/query` 参数化 SQL、前端容器块渲染;spec = `.work/features/dataview.md`。
 
 ## 待人工验证
 

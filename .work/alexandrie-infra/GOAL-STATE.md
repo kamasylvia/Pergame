@@ -15,7 +15,8 @@
 | 4 | Rust 技术栈调研 | done(2026-11-07,结论 go) | `.work/rust-migration/RESEARCH.md` |
 | 5 | Rust 后端重写 + pg | pending(go 已裁决 2026-11-07;db 层 = Toasty + sqlx 逃逸;P0 前置待办) | issue #1 |
 | 6 | MCP server(读写全量,内置 HTTP) | pending(随 #5 实施) | issue #3;spec `.work/features/mcp-server.md` |
-| 7 | 目录索引文件(dataview) | pending(随 #5 实施) | issue #4;spec `.work/features/directory-index.md` |
+| 7 | 目录索引文件(dataview) | pending(随 #5 实施;index 块 = #8 预设) | issue #4;spec `.work/features/directory-index.md` |
+| 8 | Dataview 查询引擎(DQL 子集) | pending(随 #5 实施) | issue #5;spec `.work/features/dataview.md` |
 
 ## 3. 续接点
 

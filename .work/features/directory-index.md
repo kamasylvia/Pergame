@@ -14,7 +14,7 @@
 | 自动创建 | 后端建 folder 成功后自动建子 doc:name = 设置值,`metadata.index = true`,content = dataview 块模板 |
 | 文件名设置 | `index_file_name`(默认 `"index"`,user_settings JSONB);**改名 = 批量 rename** 所有 `metadata.index=true` 节点(后台任务),已有+将来一致,搜索/树/引用全一致 |
 | 可见性设置 | `index_file_visibility`(默认 visible)。开放问题:visible = 树中正常显示 vs 不显示(仅 dataview 跳转可达)?倾向 = 树中显示,flag 控制排序沉底;实施时与用户确认 |
-| dataview 渲染 | 特殊 md 代码块(如 ` ```index `);前端渲染为可点击列表:子目录优先,显示 name/icon/updated;数据 = 现有 `list_children` API。**澄清(2026-11-07):dataview 非 Alexandrie 内置(全仓零命中),仅借 Obsidian Dataview 描述效果;实现 = markdown-it-container 注册自定义 `index` 块 + 渲染组件,编辑器侧 `customBlocks.ts` 加预览高亮** |
+| dataview 渲染 | 特殊 md 代码块(如 ` ```index `);前端渲染为可点击列表:子目录优先,显示 name/icon/updated;数据 = 现有 `list_children` API。**澄清(2026-11-07):dataview 非 Alexandrie 内置(全仓零命中),仅借 Obsidian Dataview 描述效果。**(2026-11-07 追加:通用 dataview 引擎已立项 = issue #5,引擎落地后 index 块转为其预设语法糖,渲染单点维护) |
 | 点击跳转 | 文件 → 该文件路由;目录 → 该目录的 index.md(**不存在则按需自动创建**,与新建逻辑同一函数) |
 | 改名保护 | 前端隐藏 index 文件的改名入口;后端 rename 端点拒绝 `metadata.index=true`(除非经设置批量路径);删除行为开放问题(倾向:可删,目录被再次访问时按需重建) |
 | **置顶(2026-11-07 补)** | index 文件**永远在所属目录置顶显示**:创建时 `order = -1`(复用现有 pin 机制);前端隐藏其"取消置顶"入口,后端对 `metadata.index=true` 拒绝 unpin/手动排序;置顶组内 tie-break(index vs 用户手动 pin 的其他文件)实施时定(倾向 index 再按名字/时间排最前) |
