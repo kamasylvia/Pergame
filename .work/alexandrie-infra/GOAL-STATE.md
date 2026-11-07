@@ -30,7 +30,7 @@
 
 | # | 项 | 跟踪 |
 |---|---|---|
-| B1 | Rust 重写 + pg(Toasty + sqlx 逃逸;P0 前置:Snowflake 序列化/密码哈希/集成测试补齐) | issue #1;`rust-migration/RESEARCH.md` §6/§8 |
+| B1 | Rust 重写 + pg(Toasty + sqlx 逃逸)。**P0 完成(2026-11-08)**:Snowflake=字符串序列化、bcrypt(10,兼容 Rust 校验零迁移)、集成测试补齐(编译/vet 过,运行时待人工) | issue #1;`rust-migration/RESEARCH.md` §8 |
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
 | B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
 | B4 | Dataview 查询引擎(随 B1) | issue #5;spec `features/dataview.md` |
@@ -38,8 +38,9 @@
 
 ## 3. 续接点
 
-- **等待两个开工令**:批次 A(可立即开工,三件按 A1→A2→A3 顺序)与批次 B(先跑 B1 P0 前置,再进 P1 Toasty spike)。
-- 用户侧待办:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`);有 docker 的机器跑自托管 smoke。
+- **批次 B 已开工,P0 完成(2026-11-08)**:核实结论入 RESEARCH.md §8;测试已写未跑(本机无 mysql/minio,待人工 `go test ./tests/...`)。
+- **下一步 = 批次 B 的 P1**(axum 骨架 + 配置 + DB 连接 + pg init migration + Toasty spike + snowflake + logger),**待用户放行 P1**;批次 A 仍待开工令。
+- 用户侧待办:GitHub secrets 改名(`S3_ACCESSKEY/SECRETKEY`);有 docker 的机器跑自托管 smoke + 集成测试。
 
 ## 4. 机制配置指针
 

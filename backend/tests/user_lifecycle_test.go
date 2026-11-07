@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,25 +78,18 @@ func TestUserLifeCycle(t *testing.T) {
 	// ************************************************************
 	// GET /users/XX
 	// ************************************************************
-	var userId int64
+	var userId string
 	t.Run("Get @me gnolan", func(t *testing.T) {
 		r := DoGet(t, client, "/users/@me")
 		assert.Equal(t, "success", r.Status)
 		assert.Equal(t, 200, r.StatusCode)
 		assert.Equal(t, IsValidUser(t, r), true)
-		idNum, ok := r.Result.(map[string]any)["id"].(json.Number)
-		if !ok {
-			t.Fatal("ID is not a json.Number")
-		}
-		u, err := idNum.Int64()
-		if err != nil {
-			t.Fatal("Error converting ID to int64:", err)
-		}
-		userId = u
+		// Snowflake ids are marshaled as JSON strings since the bigint migration.
+		userId = ResultIDString(t, r)
 		assert.Equal(t, r.Result.(map[string]any)["username"], "gnolan")
 	})
 	t.Run("Get user by ID", func(t *testing.T) {
-		r := DoGet(t, client, "/users/"+fmt.Sprintf("%d", userId))
+		r := DoGet(t, client, "/users/"+userId)
 		assert.Equal(t, "success", r.Status)
 		assert.Equal(t, 200, r.StatusCode)
 		assert.Equal(t, IsValidUser(t, r), true)

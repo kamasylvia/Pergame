@@ -112,10 +112,11 @@
 2. 后端规模收敛(8.5k 行、SQL 集中、52 路由),12-17 天量级可控;
 3. Rust + pg + sqlx 组合对该形态(自托管单二进制、内存占用低)是长期收益;axum 为当前社区默认首选。
 
-**前置条件(P0,重写动工前必须完成)**:
-- [ ] 核实 `types.Snowflake` JSON 序列化(字符串/数字)
-- [ ] 核实用户密码哈希算法与迁移策略
-- [ ] 集成测试补齐至覆盖 nodes/resources/permissions 路由(现仅 auth/user/admin)
+**前置条件(P0,2026-11-08 完成)**:
+
+- [x] **`types.Snowflake` JSON 序列化 = 字符串**(`MarshalJSON` → `strconv.FormatUint`);Unmarshal 宽松(去引号 ParseUint,数字亦可)。→ Rust:`Serialize` 为 string,`Deserialize` 兼容 string+number。注:既有 `user_lifecycle_test.go` 曾强断言 `json.Number`(bigint 迁移前的旧断言,已过期必红),随 P0 修正。
+- [x] **密码哈希 = bcrypt DefaultCost(10)**(user.service/auth.service;**backup codes 亦 bcrypt**)。→ Rust `bcrypt` crate 可直接校验 `$2a$/$2b$` 哈希,**现有用户零迁移**;Rust 侧新哈希维持 cost 10。
+- [x] **集成测试补齐**:`tests/nodes_test.go`(doc 生命周期+search+未授权 401)、`tests/permissions_test.go`(读→写升级/撤销/邀请 join/非法输入)、`resources_test.go`(multipart 上传/更新/头像/删除);helpers 增 `NewClient/DoPut/DoPostMultipart/SignupAndLogin(唯一用户名,可重跑)/ResultIDString`。**编译过(`go test -c`)+ vet 过;运行时验证待人工**(需 mysql + minio + 活后端,本机均无)。
 - [x] 用户 go/no-go 确认(2026-11-07 go,ORM = Toasty;回填 issue #1)
 - [ ] P1 内 Toasty spike:sqlx migrate 手管 schema + Toasty 模型映射 + raw SQL 逃逸链路;不通过则 P1 末决策回退 sqlx 为主
 
