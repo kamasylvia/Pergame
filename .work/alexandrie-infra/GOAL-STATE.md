@@ -19,9 +19,10 @@
 | 8 | Dataview 查询引擎(DQL 子集) | pending(随 #5 实施) | issue #5;spec `.work/features/dataview.md` |
 | 9 | ob 插件兼容性盘点 | done(2026-11-07;决策门待用户) | `.work/obsidian-compat/RESEARCH.md` |
 | 10 | M0 语法/数据兼容(wikilinks/callout/properties/导入导出) | pending(阻塞:用户裁决并入重写否) | 盘点报告 §6 |
-| 11 | 自建插件系统 | pending(设计提案待批) | `.work/plugin-system/DESIGN.md`;批准后开 issue |
-| 12 | 媒体播放器内置化(video-md) | pending(纯前端,时机待裁决) | issue #6;spec `features/markdown-parity.md` §2 |
-| 13 | Joplin md 特性集对齐 | pending(纯前端,时机待裁决) | issue #7;spec 同上 §3 |
+| 11 | 自建插件系统 | pending(**已批准** 2026-11-07,issue #8;PS-A..E 排重写主体后) | `.work/plugin-system/DESIGN.md`(§9 已定案) |
+| 12 | 媒体播放器内置化(video-md) | pending(排进大批次,随重写) | issue #6;spec `features/markdown-parity.md` §2 |
+| 13 | Joplin md 特性集对齐 | pending(排进大批次,随重写) | issue #7;spec 同上 §3 |
+| 14 | M0 ob 语法兼容 | pending(orchestrator 建议做,待用户拍板) | 兼容盘点报告 §6;TODO 条目 |
 
 ## 3. 续接点
 

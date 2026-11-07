@@ -1,6 +1,6 @@
 # Alexandrie 插件系统设计提案
 
-> 日期:2026-11-07,状态:**提案待批**(批准后开 tracking issue + 排期)。
+> 日期:2026-11-07,状态:**已批准**(2026-11-07 用户裁决;tracking issue #8)。§9 开放问题按预填建议定为:①插件读写权限跟随 UI 权限,不提权 ②v1 不做 iframe 隔离(v2 备选)③市场/签名 = v2,v1 管理员手动装 ④`net.fetch` 限方式与大小。
 > 输入:`.work/obsidian-compat/RESEARCH.md`(ob 生态盘点教训)+ 本仓架构(Nuxt 3 + CM6 + markdown-it / Rust axum + pg)。
 
 ## 0. 设计原则(来自 ob 教训的逆向)
