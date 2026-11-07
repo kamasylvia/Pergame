@@ -8,6 +8,8 @@
 - [ ] **MCP server**(随重写):issue #3;读写全量工具、streamable HTTP `/api/mcp`、rmcp、每用户 API token;spec = `.work/features/mcp-server.md`。
 - [ ] **目录索引文件**(随重写):issue #4;新建目录自动建 index、设置管文件名(批量改名)/可见性、永远置顶(order=-1 双端强制);**index 块 = #5 dataview 预设语法糖**;spec = `.work/features/directory-index.md`。
 - [ ] **Dataview 查询引擎**(随重写):issue #5;DQL 子集(LIST/TABLE+FROM/WHERE/SORT/LIMIT)、内置字段+metadata JSONB、后端 `POST /api/nodes/query` 参数化 SQL、前端容器块渲染;spec = `.work/features/dataview.md`。
+- [x] **Obsidian 插件兼容性盘点**(2026-11-07):`.work/obsidian-compat/RESEARCH.md`;结论 = 不以生态复用为目标;M0 语法/数据兼容建议并入重写批次,M1 加载器列为可选 spike;**待裁决:M0 并入批次?M1 排期?结论回填公开 issue?**
+- [ ] **M0 Obsidian 语法/数据兼容**(wikilinks/callout/properties/导入导出,3-5 天):阻塞:用户按盘点报告裁决是否并入重写批次。
 
 ## 待人工验证
 

@@ -17,6 +17,8 @@
 | 6 | MCP server(读写全量,内置 HTTP) | pending(随 #5 实施) | issue #3;spec `.work/features/mcp-server.md` |
 | 7 | 目录索引文件(dataview) | pending(随 #5 实施;index 块 = #8 预设) | issue #4;spec `.work/features/directory-index.md` |
 | 8 | Dataview 查询引擎(DQL 子集) | pending(随 #5 实施) | issue #5;spec `.work/features/dataview.md` |
+| 9 | ob 插件兼容性盘点 | done(2026-11-07;决策门待用户) | `.work/obsidian-compat/RESEARCH.md` |
+| 10 | M0 语法/数据兼容(wikilinks/callout/properties/导入导出) | pending(阻塞:用户裁决并入重写否) | 盘点报告 §6 |
 
 ## 3. 续接点
 
