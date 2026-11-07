@@ -1,0 +1,156 @@
+# Alexandrie 插件系统设计提案
+
+> 日期:2026-11-07,状态:**提案待批**(批准后开 tracking issue + 排期)。
+> 输入:`.work/obsidian-compat/RESEARCH.md`(ob 生态盘点教训)+ 本仓架构(Nuxt 3 + CM6 + markdown-it / Rust axum + pg)。
+
+## 0. 设计原则(来自 ob 教训的逆向)
+
+| ob 的痛点 | 我们的原则 |
+|---|---|
+| API 无版本承诺,宿主升级插件碎 | **`apiVersion` 硬契约**:宿主承诺快照内不破坏,弃用走双版本过渡期 |
+| 插件全能,无权限边界 | **能力声明(capabilities)+ 用户同意**:插件声明要什么,用户装的时候批 |
+| CJS main.js(Electron 时代产物) | **原生 ESM**,浏览器直载,无 loader 魔法 |
+| 生态"官方 API + 事实依赖"两层皮 | **单向狗粮**:官方功能(index/dataview 块)走同一插件 API,API 不诚实立刻暴露 |
+| desktop-only 类能力混在主 API | **能力分层 + 运行环境探测**,插件按能力存在性编程,不猜平台 |
+
+## 1. 范围(v1 非目标先行)
+
+**v1 = 前端插件**(浏览器内,与 ob 同威胁模型:插件 = 用户主动安装的可信代码)。
+
+非目标(v1):后端插件(服务端代码执行)、跨实例市场、移动壳适配、插件间通信协议。
+
+理由:后端是 Rust 单二进制 + 数据主权面,不开放任意代码;后端扩展需求将来走声明式配置(webhook/automation),不走代码插件。
+
+## 2. 插件形态
+
+```
+my-plugin/
+  manifest.json    # 元数据 + 能力声明 + apiVersion
+  main.mjs         # ESM 入口(单文件,构建产物)
+  styles.css?      # 可选,作用域前缀强制 .plugin-<id>
+  README.md?
+```
+
+```jsonc
+// manifest.json
+{
+  "id": "word-count",
+  "name": "Word Count",
+  "version": "0.1.0",
+  "apiVersion": "1",                    // 宿主契约版本,主版本不同 = 拒载
+  "entry": "main.mjs",
+  "capabilities": [                      // 装时用户逐项批准
+    "nodes:read",                        //   数据面
+    "ui",                                //   注册命令/视图/设置页
+    "markdown:render",                   //   md 渲染钩子
+    "net:api.example.com"                //   网络出口白名单(逐域)
+  ],
+  "minHostVersion": "8.15.0"
+}
+```
+
+分发:实例管理员上传 zip → 存 pg(插件表)+ 产物进 S3 `plugins/`;`/plugins/<id>/main.mjs` 服务;dev 模式 = 本地 origin 白名单 + 动态 import + HMR。市场 = 远期。
+
+## 3. API 面(四层,`import { ... } from "alexandrie"`)
+
+```ts
+// 类型包 @alexandrie/plugin(独立 npm,含完整 d.ts —— 学 ob 的 d.ts 做法,但天生分层)
+export abstract class Plugin {
+  static manifest: PluginManifest;
+  onload(ctx: PluginContext): Promise<void>;
+  onunload?(): Promise<void>;          // 必须可逆:注册即登记,unload 全回收
+}
+
+export interface PluginContext {
+  api: { version: 1; host: HostInfo };
+
+  // L1 数据 —— 类型化 REST 客户端,身份 = 当前登录用户,权限天然受 actor 约束
+  nodes: NodeClient;                    // get/list_children/create/update/move/delete
+  search: SearchClient;                 // 全文搜索 + dataview query 端点(#5)
+  user: { id; settings: KVStore };      // 插件私有 KV(后端 user_settings JSONB 隔离命名空间)
+
+  // L2 UI —— 声明式注册,Nuxt 组件映射
+  ui: {
+    command(id: string, title: string, cb: () => void): Disposable;
+    ribbon(icon: string, title: string, cb: () => void): Disposable;
+    notice(msg: string, opts?): void;
+    modal(component: PluginModal): void;
+    registerSettingsTab(tab: SettingsTab): Disposable;   // 声明式 schema,宿主渲染
+    registerView(type: string, view: PluginView): Disposable;  // v1: 固定槽位(侧栏/tab 页),非自由 dock
+  };
+
+  // L3 markdown/编辑器 —— 与现有管线同源
+  markdown: {
+    registerContainer(name: string, render: ContainerRender): Disposable;  // :::name(::: 与 ``` 双语法)
+    registerCodeBlock(lang: string, render: CodeRender): Disposable;
+    registerPostProcessor(fn: PostProcessor): Disposable;                  // 渲染后 DOM 钩子(ob 对位物)
+  };
+  editor: {
+    registerCmExtension(ext: CMExtension): Disposable;                     // CM6 同源直通
+    registerSuggest(spec: SuggestSpec): Disposable;
+  };
+
+  // 能力化网络 —— facade 级强制,非承诺
+  net: { fetch(url: URL | string, init?: RequestInit): Promise<Response> }; // manifest.net 白名单外直接拒绝
+}
+```
+
+要点:
+- **一切注册返回 `Disposable`** —— unload 语义强制,杜绝 ob 插件卸不干净的普遍病。
+- **`alexandrie` 模块 = 唯一宿主入口**(loader 以此包名注入),插件不直接 import 应用内部模块。
+- 视图模型 v1 用**固定槽位**(侧栏面板/tab 内容区),不做 ob 的自由 dock(盘点报告 D 组:最贵最不重要)。
+
+## 4. 加载与生命周期
+
+```
+启动 → 读已装插件清单(启用序) → 逐个 dynamic import(main.mjs)
+     → 校验 apiVersion + capabilities(安装时已批,载入时复核)
+     → new Plugin() → onload(ctx)
+     → 任一插件 onload 抛错:记录 + 禁用该插件,不影响其他(隔离原则)
+卸载/停用 → onunload → Disposable 全回收 → 移除 styles → 模块引用释放
+```
+
+- **沙箱策略**:同 realm(与 ob 相同威胁模型,能力声明是知情同意不是安全边界);未来可选 `sandbox` manifest 字段 → iframe 隔离模式(纯 UI 插件),v2。
+- 样式强制前缀 `.plugin-<id>`(构建期 PostCSS 重写),防主题互踩。
+
+## 5. 权限模型(与 ob 的最大差异点)
+
+- 安装时:manifest.capabilities 逐项展示 → 用户勾选批准 → 存 pg(可后改)
+- 运行时:facade 强制(nodes 客户端本来就 actor 域内;`net.fetch` 白名单外拒;settings 只见自己命名空间)
+- 审计:敏感能力调用记 logs 表(复用现有 log 基建)
+
+## 6. 狗粮计划(证明 API 诚实)
+
+| 功能 | 走插件 API 的部分 |
+|---|---|
+| #4 目录索引块 | `markdown.registerCodeBlock("index", ...)` |
+| #5 dataview 块 | 同上 + `search` 客户端 |
+| drawio 编辑器 | `registerCodeBlock("drawio", ...)`(现 builtin,迁移作试点) |
+| emoji snippets / callout 容器 | `registerContainer` |
+
+首批官方插件(练手 + 生态种子):word count、recent files、kanban 视图、templater 简版(模板变量替换)。
+
+## 7. 开发者体验
+
+- `@alexandrie/plugin` npm 包:类型 + `create-alexandrie-plugin` 脚手架 + 本地 dev server(连真实实例,`ALEXANDRIE_DEV_PLUGINS=http://localhost:5173` 热载)
+- 文档:API reference(d.ts 生成)+ 3 个 from-zero 教程(命令插件 / 视图插件 / md 块插件)
+- 测试:`@alexandrie/plugin-test` 内存宿主 mock(mock ctx,无浏览器)
+
+## 8. 实施路线(进 Rust 重写批次的排位)
+
+| 阶段 | 内容 | 估时 | 依赖 |
+|---|---|---|---|
+| PS-A 内核 | loader + 生命周期 + manifest 校验 + L1 数据客户端 | 1 周 | 重写 P1 完成 |
+| PS-B UI 层 | L2 声明式注册 + 设置页 + 固定槽位视图 | 1 周 | PS-A |
+| PS-C md/编辑器 | L3 容器/代码块/post-processor/CM6 直通 | 3-5 天 | PS-B;与 #4/#5 合流实现 |
+| PS-D 权限与分发 | capabilities 同意 UI + 上传/存储 + 审计 | 3-5 天 | PS-B |
+| PS-E 狗粮 | 官方插件 4 个 + drawio 迁移 | 1 周 | PS-C |
+
+合计 ≈ 3.5-4.5 周,**排在重写主体(P1-P5)之后**,#3 MCP / #4 index / #5 dataview 与 PS-C 合流。
+
+## 9. 开放问题(批准时定)
+
+1. 插件是否允许读写"其他用户共享给我的"节点?→ 建议:跟随 UI 权限,无提权
+2. v1 是否要"隔离模式"(iframe)?→ 建议:不要,记 v2
+3. 插件市场/签名 → v2;v1 管理员手动装
+4. `net.fetch` 是否限方式(GET/POST)+ 大小 → 建议限

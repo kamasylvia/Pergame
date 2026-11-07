@@ -10,6 +10,7 @@
 - [ ] **Dataview 查询引擎**(随重写):issue #5;DQL 子集(LIST/TABLE+FROM/WHERE/SORT/LIMIT)、内置字段+metadata JSONB、后端 `POST /api/nodes/query` 参数化 SQL、前端容器块渲染;spec = `.work/features/dataview.md`。
 - [x] **Obsidian 插件兼容性盘点**(2026-11-07):`.work/obsidian-compat/RESEARCH.md`;结论 = 不以生态复用为目标;M0 语法/数据兼容建议并入重写批次,M1 加载器列为可选 spike;**待裁决:M0 并入批次?M1 排期?结论回填公开 issue?**
 - [ ] **M0 Obsidian 语法/数据兼容**(wikilinks/callout/properties/导入导出,3-5 天):阻塞:用户按盘点报告裁决是否并入重写批次。
+- [ ] **自建插件系统**(设计提案已出):`.work/plugin-system/DESIGN.md`——四层 API(数据/UI/markdown+CM6/固定槽位视图)、ESM 原生 + apiVersion 契约 + capabilities 权限、官方功能狗粮;PS-A..E ≈ 3.5-4.5 周,排重写主体后。**阻塞:用户批准提案**(批准后开 issue + 排期)。
 
 ## 待人工验证
 
