@@ -1,25 +1,31 @@
 # ==============================================================================
 # dr-backup configuration — copy to dr-backup.conf (chmod 600) and edit.
 # Format: bash-sourceable. Records are pipe-delimited; no field may contain "|".
+# Shape: X PostgreSQL sources, Y S3 destinations, Z WebDAV destinations.
 # ==============================================================================
 
-# ---- PostgreSQL sources ------------------------------------------------------
-# One record per database to back up. Every dump goes to EVERY destination.
+# ---- PostgreSQL sources (X) --------------------------------------------------
 # pg|name|host|port|username|password|database
 SOURCES=(
   "pg|alexandrie|localhost|5432|backup_user|change-me|alexandrie"
   # "pg|second-db|db.example.com|5432|backup_user|change-me|other_app"
 )
 
-# ---- Destinations ------------------------------------------------------------
-# rclone remote paths (create the remotes once with `rclone config`; both S3
-# and WebDAV are native rclone backends). Every dump is copied to all of them.
-# Examples:
-#   S3:     rclone config create offsite-s3 s3 provider=AWS endpoint=https://s3.example.com access_key_id=... secret_access_key=...
-#   WebDAV: rclone config create nas-webdav webdav url=https://nas.example.com/dav/ vendor=nextcloud user=... pass=$(rclone obscure '...')
-DESTINATIONS=(
-  "offsite-s3:alexandrie-backups"
-  "nas-webdav:alexandrie/backups"
+# ---- S3 destinations (Y) -----------------------------------------------------
+# Every dump goes to every destination (S3 + WebDAV alike).
+# s3|name|endpoint|bucket|prefix|access_key|secret_key|secure|region|provider
+#   secure:   true/false   (use TLS)
+#   region:   default us-east-1
+#   provider: rclone s3 provider, default "Other" (MinIO/RustFS/Garage/...; "AWS" for AWS)
+S3_DESTINATIONS=(
+  "s3|primary|https://s3.example.com:9000|alexandrie-backups|pg|ACCESS_KEY|SECRET|true|us-east-1|Other"
+  # "s3|offsite|https://s3.other.tld|alexandrie-dr|pg|KEY|SECRET|true|us-east-1|Other"
+)
+
+# ---- WebDAV destinations (Z) -------------------------------------------------
+# webdav|name|url|username|password|prefix
+WEBDAV_DESTINATIONS=(
+  "webdav|nas|https://nas.example.com/dav/|backup_user|change-me|alexandrie/pg"
 )
 
 # ---- Retention ---------------------------------------------------------------
