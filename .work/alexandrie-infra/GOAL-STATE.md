@@ -41,7 +41,7 @@
 ## 3. 续接点
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
-- **下一步(按序,接力轮 5 起)**:① P3.5 permissions CRUD + S3 资源删除(resource.service 对位);② P2 尾欠账:① ~~P2.5~~ ✅(f52262a5:RequestCtx + ADMIN_ACCOUNTS,16/16 单测);② ~~PATCH /users~~ ✅(本轮,含 /password 分支);③ ~~TOTP 域~~ ✅(3260cfe5:2fa request/confirm/verify/disable + backup codes + RecoveryCode 模型);④ ~~P3 内容域~~ ✅(cd68c4b3:nodes CRUD/树 CTE/共享/公开子树/FTS OR-tsquery+ts_rank+ts_headline/守卫含祖先属主兜底;S3 清理挂 P3.5);⑤ P2 尾欠账:POST /auth/logout/all、OIDC 域(controller/oidc + oidc_provider repo + link flow)、邮件域(request-reset/reset-password,P4 归口亦可)。
+- **下一步(按序,接力轮 6 起)**:① S3 资源删除/上传(aws-sdk-s3,resource.service 对位,含 delete_node 清理接线);② P2 尾欠账:① ~~P2.5~~ ✅(f52262a5:RequestCtx + ADMIN_ACCOUNTS,16/16 单测);② ~~PATCH /users~~ ✅(本轮,含 /password 分支);③ ~~TOTP 域~~ ✅(3260cfe5:2fa request/confirm/verify/disable + backup codes + RecoveryCode 模型);④ ~~P3 内容域~~ ✅(cd68c4b3:nodes CRUD/树 CTE/共享/公开子树/FTS OR-tsquery+ts_rank+ts_headline/守卫含祖先属主兜底;S3 清理挂 P3.5);⑤ P2 尾欠账:POST /auth/logout/all、OIDC 域(controller/oidc + oidc_provider repo + link flow)、邮件域(request-reset/reset-password,P4 归口亦可)。
 - **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
 - 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
 
