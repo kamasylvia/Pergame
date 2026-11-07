@@ -90,7 +90,11 @@ pub async fn parse_login_body(
     }
 }
 
-pub async fn login(State(state): State<AppState>, req: axum::extract::Request) -> Result<Response, ApiError> {
+pub async fn login(
+    State(state): State<AppState>,
+    ctx: crate::extract::RequestCtx,
+    req: axum::extract::Request,
+) -> Result<Response, ApiError> {
     if matches!(std::env::var("CONFIG_DISABLE_NATIVE_LOGIN").as_deref(), Ok("true")) {
         return Err(ApiError::Forbidden("native login is disabled".into()));
     }
@@ -102,8 +106,8 @@ pub async fn login(State(state): State<AppState>, req: axum::extract::Request) -
         &state.snowflake,
         &input.username,
         &input.password,
-        "", // ClientIP: P2.5 middleware (peer addr / X-Forwarded-For)
-        "", // User-Agent: read in P2.5
+        &ctx.ip,
+        &ctx.user_agent,
     )
     .await?;
 

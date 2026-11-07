@@ -1,3 +1,4 @@
+pub mod admins;
 pub mod cookies;
 pub mod jwt;
 pub mod middleware;

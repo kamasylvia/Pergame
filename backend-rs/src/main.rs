@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod db_toasty;
 mod error;
+mod extract;
 mod logger;
 mod models;
 mod response;
@@ -39,6 +40,7 @@ async fn main() {
     }
     tracing::info!("migrations applied");
 
+
     // Toasty data layer over the same database (schema stays sqlx-owned).
     let toasty_db = match db_toasty::connect(cfg).await {
         Ok(d) => d,
@@ -50,6 +52,9 @@ async fn main() {
 
     let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
     let state = AppState { db: pool, toasty: toasty_db, snowflake };
+
+    // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
+    auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
@@ -65,8 +70,11 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!(%addr, "listening");
     let listener = tokio::net::TcpListener::bind(addr).await.expect("bind failed");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("server error");
 }
