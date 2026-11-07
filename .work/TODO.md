@@ -16,6 +16,7 @@
 - [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
 - [ ] **Dataview 查询引擎**:issue #5;DQL 子集、内置字段+metadata JSONB、`POST /api/nodes/query`、前端容器块;spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。
+- [ ] **Backup v2(全量还原 + 多端备份)**:issue #9;归档格式 v2(account/nodes/relations/settings/oidc_links/plugins/files+sha256)、还原端点+冲突策略、目的地数组扇出(s3/webdav/retain/retry);6-9 天,插 B1 后;spec = `features/backup-v2.md`。
 
 ## 待人工验证
 

@@ -35,6 +35,7 @@
 | B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
 | B4 | Dataview 查询引擎(随 B1) | issue #5;spec `features/dataview.md` |
 | B5 | 插件系统 PS-A..E(排 B1 主体后,与 B2-B4 合流;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` |
+| B6 | Backup v2:全量还原归档 + 还原流程 + 多端备份(s3/webdav 扇出;插 B1 后) | issue #9;spec `features/backup-v2.md` |
 
 ## 3. 续接点
 
