@@ -23,6 +23,10 @@
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
 - [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。
 
+## 待人工验证
+
+- [ ] push 51+ commits 到 origin(kamasylvia/Collectanea)——遵令未 push,待拍板(公开仓 push 前可按全局规则压缩重组)。
+
 ## 维护说明
 
 - 项目约定与决策记录 → 根 `AGENTS.md`。
