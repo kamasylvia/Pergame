@@ -42,7 +42,7 @@
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
 - **新增批次候选:Collectanea 改名落地**(仓库/品牌/env/容器名,破坏性,范围待拍板)。
-- **下一步(按序)**:① 笔记软连接/克隆域(spec 已写,1-3 天);② 活环境剩余手测(2FA 扫码/OIDC/邮件实测);③ docs 站 deploy 文档 Rust 化;④ S3 TLS delta;⑤ push + 镜像发布(待拍板)。原「全部待用户/活环境」清单并入以上。① 活环境联调:compose up(postgres 已切,994a2af0)→ 跑 `cargo test --test integration -- --ignored` + Go tests/ + 手测 OIDC/2FA/backup;② push + 镜像发布工作流(用户拍板);③ S3 CA_PATH/INSECURE_TLS(已记录 delta)。
+- **下一步(按序)**:① 笔记软连接/克隆域(spec 已写,1-3 天)——**用户已令开工**;dr-backup 目的地去重 ✅(本轮);② 活环境剩余手测(2FA 扫码/OIDC/邮件实测);③ docs 站 deploy 文档 Rust 化;④ S3 TLS delta;⑤ push + 镜像发布(待拍板)。原「全部待用户/活环境」清单并入以上。① 活环境联调:compose up(postgres 已切,994a2af0)→ 跑 `cargo test --test integration -- --ignored` + Go tests/ + 手测 OIDC/2FA/backup;② push + 镜像发布工作流(用户拍板);③ S3 CA_PATH/INSECURE_TLS(已记录 delta)。
 - **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
 - 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
 
