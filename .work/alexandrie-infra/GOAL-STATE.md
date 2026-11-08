@@ -41,7 +41,7 @@
 ## 3. 续接点
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
-- **下一步(按序,接力轮 10 起)**:① backup zip 域(v1 归档 + 任务 API,Go backup.service 对位)+ 建户邮件分支;② Rust 集成测试镜像(需活 pg+minio 环境);③ S3 CA_PATH/INSECURE_TLS TLS 定制(已记录 delta)。
+- **下一步(按序,接力轮 11 起)**:① Rust 集成测试镜像 + 活环境联调(需 pg+minio 主机);② S3 CA_PATH/INSECURE_TLS TLS 定制(已记录 delta);③ docs 更新(Rust 后端 README/deploy 文档)+ 镜像工作流。
 - **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
 - 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
 
