@@ -52,10 +52,11 @@ services:
 
   # Alexandrie Backend
   backend:
-    # Fork build: the upstream prebuilt image does not support the S3_* env vars.
+    # Fork build (Rust backend): the upstream prebuilt image does not support
+    # the S3_* env vars or PostgreSQL.
     image: alexandrie-backend:local
     build:
-      context: ./backend
+      context: ./backend-rs
       dockerfile: Dockerfile
     container_name: alexandrie-backend
     environment:

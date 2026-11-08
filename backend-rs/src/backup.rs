@@ -4,8 +4,8 @@
 //! private backups bucket, 24h presigned download URL.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,9 @@ use serde_json::json;
 use tokio::sync::Mutex;
 
 pub const BACKUP_VERSION: &str = "1.1.0";
+
+/// Resource projection used while archiving file nodes.
+pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
 const BACKUP_EXPIRY_HOURS: i64 = 24;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,9 +95,10 @@ impl BackupStore {
     async fn cancel_existing(&self, user_id: i64) {
         let mut user_jobs = self.user_jobs.lock().await;
         if let Some(existing) = user_jobs.remove(&user_id)
-            && let Some(entry) = self.jobs.lock().await.remove(&existing) {
-                entry.cancelled.store(true, Ordering::SeqCst);
-            }
+            && let Some(entry) = self.jobs.lock().await.remove(&existing)
+        {
+            entry.cancelled.store(true, Ordering::SeqCst);
+        }
     }
 
     pub async fn create(
@@ -120,7 +124,10 @@ impl BackupStore {
         };
         self.jobs.lock().await.insert(
             job_id.clone(),
-            JobEntry { job, cancelled: Arc::new(AtomicBool::new(false)) },
+            JobEntry {
+                job,
+                cancelled: Arc::new(AtomicBool::new(false)),
+            },
         );
         self.user_jobs.lock().await.insert(user_id, job_id.clone());
         Ok(job_id)
@@ -145,13 +152,20 @@ impl BackupStore {
         }
     }
 
-    pub async fn get(&self, user_id: i64, job_id: &str) -> Result<BackupJob, crate::error::ApiError> {
+    pub async fn get(
+        &self,
+        user_id: i64,
+        job_id: &str,
+    ) -> Result<BackupJob, crate::error::ApiError> {
         use crate::error::ApiError;
         let jobs = self.jobs.lock().await;
-        let entry =
-            jobs.get(job_id).ok_or(ApiError::NotFound("backup job not found".into()))?;
+        let entry = jobs
+            .get(job_id)
+            .ok_or(ApiError::NotFound("backup job not found".into()))?;
         if entry.job.user_id != user_id.to_string() {
-            return Err(ApiError::NotFound("unauthorized access to backup job".into()));
+            return Err(ApiError::NotFound(
+                "unauthorized access to backup job".into(),
+            ));
         }
         Ok(entry.job.clone())
     }
@@ -159,10 +173,13 @@ impl BackupStore {
     pub async fn cancel(&self, user_id: i64, job_id: &str) -> Result<(), crate::error::ApiError> {
         use crate::error::ApiError;
         let mut jobs = self.jobs.lock().await;
-        let entry =
-            jobs.get_mut(job_id).ok_or(ApiError::NotFound("backup job not found".into()))?;
+        let entry = jobs
+            .get_mut(job_id)
+            .ok_or(ApiError::NotFound("backup job not found".into()))?;
         if entry.job.user_id != user_id.to_string() {
-            return Err(ApiError::NotFound("unauthorized access to backup job".into()));
+            return Err(ApiError::NotFound(
+                "unauthorized access to backup job".into(),
+            ));
         }
         entry.cancelled.store(true, Ordering::SeqCst);
         let job_id_owned = job_id.to_string();
@@ -194,24 +211,26 @@ pub async fn run_backup(
     job_id: String,
     options: BackupOptions,
 ) {
-    
-
     macro_rules! progress {
         ($p:expr, $msg:expr) => {
-            store.update(&job_id, |j| {
-                j.progress = $p;
-                j.message = $msg.into();
-            }).await;
+            store
+                .update(&job_id, |j| {
+                    j.progress = $p;
+                    j.message = $msg.into();
+                })
+                .await;
         };
     }
     macro_rules! fail {
         ($msg:expr) => {{
             let msg = $msg.to_string();
-            store.update(&job_id, |j| {
-                j.progress = 0;
-                j.message = msg.clone();
-                j.error = Some(msg);
-            }).await;
+            store
+                .update(&job_id, |j| {
+                    j.progress = 0;
+                    j.message = msg.clone();
+                    j.error = Some(msg);
+                })
+                .await;
             return;
         }};
     }
@@ -246,14 +265,18 @@ pub async fn run_backup(
             .map(|r| {
                 let mut v = serde_json::to_value(r).unwrap_or(serde_json::Value::Null);
                 if !options.include_metadata
-                    && let Some(obj) = v.as_object_mut() {
-                        obj.remove("metadata");
-                    }
+                    && let Some(obj) = v.as_object_mut()
+                {
+                    obj.remove("metadata");
+                }
                 v
             })
             .collect();
         progress!(40, "Packaging documents...");
-        archive.add("documents.json", &serde_json::to_vec_pretty(&documents).unwrap_or_default());
+        archive.add(
+            "documents.json",
+            &serde_json::to_vec_pretty(&documents).unwrap_or_default(),
+        );
     }
     if store.is_cancelled(&job_id) {
         return;
@@ -261,15 +284,14 @@ pub async fn run_backup(
 
     // ---------------- files/ + files_index.json ----------------
     if options.include_files {
-        let resources: Vec<(i64, Option<serde_json::Value>, Option<String>, Option<i64>)> =
-            sqlx::query_as(
-                r#"SELECT id, metadata, content, size FROM nodes
+        let resources: Vec<ResourceRow> = sqlx::query_as(
+            r#"SELECT id, metadata, content, size FROM nodes
                    WHERE user_id = $1 AND role = 4"#,
-            )
-            .bind(user_id)
-            .fetch_all(&sql)
-            .await
-            .unwrap_or_default();
+        )
+        .bind(user_id)
+        .fetch_all(&sql)
+        .await
+        .unwrap_or_default();
         stats.total_files = resources.len() as i64;
         progress!(60, "Archiving files...");
         for (res_id, metadata, original, size) in &resources {
@@ -309,21 +331,25 @@ pub async fn run_backup(
 
     // ---------------- user_settings.json ----------------
     if options.include_settings
-        && let Some((g, e, a)) = sqlx::query_as::<_, (serde_json::Value, serde_json::Value, serde_json::Value)>(
-            "SELECT general, editor, advanced FROM user_settings WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(&sql)
-        .await
-        .ok()
-        .flatten()
-        {
-            let settings = serde_json::json!({
-                "user_id": user_id.to_string(),
-                "general": g, "editor": e, "advanced": a,
-            });
-            archive.add("user_settings.json", &serde_json::to_vec_pretty(&settings).unwrap_or_default());
-        }
+        && let Some((g, e, a)) =
+            sqlx::query_as::<_, (serde_json::Value, serde_json::Value, serde_json::Value)>(
+                "SELECT general, editor, advanced FROM user_settings WHERE user_id = $1",
+            )
+            .bind(user_id)
+            .fetch_optional(&sql)
+            .await
+            .ok()
+            .flatten()
+    {
+        let settings = serde_json::json!({
+            "user_id": user_id.to_string(),
+            "general": g, "editor": e, "advanced": a,
+        });
+        archive.add(
+            "user_settings.json",
+            &serde_json::to_vec_pretty(&settings).unwrap_or_default(),
+        );
+    }
 
     // ---------------- manifest.json + files_index.json ----------------
     let manifest = BackupManifest {
@@ -334,9 +360,15 @@ pub async fn run_backup(
         statistics: stats.clone(),
     };
     progress!(85, "Creating manifest...");
-    archive.add("manifest.json", &serde_json::to_vec_pretty(&manifest).unwrap_or_default());
+    archive.add(
+        "manifest.json",
+        &serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
+    );
     if options.include_files {
-        archive.add("files_index.json", &serde_json::to_vec_pretty(&file_index).unwrap_or_default());
+        archive.add(
+            "files_index.json",
+            &serde_json::to_vec_pretty(&file_index).unwrap_or_default(),
+        );
     }
 
     if store.is_cancelled(&job_id) {
@@ -353,8 +385,12 @@ pub async fn run_backup(
     let now_parts = time::OffsetDateTime::now_utc();
     let filename = format!(
         "alexandrie-backup-{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
-        now_parts.year(), u8::from(now_parts.month()), now_parts.day(),
-        now_parts.hour(), now_parts.minute(), now_parts.second(),
+        now_parts.year(),
+        u8::from(now_parts.month()),
+        now_parts.day(),
+        now_parts.hour(),
+        now_parts.minute(),
+        now_parts.second(),
     );
     if let Err(e) = storage.put_backup_object(&object_name, bytes).await {
         fail!(format!("Failed to upload backup: {e}"));
@@ -387,7 +423,9 @@ struct SimpleArchive {
 
 impl SimpleArchive {
     fn new() -> Self {
-        Self { writer: Some(zip::ZipWriter::new(std::io::Cursor::new(Vec::new()))) }
+        Self {
+            writer: Some(zip::ZipWriter::new(std::io::Cursor::new(Vec::new()))),
+        }
     }
 
     fn add(&mut self, name: &str, bytes: &[u8]) {
@@ -399,7 +437,9 @@ impl SimpleArchive {
     }
 
     fn add_with(&mut self, name: impl Into<String>, bytes: &[u8], method: zip::CompressionMethod) {
-        let Some(writer) = self.writer.as_mut() else { return };
+        let Some(writer) = self.writer.as_mut() else {
+            return;
+        };
         if writer
             .start_file(
                 name.into(),

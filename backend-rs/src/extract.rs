@@ -18,12 +18,13 @@ pub fn parse_client_ip(
     connect_info: Option<SocketAddr>,
 ) -> String {
     if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok())
-        && let Some(first) = xff.split(',').next() {
-            let candidate = first.trim();
-            if !candidate.is_empty() {
-                return candidate.to_string();
-            }
+        && let Some(first) = xff.split(',').next()
+    {
+        let candidate = first.trim();
+        if !candidate.is_empty() {
+            return candidate.to_string();
         }
+    }
     if let Some(xri) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
         let candidate = xri.trim();
         if !candidate.is_empty() {
@@ -66,7 +67,10 @@ mod tests {
     #[test]
     fn xff_first_entry_wins() {
         let mut h = HeaderMap::new();
-        h.insert("x-forwarded-for", "203.0.113.7, 70.41.3.18".parse().unwrap());
+        h.insert(
+            "x-forwarded-for",
+            "203.0.113.7, 70.41.3.18".parse().unwrap(),
+        );
         assert_eq!(parse_client_ip(&h, None), "203.0.113.7");
     }
 

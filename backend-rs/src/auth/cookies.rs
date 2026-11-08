@@ -8,14 +8,21 @@ pub const ACCESS_COOKIE: &str = "Authorization";
 pub const REFRESH_COOKIE: &str = "RefreshToken";
 
 pub fn secure_cookies() -> bool {
-    !matches!(std::env::var("ALLOW_UNSECURE").as_deref(), Ok("true") | Ok("1"))
+    !matches!(
+        std::env::var("ALLOW_UNSECURE").as_deref(),
+        Ok("true") | Ok("1")
+    )
 }
 
 pub fn cookie_domain() -> Option<String> {
     match std::env::var("COOKIE_DOMAIN") {
         Ok(d) if !d.is_empty() => {
             // Include leading dot for subdomains (Go parity).
-            Some(if d.starts_with('.') { d } else { format!(".{d}") })
+            Some(if d.starts_with('.') {
+                d
+            } else {
+                format!(".{d}")
+            })
         }
         _ => None,
     }

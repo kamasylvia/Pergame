@@ -1,18 +1,18 @@
 //! Node permission + invitation routes (Go nodes.permissions.controller.go
 //! + services/permission.service.go parity).
 
-use axum::extract::{Path, Query, State};
 use axum::Json;
+use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::guard::{self, Actor, NodeAction};
+use crate::AppState;
 use crate::auth::AuthUser;
+use crate::auth::guard::{self, Actor, NodeAction};
 use crate::error::ApiError;
 use crate::repo::permissions as perm_repo;
 use crate::response::ApiOk;
 use crate::types::Snowflake;
-use crate::AppState;
 
 pub const PERM_READ: i32 = 1;
 pub const PERM_ADMIN: i32 = 3;
@@ -29,7 +29,6 @@ const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 fn generate_invitation_code(length: usize) -> String {
     use rand::distr::{Distribution, Uniform};
-    use rand::RngExt;
     let mut rng = rand::rng();
     let dist = Uniform::new(0usize, CODE_ALPHABET.len()).expect("uniform range");
     (0..length)
@@ -47,7 +46,11 @@ fn parse_invitation_code(input: &str) -> Result<String, ApiError> {
 
     let mut candidate = trimmed.to_string();
     if let Ok(url) = url::Url::parse(trimmed) {
-        if let Some(code) = url.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.to_string()) {
+        if let Some(code) = url
+            .query_pairs()
+            .find(|(k, _)| k == "code")
+            .map(|(_, v)| v.to_string())
+        {
             candidate = code;
         } else if let Some(last) = url.path().split('/').rfind(|s| !s.is_empty()) {
             candidate = last.to_string();
@@ -56,10 +59,17 @@ fn parse_invitation_code(input: &str) -> Result<String, ApiError> {
 
     let candidate = candidate.trim().to_uppercase();
     if candidate.len() != 6 {
-        return Err(ApiError::BadRequest("invalid invitation code length".into()));
+        return Err(ApiError::BadRequest(
+            "invalid invitation code length".into(),
+        ));
     }
-    if !candidate.chars().all(|c| CODE_ALPHABET.contains(&(c as u8))) {
-        return Err(ApiError::BadRequest("invalid invitation code format".into()));
+    if !candidate
+        .chars()
+        .all(|c| CODE_ALPHABET.contains(&(c as u8)))
+    {
+        return Err(ApiError::BadRequest(
+            "invalid invitation code format".into(),
+        ));
     }
     Ok(candidate)
 }
@@ -126,14 +136,23 @@ pub async fn create_permission(
         .as_i64();
 
     let id = state.snowflake.generate().as_i64();
-    perm_repo::create(&state.db, id, node, user, body.permission, crate::auth::service::now_ms())
-        .await
-        .map_err(ApiError::from)?;
+    perm_repo::create(
+        &state.db,
+        id,
+        node,
+        user,
+        body.permission,
+        crate::auth::service::now_ms(),
+    )
+    .await
+    .map_err(ApiError::from)?;
 
     let created = perm_repo::get_by_id(&state.db, id)
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::Internal(Box::new(std::io::Error::other("created permission missing"))))?;
+        .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
+            "created permission missing",
+        ))))?;
     Ok(ApiOk::ok(created))
 }
 
@@ -164,9 +183,17 @@ pub async fn update_permission(
         .ok_or(ApiError::NotFound("not found".into()))?;
 
     let actor: Actor = auth.into();
-    guard::require_node_action(&state.db, &actor, existing.node_id, NodeAction::ManagePermissions).await?;
+    guard::require_node_action(
+        &state.db,
+        &actor,
+        existing.node_id,
+        NodeAction::ManagePermissions,
+    )
+    .await?;
 
-    perm_repo::update(&state.db, perm, body.permission).await.map_err(ApiError::from)?;
+    perm_repo::update(&state.db, perm, body.permission)
+        .await
+        .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("Permission updated")))
 }
 
@@ -186,13 +213,20 @@ pub async fn delete_permission(
         .map_err(ApiError::from)?
         .ok_or(ApiError::NotFound("not found".into()))?;
 
-    let guard_ok =
-        guard::require_node_action(&state.db, &actor, existing.node_id, NodeAction::ManagePermissions).await;
+    let guard_ok = guard::require_node_action(
+        &state.db,
+        &actor,
+        existing.node_id,
+        NodeAction::ManagePermissions,
+    )
+    .await;
     if guard_ok.is_err() && existing.user_id != actor.user_id {
         return Err(ApiError::Forbidden("forbidden".into()));
     }
 
-    perm_repo::delete(&state.db, perm).await.map_err(ApiError::from)?;
+    perm_repo::delete(&state.db, perm)
+        .await
+        .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("Permission deleted")))
 }
 
@@ -206,7 +240,9 @@ pub async fn get_node_invitations(
     let id = resolve(&node_id)?.as_i64();
     guard::require_node_action(&state.db, &actor, id, NodeAction::ManagePermissions).await?;
     let rows = perm_repo::invitations_by_node(&state.db, id).await?;
-    Ok(ApiOk::ok(rows.iter().map(invitation_json).collect::<Vec<_>>()))
+    Ok(ApiOk::ok(
+        rows.iter().map(invitation_json).collect::<Vec<_>>(),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,7 +261,9 @@ pub async fn create_invitation(
     let actor: Actor = auth.into();
     let id = resolve(&node_id)?.as_i64();
     if !(PERM_READ..=PERM_ADMIN).contains(&body.permission_level) {
-        return Err(ApiError::BadRequest("Permission level must be between 1 and 3".into()));
+        return Err(ApiError::BadRequest(
+            "Permission level must be between 1 and 3".into(),
+        ));
     }
     guard::require_node_action(&state.db, &actor, id, NodeAction::ManagePermissions).await?;
 
@@ -234,10 +272,16 @@ pub async fn create_invitation(
     for _ in 0..10 {
         let code = generate_invitation_code(6);
         let iid = state.snowflake.generate().as_i64();
-        match perm_repo::create_invitation(&state.db, iid, &code, body.permission_level, id, now).await {
+        match perm_repo::create_invitation(&state.db, iid, &code, body.permission_level, id, now)
+            .await
+        {
             Ok(()) => {
                 return Ok(ApiOk::ok(invitation_json(&(
-                    iid, code, body.permission_level, id, now,
+                    iid,
+                    code,
+                    body.permission_level,
+                    id,
+                    now,
                 ))));
             }
             Err(e) => {
@@ -252,7 +296,9 @@ pub async fn create_invitation(
         }
     }
     let _ = last_err;
-    Err(ApiError::BadRequest("failed to generate unique invitation code".into()))
+    Err(ApiError::BadRequest(
+        "failed to generate unique invitation code".into(),
+    ))
 }
 
 /// DELETE /nodes/:nodeId/invitations/:invitationId
@@ -271,7 +317,9 @@ pub async fn delete_invitation(
         .ok_or(ApiError::NotFound("not found".into()))?;
     guard::require_node_action(&state.db, &actor, row.3, NodeAction::ManagePermissions).await?;
 
-    perm_repo::delete_invitation(&state.db, iid).await.map_err(ApiError::from)?;
+    perm_repo::delete_invitation(&state.db, iid)
+        .await
+        .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("Invitation deleted")))
 }
 
@@ -289,7 +337,8 @@ pub async fn join_invitation(
     Json(body): Json<JoinBody>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let actor: Actor = auth.into();
-    let code = parse_invitation_code(&body.code).map_err(|_| ApiError::NotFound("not found".into()))?;
+    let code =
+        parse_invitation_code(&body.code).map_err(|_| ApiError::NotFound("not found".into()))?;
 
     let row = perm_repo::get_invitation_by_code(&state.db, &code)
         .await
@@ -309,7 +358,9 @@ pub async fn join_invitation(
     let perm = match existing {
         Some(p) if p.permission >= level => p,
         Some(p) => {
-            perm_repo::update(&state.db, p.id, level).await.map_err(ApiError::from)?;
+            perm_repo::update(&state.db, p.id, level)
+                .await
+                .map_err(ApiError::from)?;
             crate::models::PermissionRow {
                 id: p.id,
                 node_id: p.node_id,
@@ -320,9 +371,16 @@ pub async fn join_invitation(
         }
         None => {
             let pid = state.snowflake.generate().as_i64();
-            perm_repo::create(&state.db, pid, node_id, actor.user_id, level, crate::auth::service::now_ms())
-                .await
-                .map_err(ApiError::from)?;
+            perm_repo::create(
+                &state.db,
+                pid,
+                node_id,
+                actor.user_id,
+                level,
+                crate::auth::service::now_ms(),
+            )
+            .await
+            .map_err(ApiError::from)?;
             crate::models::PermissionRow {
                 id: pid,
                 node_id,

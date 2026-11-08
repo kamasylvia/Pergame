@@ -1,16 +1,16 @@
 //! /users routes — signup (public), @me and get-by-id (authed).
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::Deserialize;
 
-use crate::auth::service::{self, SignupInput};
+use crate::AppState;
 use crate::auth::AuthUser;
+use crate::auth::service::{self, SignupInput};
 use crate::error::ApiError;
 use crate::response::ApiOk;
 use crate::types::Snowflake;
-use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateUserBody {
@@ -35,8 +35,14 @@ pub struct CreateUserBody {
 /// POST /users — signup (Go CreateUser parity: binding validation, duplicate
 /// check, bcrypt cost 10, role always 1; empty password goes through the
 /// mail-setup flow which fails without a mail client).
-pub async fn create_user(State(state): State<AppState>, Json(body): Json<CreateUserBody>) -> Result<ApiOk<crate::models::User>, ApiError> {
-    if matches!(std::env::var("CONFIG_DISABLE_SIGNUP").as_deref(), Ok("true")) {
+pub async fn create_user(
+    State(state): State<AppState>,
+    Json(body): Json<CreateUserBody>,
+) -> Result<ApiOk<crate::models::User>, ApiError> {
+    if matches!(
+        std::env::var("CONFIG_DISABLE_SIGNUP").as_deref(),
+        Ok("true")
+    ) {
         return Err(ApiError::Forbidden("user signup is disabled".into()));
     }
 
@@ -45,16 +51,24 @@ pub async fn create_user(State(state): State<AppState>, Json(body): Json<CreateU
         return Err(ApiError::BadRequest("Username is required.".into()));
     }
     if body.username.len() < 5 || body.username.len() > 30 {
-        return Err(ApiError::BadRequest("Username must be between 5 and 30 characters.".into()));
+        return Err(ApiError::BadRequest(
+            "Username must be between 5 and 30 characters.".into(),
+        ));
     }
     if let Some(p) = body.password.as_deref()
-        && !p.is_empty() && (p.len() < 4 || p.len() > 50) {
-            return Err(ApiError::BadRequest("Password must be between 4 and 50 characters.".into()));
-        }
+        && !p.is_empty()
+        && (p.len() < 4 || p.len() > 50)
+    {
+        return Err(ApiError::BadRequest(
+            "Password must be between 4 and 50 characters.".into(),
+        ));
+    }
     if let Some(e) = body.email.as_deref()
-        && !e.is_empty() && !e.contains('@') {
-            return Err(ApiError::BadRequest("Invalid email address.".into()));
-        }
+        && !e.is_empty()
+        && !e.contains('@')
+    {
+        return Err(ApiError::BadRequest("Invalid email address.".into()));
+    }
 
     let mut db = state.toasty.clone();
     let user = service::signup(
@@ -77,15 +91,23 @@ pub async fn create_user(State(state): State<AppState>, Json(body): Json<CreateU
 }
 
 /// GET /users/@me
-pub async fn get_me(State(state): State<AppState>, auth: AuthUser) -> Result<ApiOk<crate::models::User>, ApiError> {
+pub async fn get_me(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<crate::models::User>, ApiError> {
     let mut db = state.toasty.clone();
     let user = fetch_user(&mut db, auth.user_id()).await?;
     Ok(ApiOk::ok(user))
 }
 
 /// GET /users/:id
-pub async fn get_user(State(state): State<AppState>, _auth: AuthUser, Path(id): Path<String>) -> Result<ApiOk<crate::models::User>, ApiError> {
-    let snowflake = Snowflake::parse(&id).ok_or_else(|| ApiError::BadRequest("Invalid user ID".into()))?;
+pub async fn get_user(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<crate::models::User>, ApiError> {
+    let snowflake =
+        Snowflake::parse(&id).ok_or_else(|| ApiError::BadRequest("Invalid user ID".into()))?;
     let mut db = state.toasty.clone();
     let user = fetch_user(&mut db, snowflake.as_i64()).await?;
     Ok(ApiOk::ok(user))

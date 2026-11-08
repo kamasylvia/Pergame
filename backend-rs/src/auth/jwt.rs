@@ -4,7 +4,7 @@
 //! Pre-auth token (TOTP flow): same shape + `pre_auth: true`, 3-minute expiry.
 //! Refresh tokens are opaque random hex (see [`refresh_token`]), not JWTs.
 
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
 pub const JWT_ISSUER: &str = "alexandrie";
@@ -32,7 +32,9 @@ fn secret() -> Vec<u8> {
     match std::env::var("JWT_SECRET") {
         Ok(s) if !s.is_empty() => s.into_bytes(),
         _ => {
-            tracing::warn!("JWT_SECRET not set; using development default (do not use in production)");
+            tracing::warn!(
+                "JWT_SECRET not set; using development default (do not use in production)"
+            );
             b"development-jwt-secret".to_vec()
         }
     }
@@ -45,7 +47,11 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
-pub fn sign_access_token(user_id: u64, role: i32, expiry_secs: i64) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn sign_access_token(
+    user_id: u64,
+    role: i32,
+    expiry_secs: i64,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = AccessClaims {
         sub: user_id.to_string(),
         iss: JWT_ISSUER.into(),
@@ -53,7 +59,11 @@ pub fn sign_access_token(user_id: u64, role: i32, expiry_secs: i64) -> Result<St
         iat: now(),
         role: role.to_string(),
     };
-    encode(&Header::new(jsonwebtoken::Algorithm::HS256), &claims, &EncodingKey::from_secret(&secret()))
+    encode(
+        &Header::new(jsonwebtoken::Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(&secret()),
+    )
 }
 
 pub fn sign_pre_auth_token(user_id: u64) -> Result<String, jsonwebtoken::errors::Error> {
@@ -64,7 +74,11 @@ pub fn sign_pre_auth_token(user_id: u64) -> Result<String, jsonwebtoken::errors:
         iat: now(),
         pre_auth: true,
     };
-    encode(&Header::new(jsonwebtoken::Algorithm::HS256), &claims, &EncodingKey::from_secret(&secret()))
+    encode(
+        &Header::new(jsonwebtoken::Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(&secret()),
+    )
 }
 
 /// Verifies an access token (HS256 only, exp validated) and returns (user_id, role).
@@ -76,8 +90,16 @@ pub fn verify_access_token(token: &str) -> Result<(u64, i32), jsonwebtoken::erro
     validation.iss = None;
     validation.required_spec_claims.clear(); // Go treats missing exp as valid
     let data = decode::<AccessClaims>(token, &DecodingKey::from_secret(&secret()), &validation)?;
-    let user_id: u64 = data.claims.sub.parse().map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat("sub/role".into())))?;
-    let role: i32 = data.claims.role.parse().map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat("sub/role".into())))?;
+    let user_id: u64 = data.claims.sub.parse().map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat(
+            "sub/role".into(),
+        ))
+    })?;
+    let role: i32 = data.claims.role.parse().map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat(
+            "sub/role".into(),
+        ))
+    })?;
     Ok((user_id, role))
 }
 
@@ -90,9 +112,15 @@ pub fn verify_pre_auth_token(token: &str) -> Result<u64, jsonwebtoken::errors::E
     validation.required_spec_claims.clear();
     let data = decode::<PreAuthClaims>(token, &DecodingKey::from_secret(&secret()), &validation)?;
     if !data.claims.pre_auth {
-        return Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat("sub/role".into())));
+        return Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidClaimFormat("sub/role".into()),
+        ));
     }
-    data.claims.sub.parse().map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat("sub/role".into())))
+    data.claims.sub.parse().map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat(
+            "sub/role".into(),
+        ))
+    })
 }
 
 /// 45 random bytes hex-encoded (90 chars), Go `signRefreshToken` parity.

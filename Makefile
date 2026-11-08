@@ -2,7 +2,7 @@
 
 
 backend:
-	cd backend && go run main.go
+	cd backend-rs && cargo run
 
 frontend:
 	cd frontend && bunx --bun nuxt dev 
@@ -16,8 +16,8 @@ update:
 	cd frontend && \
 	rm -rf node_modules .nuxt bun.lock && \
 	bun update
-	cd backend && \
-	go mod tidy
+	cd backend-rs && \
+	cargo fmt && cargo clippy --fix --allow-dirty
 
 minio:
 	MINIO_ROOT_USER=alexandrie-access MINIO_ROOT_PASSWORD=alexandrie-secret \
@@ -28,5 +28,5 @@ minioh:
 	minio server ./minio --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
 
 migrate:
-	migrate create -ext sql -dir backend/migrations/ -seq $(name)
+	migrate create -ext sql -dir backend-rs/migrations/ -seq $(name)
 

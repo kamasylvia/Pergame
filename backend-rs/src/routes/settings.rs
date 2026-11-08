@@ -1,16 +1,16 @@
 //! /user/settings routes (Go user_settings.controller.go parity) and
 //! /stats admin routes (Go stats.controller.go + stats.service.go parity).
 
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::error::ApiError;
 use crate::repo::settings_stats as repo;
 use crate::response::ApiOk;
-use crate::AppState;
 
 // ------------------------------------------------------------------ settings
 
@@ -47,9 +47,21 @@ pub async fn save_settings(
     auth: AuthUser,
     Json(body): Json<SaveSettingsBody>,
 ) -> Result<ApiOk<repo::SettingsRow>, ApiError> {
-    let general = if body.general.is_null() { json!({}) } else { body.general.clone() };
-    let editor = if body.editor.is_null() { json!({}) } else { body.editor.clone() };
-    let advanced = if body.advanced.is_null() { json!({}) } else { body.advanced.clone() };
+    let general = if body.general.is_null() {
+        json!({})
+    } else {
+        body.general.clone()
+    };
+    let editor = if body.editor.is_null() {
+        json!({})
+    } else {
+        body.editor.clone()
+    };
+    let advanced = if body.advanced.is_null() {
+        json!({})
+    } else {
+        body.advanced.clone()
+    };
 
     repo::upsert_settings(&state.db, auth.user_id(), &general, &editor, &advanced)
         .await
@@ -58,7 +70,9 @@ pub async fn save_settings(
     let row = repo::get_settings(&state.db, auth.user_id())
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::Internal(Box::new(std::io::Error::other("settings upsert failed"))))?;
+        .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
+            "settings upsert failed",
+        ))))?;
     Ok(ApiOk::ok(row))
 }
 
@@ -108,7 +122,10 @@ fn growth_window_keys() -> Vec<String> {
 }
 
 /// GET /stats/overview
-pub async fn overview_stats(State(state): State<AppState>, auth: AuthUser) -> Result<ApiOk<serde_json::Value>, ApiError> {
+pub async fn overview_stats(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
     let total_users = repo::users_total(&state.db).await?;
     let total_nodes = repo::nodes_total(&state.db).await?;
@@ -121,7 +138,10 @@ pub async fn overview_stats(State(state): State<AppState>, auth: AuthUser) -> Re
 }
 
 /// GET /stats/users
-pub async fn user_stats(State(state): State<AppState>, auth: AuthUser) -> Result<ApiOk<serde_json::Value>, ApiError> {
+pub async fn user_stats(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
     let total_users = repo::users_total(&state.db).await?;
     let keys = growth_window_keys();
@@ -168,15 +188,22 @@ pub async fn node_stats(
 /// startOfMonthUTC(...).AddDate(0,-11,0) window start).
 fn month_key_to_ms(key: Option<&String>) -> Result<i64, ApiError> {
     let Some(key) = key else {
-        return Err(ApiError::Internal(Box::new(std::io::Error::other("no months"))));
+        return Err(ApiError::Internal(Box::new(std::io::Error::other(
+            "no months",
+        ))));
     };
     let (y, m) = key
         .split_once('-')
         .and_then(|(y, m)| Some((y.parse::<i32>().ok()?, m.parse::<u8>().ok()?)))
-        .ok_or(ApiError::Internal(Box::new(std::io::Error::other("bad month key"))))?;
-    let date = time::Date::from_calendar_date(y, time::Month::try_from(m).map_err(|_| {
-        ApiError::Internal(Box::new(std::io::Error::other("bad month")))
-    })?, 1)
+        .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
+            "bad month key",
+        ))))?;
+    let date = time::Date::from_calendar_date(
+        y,
+        time::Month::try_from(m)
+            .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("bad month"))))?,
+        1,
+    )
     .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("bad date"))))?;
     let dt = date.with_time(time::Time::MIDNIGHT).assume_utc();
     Ok(dt.unix_timestamp() * 1000)
@@ -196,7 +223,10 @@ mod tests {
 
     #[test]
     fn fill_missing_defaults_to_zero() {
-        let series = vec![repo::MonthlyCount { month: "2026-10".into(), count: 7 }];
+        let series = vec![repo::MonthlyCount {
+            month: "2026-10".into(),
+            count: 7,
+        }];
         let keys = last12_month_keys((2026, 11));
         let filled = fill_missing_months(&series, &keys);
         assert_eq!(filled.len(), 12);

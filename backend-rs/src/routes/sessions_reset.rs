@@ -2,24 +2,31 @@
 //! GetSessions / DeleteSession / LogoutAllDevices / RequestResetPassword /
 //! ResetPassword parity).
 
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::AppState;
 use crate::auth::service::now_ms;
-use crate::auth::{cookies, AuthUser};
+use crate::auth::{AuthUser, cookies};
 use crate::error::ApiError;
 use crate::repo::sessions as session_repo;
 use crate::response::ApiOk;
-use crate::AppState;
 
 /// GET /auth/sessions — all sessions of the caller.
-pub async fn get_sessions(State(state): State<AppState>, auth: AuthUser) -> Result<ApiOk<Vec<serde_json::Value>>, ApiError> {
+pub async fn get_sessions(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<Vec<serde_json::Value>>, ApiError> {
     let rows = session_repo::list_by_user(&state.db, auth.user_id())
         .await
-        .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to retrieve sessions"))))?;
+        .map_err(|_| {
+            ApiError::Internal(Box::new(std::io::Error::other(
+                "failed to retrieve sessions",
+            )))
+        })?;
     let value: Vec<serde_json::Value> = rows
         .iter()
         .map(|s| serde_json::to_value(s).unwrap_or(json!(null)))
@@ -38,7 +45,9 @@ pub async fn delete_session(
         .as_i64();
     session_repo::delete_by_id_and_user(&state.db, id, auth.user_id())
         .await
-        .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to delete session"))))?;
+        .map_err(|_| {
+            ApiError::Internal(Box::new(std::io::Error::other("failed to delete session")))
+        })?;
     Ok(ApiOk::ok(json!("Session closed successfully.")))
 }
 
@@ -49,7 +58,9 @@ pub async fn logout_all_devices(
 ) -> Result<axum::response::Response, ApiError> {
     session_repo::delete_all_by_user(&state.db, auth.user_id())
         .await
-        .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to delete sessions"))))?;
+        .map_err(|_| {
+            ApiError::Internal(Box::new(std::io::Error::other("failed to delete sessions")))
+        })?;
 
     let resp = (
         axum::http::StatusCode::OK,
@@ -63,7 +74,10 @@ pub async fn logout_all_devices(
     let mut resp = resp;
     {
         let headers = resp.headers_mut();
-        for c in [cookies::clear_access_cookie(), cookies::clear_refresh_cookie()] {
+        for c in [
+            cookies::clear_access_cookie(),
+            cookies::clear_refresh_cookie(),
+        ] {
             if let Ok(v) = axum::http::HeaderValue::from_str(&c.to_string()) {
                 headers.append(axum::http::header::SET_COOKIE, v);
             }
@@ -150,7 +164,8 @@ pub async fn request_reset(
         "Your password reset link is: {}\n\nIf you did not expect this email, please ignore it.",
         reset_url
     );
-    if let Err(e) = mail_client.send_html(&email, "Alexandrie: Reset your password", &plain, &html) {
+    if let Err(e) = mail_client.send_html(&email, "Alexandrie: Reset your password", &plain, &html)
+    {
         tracing::error!(error = %e, "failed to send password reset email");
     }
 
@@ -189,15 +204,16 @@ pub async fn reset_password(
         .get("sub")
         .and_then(|v| v.as_str())
         .and_then(|s| s.parse().ok())
-        .ok_or(ApiError::BadRequest("invalid user ID in reset token".into()))?;
+        .ok_or(ApiError::BadRequest(
+            "invalid user ID in reset token".into(),
+        ))?;
 
-    let stored: Option<Option<String>> = sqlx::query_scalar(
-        "SELECT password_reset_token FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&state.db)
-    .await
-    .ok();
+    let stored: Option<Option<String>> =
+        sqlx::query_scalar("SELECT password_reset_token FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&state.db)
+            .await
+            .ok();
     let Some(Some(stored_token)) = stored else {
         return Err(ApiError::BadRequest("invalid reset token".into()));
     };

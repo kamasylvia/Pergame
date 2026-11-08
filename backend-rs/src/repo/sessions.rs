@@ -30,7 +30,11 @@ pub async fn list_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<SessionView
     .await
 }
 
-pub async fn delete_by_id_and_user(pool: &PgPool, id: i64, user_id: i64) -> Result<bool, sqlx::Error> {
+pub async fn delete_by_id_and_user(
+    pool: &PgPool,
+    id: i64,
+    user_id: i64,
+) -> Result<bool, sqlx::Error> {
     let res = sqlx::query("DELETE FROM sessions WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(user_id)

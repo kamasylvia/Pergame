@@ -87,9 +87,9 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Snowflake {
     fn decode(
         value: sqlx::postgres::PgValueRef<'r>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        Ok(Self::from_i64(<i64 as sqlx::Decode<sqlx::Postgres>>::decode(
-            value,
-        )?))
+        Ok(Self::from_i64(
+            <i64 as sqlx::Decode<sqlx::Postgres>>::decode(value)?,
+        ))
     }
 }
 

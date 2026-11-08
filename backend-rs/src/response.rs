@@ -1,9 +1,9 @@
 //! Go-compatible response envelope:
 //! `{"status": "success"|"error", "timestamp": <ms>, "result"|"message": ...}`
 
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Serialize;
 
 use crate::auth::service::now_ms;
@@ -16,7 +16,10 @@ pub struct ApiOk<T: Serialize> {
 
 impl<T: Serialize> ApiOk<T> {
     pub fn ok(result: T) -> Self {
-        Self { result, status: StatusCode::OK }
+        Self {
+            result,
+            status: StatusCode::OK,
+        }
     }
 
     pub fn with_status(status: StatusCode, result: T) -> Self {

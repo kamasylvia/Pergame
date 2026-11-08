@@ -13,8 +13,8 @@
 use aws_sdk_s3::config::{Builder as S3ConfigBuilder, Credentials};
 
 const BACKUP_PRESIGN_SECONDS: u64 = 24 * 3600;
-use aws_sdk_s3::operation::create_bucket::CreateBucketOutput;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::operation::create_bucket::CreateBucketOutput;
 
 use crate::error::ApiError;
 
@@ -55,10 +55,14 @@ pub fn parse_env() -> Result<S3Storage, String> {
     let url = resolve_endpoint(&endpoint, secure_env.as_deref());
 
     if env("S3_CA_PATH").is_some() {
-        tracing::warn!("S3_CA_PATH is not supported by the Rust storage client yet (custom CA not loaded)");
+        tracing::warn!(
+            "S3_CA_PATH is not supported by the Rust storage client yet (custom CA not loaded)"
+        );
     }
     if env("S3_INSECURE_TLS").is_some() {
-        tracing::warn!("S3_INSECURE_TLS is not supported by the Rust storage client yet (verification stays on)");
+        tracing::warn!(
+            "S3_INSECURE_TLS is not supported by the Rust storage client yet (verification stays on)"
+        );
     }
 
     let s3cfg = S3ConfigBuilder::new()
@@ -106,10 +110,9 @@ impl S3Storage {
                     tracing::info!("We already own {}", bucket);
                     Ok(())
                 } else {
-                    Err(ApiError::Internal(Box::new(std::io::Error::other(format!(
-                        "failed to create bucket {}: {}",
-                        bucket, msg
-                    )))))
+                    Err(ApiError::Internal(Box::new(std::io::Error::other(
+                        format!("failed to create bucket {}: {}", bucket, msg),
+                    ))))
                 }
             }
         }
@@ -120,11 +123,20 @@ impl S3Storage {
             r#"{{"Version":"2012-10-17","Statement":[{{"Effect":"Allow","Principal":{{"AWS":["*"]}},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::{}/*"]}}]}}"#,
             bucket
         );
-        match self.client.put_bucket_policy().bucket(bucket).policy(policy).send().await {
+        match self
+            .client
+            .put_bucket_policy()
+            .bucket(bucket)
+            .policy(policy)
+            .send()
+            .await
+        {
             Ok(_) => tracing::info!("Successfully set public bucket policy for {}", bucket),
             Err(e) => {
                 tracing::warn!("Failed to set public bucket policy for {}: {}", bucket, e);
-                tracing::warn!("Make sure objects in this bucket are publicly readable (configure it in your S3 provider), otherwise uploaded files will not be accessible.");
+                tracing::warn!(
+                    "Make sure objects in this bucket are publicly readable (configure it in your S3 provider), otherwise uploaded files will not be accessible."
+                );
             }
         }
     }
@@ -154,7 +166,9 @@ impl S3Storage {
             .send()
             .await
         {
-            Ok(_) => tracing::info!("Successfully set lifecycle policy for backups (auto-delete after 24h)"),
+            Ok(_) => tracing::info!(
+                "Successfully set lifecycle policy for backups (auto-delete after 24h)"
+            ),
             Err(e) => tracing::warn!("Failed to set lifecycle policy for backups: {}", e),
         }
     }
@@ -215,7 +229,14 @@ impl S3Storage {
         let Some(objects) = list.contents else { return };
         for obj in objects {
             let Some(key) = obj.key else { continue };
-            if let Err(e) = self.client.delete_object().bucket(&self.bucket).key(&key).send().await {
+            if let Err(e) = self
+                .client
+                .delete_object()
+                .bucket(&self.bucket)
+                .key(&key)
+                .send()
+                .await
+            {
                 tracing::warn!(%key, error = %e, "failed to delete object");
             }
         }
@@ -275,18 +296,27 @@ impl S3Storage {
             .expires_in(std::time::Duration::from_secs(BACKUP_PRESIGN_SECONDS))
             .build()
             .map_err(|e| e.to_string())?;
-        req.presigned(cfg).await.map(|p| p.uri().to_string()).map_err(|e| e.to_string())
+        req.presigned(cfg)
+            .await
+            .map(|p| p.uri().to_string())
+            .map_err(|e| e.to_string())
     }
 
     /// Storage cleanup for a deleted resource node: metadata path first, then
     /// prefix sweep (Go DeleteSingleResource parity).
-    pub async fn delete_resource_files(&self, user_id: i64, node_id: i64, metadata: Option<&serde_json::Value>) {
+    pub async fn delete_resource_files(
+        &self,
+        user_id: i64,
+        node_id: i64,
+        metadata: Option<&serde_json::Value>,
+    ) {
         if let Some(meta) = metadata
             && let Some(path) = meta.get("transformed_path").and_then(|v| v.as_str())
-                && !path.is_empty() {
-                    self.delete_user_object(user_id, path).await;
-                    return;
-                }
+            && !path.is_empty()
+        {
+            self.delete_user_object(user_id, path).await;
+            return;
+        }
         self.delete_node_prefix(user_id, node_id).await;
     }
 }

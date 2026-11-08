@@ -5,34 +5,61 @@
 use axum::extract::{Multipart, Path, State};
 use serde_json::json;
 
-use crate::auth::guard::{self, Actor, NodeAction};
+use crate::AppState;
 use crate::auth::AuthUser;
+use crate::auth::guard::{self, Actor, NodeAction};
 use crate::error::ApiError;
 use crate::models::NodeRow;
 use crate::repo::nodes as node_repo;
 use crate::response::ApiOk;
-use crate::AppState;
 
 const DEFAULT_TYPES: &[&str] = &[
-    "image/png", "image/jpeg", "image/gif", "image/bmp", "image/webp", "image/avif",
-    "image/svg+xml", "image/vnd.microsoft.icon",
-    "video/mp4", "video/x-msvideo", "video/quicktime", "video/x-ms-wmv", "video/x-flv",
-    "video/x-matroska", "video/webm",
-    "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/aac", "audio/webm",
-    "application/pdf", "application/msword",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/bmp",
+    "image/webp",
+    "image/avif",
+    "image/svg+xml",
+    "image/vnd.microsoft.icon",
+    "video/mp4",
+    "video/x-msvideo",
+    "video/quicktime",
+    "video/x-ms-wmv",
+    "video/x-flv",
+    "video/x-matroska",
+    "video/webm",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
+    "audio/flac",
+    "audio/aac",
+    "audio/webm",
+    "application/pdf",
+    "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/plain", "text/csv",
-    "application/zip", "application/x-rar-compressed", "application/x-tar",
-    "application/gzip", "application/x-bzip2",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/x-rar-compressed",
+    "application/x-tar",
+    "application/gzip",
+    "application/x-bzip2",
 ];
 
 const IMAGE_TYPES: &[&str] = &[
-    "image/png", "image/jpeg", "image/gif", "image/bmp", "image/webp", "image/avif",
-    "image/svg+xml", "image/vnd.microsoft.icon",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/bmp",
+    "image/webp",
+    "image/avif",
+    "image/svg+xml",
+    "image/vnd.microsoft.icon",
 ];
 
 fn supported_types() -> Vec<String> {
@@ -72,7 +99,15 @@ pub struct UploadedPart {
 }
 
 /// Pulls a single "file" part plus string fields from the multipart body.
-async fn read_upload(mut multipart: Multipart) -> Result<(Option<UploadedPart>, std::collections::HashMap<String, String>), ApiError> {
+async fn read_upload(
+    mut multipart: Multipart,
+) -> Result<
+    (
+        Option<UploadedPart>,
+        std::collections::HashMap<String, String>,
+    ),
+    ApiError,
+> {
     let mut file = None;
     let mut fields = std::collections::HashMap::new();
     while let Some(field) = multipart
@@ -85,10 +120,9 @@ async fn read_upload(mut multipart: Multipart) -> Result<(Option<UploadedPart>, 
             "file" => {
                 let filename = field.file_name().unwrap_or("").to_string();
                 let content_type = field.content_type().unwrap_or("").to_string();
-                let bytes = field
-                    .bytes()
-                    .await
-                    .map_err(|_| ApiError::BadRequest("file too large or failed to get file".into()))?;
+                let bytes = field.bytes().await.map_err(|_| {
+                    ApiError::BadRequest("file too large or failed to get file".into())
+                })?;
                 file = Some(UploadedPart {
                     filename,
                     content_type,
@@ -116,14 +150,21 @@ fn mime_allowed(list: &[String], mime: &str) -> bool {
     list.iter().any(|t| t == mime)
 }
 
-fn build_metadata(filetype: &str, original_path: &str, transformed_path: &str, extra: Option<&serde_json::Value>) -> serde_json::Value {
+fn build_metadata(
+    filetype: &str,
+    original_path: &str,
+    transformed_path: &str,
+    extra: Option<&serde_json::Value>,
+) -> serde_json::Value {
     let mut base = json!({
         "filetype": filetype,
         "original_path": original_path,
         "transformed_path": transformed_path,
     });
     // Go maps.Copy(metadata_final, metadata): user-provided keys override.
-    if let (Some(base_obj), Some(extra_obj)) = (base.as_object_mut(), extra.and_then(|v| v.as_object())) {
+    if let (Some(base_obj), Some(extra_obj)) =
+        (base.as_object_mut(), extra.and_then(|v| v.as_object()))
+    {
         for (k, v) in extra_obj {
             base_obj.insert(k.clone(), v.clone());
         }
@@ -145,7 +186,9 @@ pub async fn upload_file(
 
     let (file, fields) = read_upload(multipart).await?;
     let Some(file) = file else {
-        return Err(ApiError::BadRequest("file too large or failed to get file".into()));
+        return Err(ApiError::BadRequest(
+            "file too large or failed to get file".into(),
+        ));
     };
 
     let parent_id: Option<i64> = fields
@@ -166,12 +209,16 @@ pub async fn upload_file(
         return Err(ApiError::BadRequest("file type not supported".into()));
     }
     if file.bytes.len() as u64 > max_file {
-        return Err(ApiError::BadRequest("file too large or failed to get file".into()));
+        return Err(ApiError::BadRequest(
+            "file too large or failed to get file".into(),
+        ));
     }
 
     let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
     if (total as u64) + file.bytes.len() as u64 > max_total {
-        return Err(ApiError::BadRequest("total size of uploads exceeds the limit".into()));
+        return Err(ApiError::BadRequest(
+            "total size of uploads exceeds the limit".into(),
+        ));
     }
 
     let id = state.snowflake.generate().as_i64();
@@ -232,15 +279,25 @@ pub async fn upload_file(
 
     let object_key = format!("{}/{}{}", actor.user_id, id, ext);
     storage
-        .put_user_object(actor.user_id, &format!("{}{}", id, ext), file.bytes.clone(), Some(&mime))
+        .put_user_object(
+            actor.user_id,
+            &format!("{}{}", id, ext),
+            file.bytes.clone(),
+            Some(&mime),
+        )
         .await?;
     let _ = object_key;
 
     let node = node_repo::get_by_id(&state.db, id)
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::Internal(Box::new(std::io::Error::other("created node missing"))))?;
-    Ok(ApiOk::with_status(axum::http::StatusCode::OK, serde_json::to_value(&node).unwrap_or(json!(null))))
+        .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
+            "created node missing",
+        ))))?;
+    Ok(ApiOk::with_status(
+        axum::http::StatusCode::OK,
+        serde_json::to_value(&node).unwrap_or(json!(null)),
+    ))
 }
 
 /// POST /resources/avatar — image-only upload to `{user}/avatar`.
@@ -257,7 +314,9 @@ pub async fn upload_avatar(
 
     let (file, _) = read_upload(multipart).await?;
     let Some(file) = file else {
-        return Err(ApiError::BadRequest("file too large or failed to get file".into()));
+        return Err(ApiError::BadRequest(
+            "file too large or failed to get file".into(),
+        ));
     };
 
     let mime = if file.content_type.is_empty() {
@@ -269,7 +328,9 @@ pub async fn upload_avatar(
         return Err(ApiError::BadRequest("file type not supported".into()));
     }
     if file.bytes.len() as u64 > max_file {
-        return Err(ApiError::BadRequest("file too large or failed to get file".into()));
+        return Err(ApiError::BadRequest(
+            "file too large or failed to get file".into(),
+        ));
     }
 
     storage
@@ -309,11 +370,14 @@ pub async fn update_file(
             "file" => {
                 let filename = field.file_name().unwrap_or("").to_string();
                 let content_type = field.content_type().unwrap_or("").to_string();
-                let bytes = field
-                    .bytes()
-                    .await
-                    .map_err(|_| ApiError::BadRequest("file too large or failed to get file".into()))?;
-                file = Some(UploadedPart { filename, content_type, bytes: bytes.to_vec() });
+                let bytes = field.bytes().await.map_err(|_| {
+                    ApiError::BadRequest("file too large or failed to get file".into())
+                })?;
+                file = Some(UploadedPart {
+                    filename,
+                    content_type,
+                    bytes: bytes.to_vec(),
+                });
             }
             name => {
                 let value = field
@@ -345,14 +409,18 @@ pub async fn update_file(
             return Err(ApiError::BadRequest("file type not supported".into()));
         }
         if file.bytes.len() as u64 > max_file {
-            return Err(ApiError::BadRequest("file too large or failed to get file".into()));
+            return Err(ApiError::BadRequest(
+                "file too large or failed to get file".into(),
+            ));
         }
 
         let current_size = db_node.size.unwrap_or(0);
         let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
         let size_increase = file.bytes.len() as i64 - current_size;
         if (total as i64) + size_increase > max_total as i64 {
-            return Err(ApiError::BadRequest("total size of uploads exceeds the limit".into()));
+            return Err(ApiError::BadRequest(
+                "total size of uploads exceeds the limit".into(),
+            ));
         }
 
         // Go: object key from the EXISTING transformed_path (extension kept).

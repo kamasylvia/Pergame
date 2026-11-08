@@ -1,32 +1,20 @@
 //! /nodes routes — CRUD, tree listing, shared listing, public view, search
 //! (Go controllers/nodes.controller.go + services/node.service.go parity).
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::guard::{self, Actor, NodeAction};
+use crate::AppState;
 use crate::auth::AuthUser;
+use crate::auth::guard::{self, Actor, NodeAction};
 use crate::error::ApiError;
 use crate::repo::nodes as node_repo;
 use crate::response::ApiOk;
 use crate::utils::sanitize_html;
-use crate::AppState;
-
-fn ok_json(status: StatusCode, result: serde_json::Value) -> axum::response::Response {
-    (
-        status,
-        Json(json!({
-            "status": "success",
-            "timestamp": node_repo::now_ms(),
-            "result": result,
-        })),
-    )
-        .into_response()
-}
 
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
@@ -45,11 +33,14 @@ pub async fn search(
     Query(q): Query<SearchQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     if q.q.chars().count() < 2 {
-        return Err(ApiError::BadRequest("Search query must be at least 2 characters".into()));
+        return Err(ApiError::BadRequest(
+            "Search query must be at least 2 characters".into(),
+        ));
     }
     let include_content = q.content == "true";
     let limit = q.limit.unwrap_or(20);
-    let results = node_repo::search(&state.db, auth.user_id(), &q.q, include_content, limit).await?;
+    let results =
+        node_repo::search(&state.db, auth.user_id(), &q.q, include_content, limit).await?;
     Ok(ApiOk::ok(results))
 }
 
@@ -206,11 +197,15 @@ impl NodeInput {
 
 /// Go getNodeSize: file nodes keep the provided size; others derive it from
 /// content lengths.
-fn node_size(role: i32, size: Option<i64>, content: &Option<String>, compiled: &Option<String>) -> Option<i64> {
-    if role == 4
-        && size.is_some() {
-            return size;
-        }
+fn node_size(
+    role: i32,
+    size: Option<i64>,
+    content: &Option<String>,
+    compiled: &Option<String>,
+) -> Option<i64> {
+    if role == 4 && size.is_some() {
+        return size;
+    }
     let mut total = 0i64;
     if let Some(c) = compiled {
         total += c.len() as i64;
@@ -228,7 +223,8 @@ fn resolve_id(param: &str) -> Result<crate::types::Snowflake, ApiError> {
     if param == "@me" {
         return Err(ApiError::BadRequest("invalid parameter".into()));
     }
-    crate::types::Snowflake::parse(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    crate::types::Snowflake::parse(param)
+        .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// POST /nodes — create under the actor.
@@ -239,7 +235,9 @@ pub async fn create_node(
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
     if input.name.is_empty() {
-        return Err(ApiError::BadRequest("Key: 'Node.Name' Error: field validation failed".into()));
+        return Err(ApiError::BadRequest(
+            "Key: 'Node.Name' Error: field validation failed".into(),
+        ));
     }
 
     let mut safe_parent = input.parent_id;
@@ -269,7 +267,9 @@ pub async fn create_node(
     let created = node_repo::get_by_id(&state.db, id)
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::Internal(Box::new(std::io::Error::other("created node missing"))))?;
+        .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
+            "created node missing",
+        ))))?;
     Ok(ApiOk::with_status(StatusCode::OK, created))
 }
 
@@ -294,7 +294,8 @@ pub async fn update_node(
     let mut accessibility = input.accessibility;
     let mut access = input.access;
 
-    let level = guard::check_node_action_status(&state.db, &actor, &db_node, NodeAction::Update).await;
+    let level =
+        guard::check_node_action_status(&state.db, &actor, &db_node, NodeAction::Update).await;
     let level = match level {
         Ok(l) => Some(l),
         Err((_, err)) => {
@@ -309,8 +310,8 @@ pub async fn update_node(
         }
     };
 
-    let is_owner_edit = db_node.user_id == actor.user_id
-        || level.map(|l| l >= guard::PERM_OWNER).unwrap_or(false);
+    let is_owner_edit =
+        db_node.user_id == actor.user_id || level.map(|l| l >= guard::PERM_OWNER).unwrap_or(false);
     if !is_owner_edit {
         parent = db_node.parent_id;
         user_id = db_node.user_id;
@@ -342,7 +343,7 @@ pub async fn update_node(
         .await
         .map_err(ApiError::from)?;
     let _ = user_id; // Go updates user_id via repo.Update omitting it; node ownership
-                     // only changes implicitly through parent moves — kept identical.
+    // only changes implicitly through parent moves — kept identical.
 
     let updated = node_repo::get_by_id(&state.db, id)
         .await
@@ -366,12 +367,17 @@ pub async fn delete_node(
     // Storage cleanup: descendant role=4 files are removed before the DB
     // cascade (Go parity: failures logged and ignored).
     if let Some(storage) = &state.storage
-        && let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await {
-            for (res_id, res_user, metadata) in resources {
-                storage.delete_resource_files(res_user, res_id, metadata.as_ref()).await;
-            }
+        && let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await
+    {
+        for (res_id, res_user, metadata) in resources {
+            storage
+                .delete_resource_files(res_user, res_id, metadata.as_ref())
+                .await;
         }
+    }
 
-    node_repo::delete(&state.db, node.id).await.map_err(ApiError::from)?;
+    node_repo::delete(&state.db, node.id)
+        .await
+        .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("OK")))
 }

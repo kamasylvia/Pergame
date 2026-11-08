@@ -2,17 +2,17 @@
 //! request (enroll), confirm (activate + backup codes), verify (complete
 //! pre-auth login), disable.
 
-use axum::extract::State;
-use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum::extract::State;
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::service::now_ms;
-use crate::auth::{cookies, jwt, totp, AuthUser};
-use crate::error::ApiError;
 use crate::AppState;
+use crate::auth::service::now_ms;
+use crate::auth::{AuthUser, cookies, jwt, totp};
+use crate::error::ApiError;
 
 fn ok_envelope(result: serde_json::Value) -> Response {
     (
@@ -26,12 +26,20 @@ fn ok_envelope(result: serde_json::Value) -> Response {
         .into_response()
 }
 
-fn envelope_with_cookies(status: StatusCode, body: serde_json::Value, set_cookies: Vec<cookie::Cookie<'static>>) -> Response {
-    let resp = (status, Json(json!({
-        "status": "success",
-        "timestamp": now_ms(),
-        "result": body,
-    }))).into_response();
+fn envelope_with_cookies(
+    status: StatusCode,
+    body: serde_json::Value,
+    set_cookies: Vec<cookie::Cookie<'static>>,
+) -> Response {
+    let resp = (
+        status,
+        Json(json!({
+            "status": "success",
+            "timestamp": now_ms(),
+            "result": body,
+        })),
+    )
+        .into_response();
     let mut resp = resp;
     {
         let headers = resp.headers_mut();
@@ -113,11 +121,16 @@ pub async fn confirm_activation(
     if body.secret.is_empty() || body.code.is_empty() {
         return Err(ApiError::BadRequest("secret and code are required".into()));
     }
-    let pre_token = if auth.is_some() { None } else { Some(body.pre_auth_token.clone()) };
+    let pre_token = if auth.is_some() {
+        None
+    } else {
+        Some(body.pre_auth_token.clone())
+    };
     let user_id = resolve_user_id(&state, auth, pre_token).await?;
 
     let mut db = state.toasty.clone();
-    let plain_codes = totp::enable_totp(&mut db, &state.snowflake, user_id, &body.secret, &body.code).await?;
+    let plain_codes =
+        totp::enable_totp(&mut db, &state.snowflake, user_id, &body.secret, &body.code).await?;
     Ok(ok_envelope(json!({ "backup_codes": plain_codes })))
 }
 
@@ -136,14 +149,17 @@ pub async fn verify_totp(
     Json(body): Json<VerifyBody>,
 ) -> Result<Response, ApiError> {
     if body.pre_auth_token.is_empty() || body.code.is_empty() {
-        return Err(ApiError::BadRequest("pre_auth_token and code are required".into()));
+        return Err(ApiError::BadRequest(
+            "pre_auth_token and code are required".into(),
+        ));
     }
 
     let mut db = state.toasty.clone();
     let user = totp::verify_pre_auth_and_user(&mut db, &body.pre_auth_token, &body.code).await?;
 
     let refresh_token =
-        totp::create_login_session(&mut db, &state.snowflake, user.id, &ctx.ip, &ctx.user_agent).await?;
+        totp::create_login_session(&mut db, &state.snowflake, user.id, &ctx.ip, &ctx.user_agent)
+            .await?;
 
     let cfg = crate::config::global();
     let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)

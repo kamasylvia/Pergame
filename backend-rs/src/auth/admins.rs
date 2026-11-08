@@ -13,7 +13,12 @@ const ROLE_ADMIN: i32 = 2; // 1 << 1
 
 pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
     let admin_ids: Vec<String> = std::env::var("ADMIN_ACCOUNTS")
-        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default();
 
     // Demote existing admins that are not in the current list (sqlx escape
@@ -47,7 +52,11 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
             tracing::warn!(%id_str, "app-admins: invalid admin user ID");
             continue;
         };
-        match crate::models::User::filter_by_id(id.as_i64()).first().exec(db).await {
+        match crate::models::User::filter_by_id(id.as_i64())
+            .first()
+            .exec(db)
+            .await
+        {
             Ok(Some(user)) => {
                 if user.role != ROLE_ADMIN {
                     match crate::models::User::filter_by_id(user.id)
@@ -56,8 +65,12 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
                         .exec(db)
                         .await
                     {
-                        Ok(_) => tracing::info!("app-admins: user {} granted admin role", user.username),
-                        Err(e) => tracing::warn!(error = %e, username = %user.username, "failed to promote user"),
+                        Ok(_) => {
+                            tracing::info!("app-admins: user {} granted admin role", user.username)
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, username = %user.username, "failed to promote user")
+                        }
                     }
                 }
             }

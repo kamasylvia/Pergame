@@ -35,9 +35,18 @@ pub fn from_env() -> Option<MailClient> {
 impl MailClient {
     /// Sends a templated HTML email with a plain-text fallback (Go parity:
     /// SetBodyString plain + AddAlternative HTML).
-    pub fn send_html(&self, to: &str, subject: &str, plain: &str, html: &str) -> Result<(), String> {
+    pub fn send_html(
+        &self,
+        to: &str,
+        subject: &str,
+        plain: &str,
+        html: &str,
+    ) -> Result<(), String> {
         let mailbox_to: Mailbox = to.parse().map_err(|e| format!("invalid recipient: {e}"))?;
-        let mailbox_from: Mailbox = self.from.parse().map_err(|e| format!("invalid sender: {e}"))?;
+        let mailbox_from: Mailbox = self
+            .from
+            .parse()
+            .map_err(|e| format!("invalid sender: {e}"))?;
 
         let email = lettre::Message::builder()
             .from(mailbox_from)
@@ -49,7 +58,10 @@ impl MailClient {
             ))
             .map_err(|e| format!("failed to build email: {e}"))?;
 
-        self.transport.send(&email).map(|_| ()).map_err(|e| e.to_string())
+        self.transport
+            .send(&email)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 

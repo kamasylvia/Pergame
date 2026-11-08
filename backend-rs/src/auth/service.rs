@@ -19,10 +19,7 @@ pub fn now_ms() -> i64 {
 
 pub enum LoginOutcome {
     /// Password verified; session created; refresh token issued.
-    Full {
-        user: User,
-        refresh_token: String,
-    },
+    Full { user: User, refresh_token: String },
     /// TOTP required (enabled) or must be enrolled first (forced).
     TwoFa {
         message: &'static str,
@@ -48,14 +45,21 @@ pub async fn login(
     ip: &str,
     user_agent: &str,
 ) -> Result<LoginOutcome, ApiError> {
-    let user = User::filter_by_username(username).first().exec(db).await.ok().flatten();
+    let user = User::filter_by_username(username)
+        .first()
+        .exec(db)
+        .await
+        .ok()
+        .flatten();
 
     let Some(user) = user else {
         return Err(bad_credentials());
     };
 
     let Some(hash) = &user.password else {
-        return Err(ApiError::Unauthorized("please login with OIDC provider".into()));
+        return Err(ApiError::Unauthorized(
+            "please login with OIDC provider".into(),
+        ));
     };
 
     if bcrypt::verify(password, hash).unwrap_or(false) {
@@ -65,9 +69,14 @@ pub async fn login(
     }
 
     if user.totp_enabled || user.totp_forced {
-        let pre = super::jwt::sign_pre_auth_token(user.id as u64)
-            .map_err(|_| ApiError::Unauthorized("failed to generate pre-authentication token".into()))?;
-        let message = if user.totp_enabled { "2FA_REQUIRED" } else { "2FA_TO_ENABLE" };
+        let pre = super::jwt::sign_pre_auth_token(user.id as u64).map_err(|_| {
+            ApiError::Unauthorized("failed to generate pre-authentication token".into())
+        })?;
+        let message = if user.totp_enabled {
+            "2FA_REQUIRED"
+        } else {
+            "2FA_TO_ENABLE"
+        };
         return Ok(LoginOutcome::TwoFa {
             message,
             pre_auth_token: pre,
@@ -75,10 +84,12 @@ pub async fn login(
         });
     }
 
-    let refresh =
-        super::totp::create_login_session(db, generator, user.id, ip, user_agent).await?;
+    let refresh = super::totp::create_login_session(db, generator, user.id, ip, user_agent).await?;
 
-    Ok(LoginOutcome::Full { user, refresh_token: refresh })
+    Ok(LoginOutcome::Full {
+        user,
+        refresh_token: refresh,
+    })
 }
 
 pub async fn refresh_session(db: &mut Db, refresh_token: &str) -> Result<(User, String), ApiError> {
@@ -121,7 +132,13 @@ pub async fn refresh_session(db: &mut Db, refresh_token: &str) -> Result<(User, 
 /// Logs a session out by refresh token. Errors are swallowed (Go parity:
 /// `ctr.app.Services.Auth.Logout(refreshToken)` ignores the result).
 pub async fn logout(db: &mut Db, refresh_token: &str) {
-    if let Some(session) = Session::filter_by_refresh_token(refresh_token).first().exec(db).await.ok().flatten() {
+    if let Some(session) = Session::filter_by_refresh_token(refresh_token)
+        .first()
+        .exec(db)
+        .await
+        .ok()
+        .flatten()
+    {
         let _ = Session::filter_by_id(session.id).delete().exec(db).await;
     }
 }
@@ -158,15 +175,30 @@ pub struct SignupInput {
     pub totp_forced: bool,
 }
 
-pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupInput) -> Result<User, ApiError> {
-    if User::filter_by_username(&input.username).first().exec(db).await.ok().flatten().is_some() {
+pub async fn signup(
+    db: &mut Db,
+    generator: &SnowflakeGenerator,
+    input: SignupInput,
+) -> Result<User, ApiError> {
+    if User::filter_by_username(&input.username)
+        .first()
+        .exec(db)
+        .await
+        .ok()
+        .flatten()
+        .is_some()
+    {
         return Err(ApiError::Conflict("Username already exists".into()));
     }
 
     // Empty password triggers the "account created by admin" email flow in Go:
     // a set-password invitation JWT (sub only, no expiry — signSetToken parity)
     // is emailed; without a mail client that path fails there too.
-    let password_provided = input.password.as_deref().map(|p| !p.is_empty()).unwrap_or(false);
+    let password_provided = input
+        .password
+        .as_deref()
+        .map(|p| !p.is_empty())
+        .unwrap_or(false);
     let password_hash = if password_provided {
         Some(
             bcrypt::hash(input.password.as_deref().unwrap(), bcrypt::DEFAULT_COST)
@@ -177,7 +209,9 @@ pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupIn
             return Err(ApiError::BadRequest("no email provided".into()));
         }
         let Some(mail_client) = crate::mail::from_env() else {
-            return Err(ApiError::BadRequest("mail client is not initialized".into()));
+            return Err(ApiError::BadRequest(
+                "mail client is not initialized".into(),
+            ));
         };
         let user_id = generator.generate().as_i64();
         let token = set_password_token(user_id);
@@ -195,7 +229,9 @@ pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupIn
         if let Err(_e) =
             mail_client.send_html(&email_addr, "Alexandrie: Set your password", &plain, &html)
         {
-            return Err(ApiError::BadRequest("failed to send account creation email".into()));
+            return Err(ApiError::BadRequest(
+                "failed to send account creation email".into(),
+            ));
         }
         let _ = user_id; // id generated again below for the insert (Go parity: one id)
         None

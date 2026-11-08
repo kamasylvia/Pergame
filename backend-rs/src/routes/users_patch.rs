@@ -2,18 +2,18 @@
 //! UpdatePassword parity: self-or-admin access, admin-only fields, password
 //! change rules).
 
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::service::now_ms;
+use crate::AppState;
 use crate::auth::AuthUser;
+use crate::auth::service::now_ms;
 use crate::error::ApiError;
 use crate::models::User;
 use crate::response::ApiOk;
 use crate::types::Snowflake;
-use crate::AppState;
 
 /// Go `utils.GetTargetId`: "@me" resolves to the actor, else numeric parse.
 pub fn resolve_target(param: &str, auth: &AuthUser) -> Result<Snowflake, ApiError> {
@@ -74,10 +74,15 @@ pub async fn update_user(
     // Only admins may change type / TOTP-forced; type must be 0 or 1.
     let (user_type, totp_forced) = if auth.role == ROLE_ADMIN {
         if let Some(t) = body.user_type
-            && t != 0 && t != 1 {
-                return Err(ApiError::BadRequest("invalid user type".into()));
-            }
-        (body.user_type.unwrap_or(db_user.user_type), body.totp_forced.unwrap_or(db_user.totp_forced))
+            && t != 0
+            && t != 1
+        {
+            return Err(ApiError::BadRequest("invalid user type".into()));
+        }
+        (
+            body.user_type.unwrap_or(db_user.user_type),
+            body.totp_forced.unwrap_or(db_user.totp_forced),
+        )
     } else {
         (db_user.user_type, db_user.totp_forced)
     };
@@ -142,14 +147,17 @@ pub async fn update_password(
     // password; admins resetting another user's password are exempt (account
     // recovery). First-time setters (OAuth-only accounts) skip the check too.
     if auth.id == target
-        && let Some(hash) = &db_user.password {
-            if body.current_password.is_empty() {
-                return Err(ApiError::BadRequest("current password is required".into()));
-            }
-            if !bcrypt::verify(&body.current_password, hash).unwrap_or(false) {
-                return Err(ApiError::Unauthorized("current password is incorrect".into()));
-            }
+        && let Some(hash) = &db_user.password
+    {
+        if body.current_password.is_empty() {
+            return Err(ApiError::BadRequest("current password is required".into()));
         }
+        if !bcrypt::verify(&body.current_password, hash).unwrap_or(false) {
+            return Err(ApiError::Unauthorized(
+                "current password is incorrect".into(),
+            ));
+        }
+    }
 
     let new_hash = bcrypt::hash(&body.password, bcrypt::DEFAULT_COST)
         .map_err(|_| ApiError::BadRequest("failed to hash password".into()))?;

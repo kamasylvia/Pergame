@@ -225,7 +225,10 @@ async fn spike_compile(db: &mut toasty::Db) -> toasty::Result<()> {
     User::filter_by_id(42i64).delete().exec(db).await?;
 
     // Session lookups used by the auth domain.
-    let _session = Session::filter_by_refresh_token("abc").first().exec(db).await?;
+    let _session = Session::filter_by_refresh_token("abc")
+        .first()
+        .exec(db)
+        .await?;
     let _by_user = Session::filter_by_user_id(1i64).exec(db).await?;
 
     // Recovery codes used by the TOTP domain.

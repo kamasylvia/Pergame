@@ -1,17 +1,24 @@
 //! /auth routes — login (form or JSON), refresh, logout (Go controller parity).
 
-use axum::extract::State;
-use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum::extract::State;
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::{cookies, jwt, service::{self, LoginOutcome}};
-use crate::error::ApiError;
 use crate::AppState;
+use crate::auth::{
+    cookies, jwt,
+    service::{self, LoginOutcome},
+};
+use crate::error::ApiError;
 
-fn envelope_with_cookies(status: StatusCode, body: serde_json::Value, cookies: Vec<cookie::Cookie<'static>>) -> Response {
+fn envelope_with_cookies(
+    status: StatusCode,
+    body: serde_json::Value,
+    cookies: Vec<cookie::Cookie<'static>>,
+) -> Response {
     let envelope = json!({
         "status": "success",
         "timestamp": service::now_ms(),
@@ -38,7 +45,8 @@ fn get_cookie(req_headers: &axum::http::HeaderMap, name: &str) -> Option<String>
         .and_then(|cookies| {
             cookies.split(';').find_map(|c| {
                 let c = c.trim();
-                c.strip_prefix(&format!("{name}=")).map(|v| v.trim().to_string())
+                c.strip_prefix(&format!("{name}="))
+                    .map(|v| v.trim().to_string())
             })
         })
 }
@@ -52,9 +60,7 @@ pub struct LoginInput {
 }
 
 /// Accepts `application/x-www-form-urlencoded` (Go tests) and JSON alike.
-pub async fn parse_login_body(
-    req: axum::extract::Request,
-) -> Result<LoginInput, ApiError> {
+pub async fn parse_login_body(req: axum::extract::Request) -> Result<LoginInput, ApiError> {
     let content_type = req
         .headers()
         .get(header::CONTENT_TYPE)
@@ -95,7 +101,10 @@ pub async fn login(
     ctx: crate::extract::RequestCtx,
     req: axum::extract::Request,
 ) -> Result<Response, ApiError> {
-    if matches!(std::env::var("CONFIG_DISABLE_NATIVE_LOGIN").as_deref(), Ok("true")) {
+    if matches!(
+        std::env::var("CONFIG_DISABLE_NATIVE_LOGIN").as_deref(),
+        Ok("true")
+    ) {
         return Err(ApiError::Forbidden("native login is disabled".into()));
     }
 
@@ -112,7 +121,11 @@ pub async fn login(
     .await?;
 
     match outcome {
-        LoginOutcome::TwoFa { message, pre_auth_token, user_id } => Ok(envelope_with_cookies(
+        LoginOutcome::TwoFa {
+            message,
+            pre_auth_token,
+            user_id,
+        } => Ok(envelope_with_cookies(
             StatusCode::ACCEPTED,
             json!({
                 "message": message,
@@ -121,10 +134,16 @@ pub async fn login(
             }),
             vec![],
         )),
-        LoginOutcome::Full { user, refresh_token } => {
+        LoginOutcome::Full {
+            user,
+            refresh_token,
+        } => {
             let cfg = crate::config::global();
-            let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
-                .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to sign token"))))?;
+            let token =
+                jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
+                    .map_err(|_| {
+                        ApiError::Internal(Box::new(std::io::Error::other("failed to sign token")))
+                    })?;
             Ok(envelope_with_cookies(
                 StatusCode::OK,
                 serde_json::to_value(&user).unwrap_or(json!(null)),
@@ -173,6 +192,9 @@ pub async fn logout(
     Ok(envelope_with_cookies(
         StatusCode::OK,
         json!("Logged out successfully."),
-        vec![cookies::clear_access_cookie(), cookies::clear_refresh_cookie()],
+        vec![
+            cookies::clear_access_cookie(),
+            cookies::clear_refresh_cookie(),
+        ],
     ))
 }

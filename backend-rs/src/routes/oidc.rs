@@ -1,20 +1,20 @@
 //! /auth/oidc routes — providers, authorize, callback, linked, link, unlink
 //! (Go controllers/oidc.controller.go + services/oidc.service.go parity).
 
-use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use rand::RngExt;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::auth::{cookies, jwt, AuthUser};
+use crate::AppState;
+use crate::auth::{AuthUser, cookies, jwt};
 use crate::error::ApiError;
-use crate::response::ApiOk;
 use crate::oidc::{SharedManager, UserInfo};
 use crate::repo::oidc as oidc_repo;
-use crate::AppState;
+use crate::response::ApiOk;
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -35,7 +35,11 @@ fn ok_json(result: serde_json::Value) -> Response {
         .into_response()
 }
 
-fn envelope_with_cookies(status: StatusCode, body: serde_json::Value, set_cookies: Vec<cookie::Cookie<'static>>) -> Response {
+fn envelope_with_cookies(
+    status: StatusCode,
+    body: serde_json::Value,
+    set_cookies: Vec<cookie::Cookie<'static>>,
+) -> Response {
     let resp = (
         status,
         Json(json!({
@@ -149,8 +153,14 @@ pub async fn callback(
 
     // Link flow: logged-in user redeeming a link state.
     if state_data.is_link {
-        oidc_repo::link_provider(&state.db, &state.snowflake, state_data.user_id, &provider, &user_info.sub)
-            .await?;
+        oidc_repo::link_provider(
+            &state.db,
+            &state.snowflake,
+            state_data.user_id,
+            &provider,
+            &user_info.sub,
+        )
+        .await?;
         return Ok(ok_json(json!({
             "linked": true,
             "provider": provider,
@@ -159,8 +169,7 @@ pub async fn callback(
 
     // Login-or-create.
     let mut db = state.toasty.clone();
-    let user =
-        oidc_login_or_create(&mut db, &state, &manager, &provider, &user_info, &ctx).await?;
+    let user = oidc_login_or_create(&mut db, &state, &manager, &provider, &user_info, &ctx).await?;
     let _is_new = false; // parity detail: LoginOrCreate signals new; surfaced via created timestamps
 
     let cfg = crate::config::global();
@@ -242,12 +251,16 @@ pub async fn unlink_provider(
         .await
         .map_err(|_| ApiError::BadRequest("failed to get user password status".into()))?;
     if !has_password && links.len() <= 1 {
-        return Err(ApiError::BadRequest("cannot unlink the only login method".into()));
+        return Err(ApiError::BadRequest(
+            "cannot unlink the only login method".into(),
+        ));
     }
 
     for link in links {
         if link.provider_name.to_lowercase() == provider {
-            oidc_repo::delete(&state.db, link.id).await.map_err(ApiError::from)?;
+            oidc_repo::delete(&state.db, link.id)
+                .await
+                .map_err(ApiError::from)?;
             return Ok(ApiOk::ok(json!("Provider unlinked successfully")));
         }
     }
@@ -296,8 +309,14 @@ async fn oidc_login_or_create(
         .ok_or(ApiError::Unauthorized("linked user not found".into()))?;
 
     if is_new {
-        oidc_repo::link_provider(&state.db, &state.snowflake, user_id, provider, &user_info.sub)
-            .await?;
+        oidc_repo::link_provider(
+            &state.db,
+            &state.snowflake,
+            user_id,
+            provider,
+            &user_info.sub,
+        )
+        .await?;
     }
 
     crate::auth::totp::create_login_session_type(

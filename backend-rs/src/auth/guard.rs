@@ -20,6 +20,7 @@ pub const PERM_ADMIN: i32 = 3;
 pub const PERM_OWNER: i32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Share is part of the Go action set; ported for API completeness
 pub enum NodeAction {
     Read,
     Update,
@@ -46,7 +47,10 @@ pub struct Actor {
 
 impl From<crate::auth::AuthUser> for Actor {
     fn from(a: crate::auth::AuthUser) -> Self {
-        Self { user_id: a.user_id(), role: a.role }
+        Self {
+            user_id: a.user_id(),
+            role: a.role,
+        }
     }
 }
 
@@ -74,7 +78,8 @@ pub async fn check_node_action(
     if is_app_admin(actor.role) {
         return Ok(PERM_OWNER);
     }
-    let (ok, level) = node_repo::has_permission(pool, actor.user_id, node.id, action.required_level()).await;
+    let (ok, level) =
+        node_repo::has_permission(pool, actor.user_id, node.id, action.required_level()).await;
     if ok {
         return Ok(level);
     }

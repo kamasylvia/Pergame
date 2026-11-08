@@ -19,7 +19,8 @@ pub struct Config {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DatabaseConfig {
-    #[serde(default = "default_driver")]
+    /// Retained for config.toml parity (pgx is the only supported value).
+    #[allow(dead_code)]
     pub driver: String,
     #[serde(default = "default_host")]
     pub host: String,
@@ -126,9 +127,10 @@ impl Config {
             cfg.database.host = v;
         }
         if let Ok(v) = std::env::var("DATABASE_PORT")
-            && let Ok(p) = v.parse() {
-                cfg.database.port = p;
-            }
+            && let Ok(p) = v.parse()
+        {
+            cfg.database.port = p;
+        }
         if let Ok(v) = std::env::var("DATABASE_NAME") {
             cfg.database.name = v;
         }
@@ -144,7 +146,11 @@ impl Config {
     pub fn postgres_url(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.database.user, self.database.password, self.database.host, self.database.port, self.database.name
+            self.database.user,
+            self.database.password,
+            self.database.host,
+            self.database.port,
+            self.database.name
         )
     }
 

@@ -98,7 +98,8 @@ impl OidcManager {
                 .filter(|v| !v.is_empty())
                 .unwrap_or_else(|| format!("provider_{i}"));
             let client_id = std::env::var(format!("OIDC_{i}_CLIENT_ID")).unwrap_or_default();
-            let client_secret = std::env::var(format!("OIDC_{i}_CLIENT_SECRET")).unwrap_or_default();
+            let client_secret =
+                std::env::var(format!("OIDC_{i}_CLIENT_SECRET")).unwrap_or_default();
             if client_id.is_empty() || client_secret.is_empty() {
                 tracing::error!(%name, "Failed to add OIDC provider: client id/secret required");
                 continue;
@@ -234,12 +235,19 @@ impl OidcManager {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
-            return Err(format!("token endpoint returned status {}: {}", status, body));
+            return Err(format!(
+                "token endpoint returned status {}: {}",
+                status, body
+            ));
         }
         serde_json::from_str(&body).map_err(|e| format!("failed to decode token response: {e}"))
     }
 
-    pub async fn get_user_info(&self, provider: &Provider, access_token: &str) -> Result<UserInfo, String> {
+    pub async fn get_user_info(
+        &self,
+        provider: &Provider,
+        access_token: &str,
+    ) -> Result<UserInfo, String> {
         let resp = self
             .http
             .get(&provider.userinfo_endpoint)
@@ -252,7 +260,10 @@ impl OidcManager {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
-            return Err(format!("userinfo endpoint returned status {}: {}", status, body));
+            return Err(format!(
+                "userinfo endpoint returned status {}: {}",
+                status, body
+            ));
         }
         serde_json::from_str(&body).map_err(|e| format!("failed to decode user info: {e}"))
     }

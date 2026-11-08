@@ -1,16 +1,16 @@
 //! /backup routes (Go backup.controller.go parity): create (202 + job_id),
 //! status, cancel.
 
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::backup::{BackupOptions, BackupStore};
 use crate::error::ApiError;
 use crate::response::ApiOk;
-use crate::AppState;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct BackupBody {
@@ -89,7 +89,9 @@ pub async fn cancel_backup(
         return Err(ApiError::BadRequest("job ID is required".into()));
     }
     state.backups.cancel(auth.user_id(), &job_id).await?;
-    Ok(ApiOk::ok(json!({ "message": "Backup job cancelled successfully" })))
+    Ok(ApiOk::ok(
+        json!({ "message": "Backup job cancelled successfully" }),
+    ))
 }
 
 impl BackupStore {

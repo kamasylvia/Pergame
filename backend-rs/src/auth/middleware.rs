@@ -1,10 +1,10 @@
 //! `AuthUser` extractor: verifies the `Authorization` cookie JWT (HS256,
 //! Go middleware parity) and yields the acting user identity.
 
-use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
-use axum::http::StatusCode;
 use axum::Json;
+use axum::extract::FromRequestParts;
+use axum::http::StatusCode;
+use axum::http::request::Parts;
 use serde_json::json;
 
 use crate::types::Snowflake;
@@ -40,9 +40,11 @@ impl axum::extract::OptionalFromRequestParts<crate::AppState> for AuthUser {
         state: &crate::AppState,
     ) -> Result<Option<Self>, Self::Rejection> {
         // Infallible rejection => always Ok; invalid/missing cookie = None.
-        Ok(<Self as FromRequestParts<crate::AppState>>::from_request_parts(parts, state)
-            .await
-            .ok())
+        Ok(
+            <Self as FromRequestParts<crate::AppState>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 
@@ -60,7 +62,8 @@ impl FromRequestParts<crate::AppState> for AuthUser {
             .and_then(|cookies| {
                 cookies.split(';').find_map(|c| {
                     let c = c.trim();
-                    c.strip_prefix("Authorization=").map(|v| v.trim().to_string())
+                    c.strip_prefix("Authorization=")
+                        .map(|v| v.trim().to_string())
                 })
             });
 
@@ -69,7 +72,10 @@ impl FromRequestParts<crate::AppState> for AuthUser {
         };
 
         match super::jwt::verify_access_token(&token) {
-            Ok((user_id, role)) => Ok(AuthUser { id: Snowflake(user_id), role }),
+            Ok((user_id, role)) => Ok(AuthUser {
+                id: Snowflake(user_id),
+                role,
+            }),
             Err(_) => Err(unauthorized("Bad access token.")),
         }
     }

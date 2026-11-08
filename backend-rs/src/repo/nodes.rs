@@ -87,10 +87,6 @@ pub async fn permissions_for_nodes(
     .await
 }
 
-const NODE_FULL_COLS: &str = "id, user_id, parent_id, name, description, tags, role, color, icon, \
-     thumbnail, theme, accessibility, access, display, \"order\", content, content_compiled, size, \
-     metadata, created_timestamp, updated_timestamp";
-
 pub async fn get_by_id(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, sqlx::Error> {
     // Column list spelled out (sqlx audit lint; same as NODE_FULL_COLS).
     sqlx::query_as::<_, NodeRow>(
@@ -208,9 +204,10 @@ pub async fn has_permission(
     .ok();
 
     if let Some(Some(level)) = max_perm
-        && level >= required {
-            return (true, level);
-        }
+        && level >= required
+    {
+        return (true, level);
+    }
 
     // Ancestor-owner fallback.
     let owns: Option<i32> = sqlx::query_scalar(
@@ -257,7 +254,13 @@ pub struct NodeWrite {
     pub metadata: Option<serde_json::Value>,
 }
 
-pub async fn insert(pool: &PgPool, id: i64, user_id: i64, n: &NodeWrite, now: i64) -> Result<(), sqlx::Error> {
+pub async fn insert(
+    pool: &PgPool,
+    id: i64,
+    user_id: i64,
+    n: &NodeWrite,
+    now: i64,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"INSERT INTO nodes (id, user_id, parent_id, name, description, tags, role, color, icon,
             thumbnail, theme, accessibility, access, display, "order", content, content_compiled,
@@ -290,7 +293,12 @@ pub async fn insert(pool: &PgPool, id: i64, user_id: i64, n: &NodeWrite, now: i6
     .map(|_| ())
 }
 
-pub async fn update(pool: &PgPool, id: i64, n: &NodeWrite, updated: i64) -> Result<(), sqlx::Error> {
+pub async fn update(
+    pool: &PgPool,
+    id: i64,
+    n: &NodeWrite,
+    updated: i64,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"UPDATE nodes
            SET parent_id = $1, name = $2, description = $3, tags = $4, role = $5, color = $6,

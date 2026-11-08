@@ -1,7 +1,7 @@
 //! Database connection pool and startup migrations (sqlx).
 
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 use crate::config::Config;
 

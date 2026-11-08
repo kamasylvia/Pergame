@@ -50,7 +50,9 @@ pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
         .build()
         .map_err(|e| {
             tracing::error!(error = %e, "totp generate failed");
-            ApiError::Internal(Box::new(std::io::Error::other("failed to generate TOTP key")))
+            ApiError::Internal(Box::new(std::io::Error::other(
+                "failed to generate TOTP key",
+            )))
         })?;
     Ok((totp.secret().to_base32(), totp.to_string()))
 }
@@ -58,10 +60,11 @@ pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
 /// 8 backup codes: 8-digit numbers in [10000000, 100000000), Go parity.
 fn generate_backup_codes() -> Vec<String> {
     use rand::distr::{Distribution, Uniform};
-    use rand::RngExt;
     let mut rng = rand::rng();
     let dist = Uniform::new(10_000_000u32, 100_000_000).expect("uniform range");
-    (0..8).map(|_| format!("{:08}", dist.sample(&mut rng))).collect()
+    (0..8)
+        .map(|_| format!("{:08}", dist.sample(&mut rng)))
+        .collect()
 }
 
 /// Validates a code against the user: 6 digits = TOTP, 8 digits = backup code

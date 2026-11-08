@@ -1,3 +1,3 @@
 pub mod snowflake;
 
-pub use snowflake::{Snowflake, SnowflakeGenerator, SNOWFLAKE_EPOCH_MS};
+pub use snowflake::{SNOWFLAKE_EPOCH_MS, Snowflake, SnowflakeGenerator};

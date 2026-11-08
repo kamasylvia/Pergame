@@ -62,8 +62,9 @@ pub async fn nodes_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
 }
 
 pub async fn nodes_total_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    let (v,): (i64,) =
-        sqlx::query_as("SELECT COALESCE(SUM(size), 0) FROM nodes").fetch_one(pool).await?;
+    let (v,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0) FROM nodes")
+        .fetch_one(pool)
+        .await?;
     Ok(v)
 }
 
@@ -113,7 +114,11 @@ pub struct NodeOwnerStats {
     pub total_size: i64,
 }
 
-async fn top_users(pool: &PgPool, limit: i32, by: TopOrder) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
+async fn top_users(
+    pool: &PgPool,
+    limit: i32,
+    by: TopOrder,
+) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
     let sql = match by {
         TopOrder::NodeCount => {
             r#"SELECT n.user_id AS user_id, u.username AS username,
@@ -134,7 +139,10 @@ async fn top_users(pool: &PgPool, limit: i32, by: TopOrder) -> Result<Vec<NodeOw
            LIMIT $1"#
         }
     };
-    sqlx::query_as::<_, NodeOwnerStats>(sql).bind(limit).fetch_all(pool).await
+    sqlx::query_as::<_, NodeOwnerStats>(sql)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -143,10 +151,16 @@ enum TopOrder {
     TotalSize,
 }
 
-pub async fn top_users_by_node_count(pool: &PgPool, limit: i32) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
+pub async fn top_users_by_node_count(
+    pool: &PgPool,
+    limit: i32,
+) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
     top_users(pool, limit, TopOrder::NodeCount).await
 }
 
-pub async fn top_users_by_node_size(pool: &PgPool, limit: i32) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
+pub async fn top_users_by_node_size(
+    pool: &PgPool,
+    limit: i32,
+) -> Result<Vec<NodeOwnerStats>, sqlx::Error> {
     top_users(pool, limit, TopOrder::TotalSize).await
 }
