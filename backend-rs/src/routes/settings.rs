@@ -2,7 +2,6 @@
 //! /stats admin routes (Go stats.controller.go + stats.service.go parity).
 
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::json;

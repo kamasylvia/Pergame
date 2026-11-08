@@ -163,17 +163,42 @@ pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupIn
         return Err(ApiError::Conflict("Username already exists".into()));
     }
 
-    // Empty password triggers the "account created by admin" email flow in Go;
-    // without a mail client initialized that path always fails there too.
-    let password_hash = match input.password.as_deref() {
-        Some(p) if !p.is_empty() => bcrypt::hash(p, bcrypt::DEFAULT_COST)
-            .map_err(|_| ApiError::BadRequest("failed to hash password".into()))?,
-        _ => {
-            if input.email.as_deref().unwrap_or("").is_empty() {
-                return Err(ApiError::BadRequest("no email provided".into()));
-            }
-            return Err(ApiError::BadRequest("mail client is not initialized".into()));
+    // Empty password triggers the "account created by admin" email flow in Go:
+    // a set-password invitation JWT (sub only, no expiry — signSetToken parity)
+    // is emailed; without a mail client that path fails there too.
+    let password_provided = input.password.as_deref().map(|p| !p.is_empty()).unwrap_or(false);
+    let password_hash = if password_provided {
+        Some(
+            bcrypt::hash(input.password.as_deref().unwrap(), bcrypt::DEFAULT_COST)
+                .map_err(|_| ApiError::BadRequest("failed to hash password".into()))?,
+        )
+    } else {
+        if input.email.as_deref().unwrap_or("").is_empty() {
+            return Err(ApiError::BadRequest("no email provided".into()));
         }
+        let Some(mail_client) = crate::mail::from_env() else {
+            return Err(ApiError::BadRequest("mail client is not initialized".into()));
+        };
+        let user_id = generator.generate().as_i64();
+        let token = set_password_token(user_id);
+        let frontend = std::env::var("FRONTEND_URL").unwrap_or_default();
+        let reset_url = format!("{frontend}/login/reset?token={}", token);
+        let html = crate::mail::render_go_template(
+            crate::mail::ACCOUNT_CREATE_TEMPLATE,
+            &[("ResetURL", &reset_url), ("FrontendURL", &frontend)],
+        );
+        let plain = format!(
+            "Your account has been created. Set your password using this link: {}",
+            reset_url
+        );
+        let email_addr = input.email.clone().unwrap_or_default();
+        if let Err(_e) =
+            mail_client.send_html(&email_addr, "Alexandrie: Set your password", &plain, &html)
+        {
+            return Err(ApiError::BadRequest("failed to send account creation email".into()));
+        }
+        let _ = user_id; // id generated again below for the insert (Go parity: one id)
+        None
     };
 
     let now = now_ms();
@@ -186,7 +211,7 @@ pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupIn
         user_type: input.user_type,
         avatar: input.avatar,
         email: input.email,
-        password: Some(password_hash),
+        password: password_hash,
         totp_secret: None,
         totp_enabled: false,
         totp_forced: input.totp_forced,
@@ -208,11 +233,23 @@ pub async fn signup(db: &mut Db, generator: &SnowflakeGenerator, input: SignupIn
         .created_timestamp(now)
         .updated_timestamp(now)
         .exec(db)
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "signup insert failed");
-        ApiError::BadRequest("failed to create user".into())
-    })?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "signup insert failed");
+            ApiError::BadRequest("failed to create user".into())
+        })?;
 
     Ok(user)
+}
+
+/// Go signSetToken: sub-only HS256 JWT with no expiry claim.
+pub fn set_password_token(user_id: i64) -> String {
+    let claims = serde_json::json!({ "sub": user_id.to_string() });
+    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "development-jwt-secret".into());
+    jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &claims,
+        &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .unwrap_or_default()
 }

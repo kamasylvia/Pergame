@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use toasty::Db;
 
+use crate::backup::BackupStore;
 use crate::oidc::SharedManager;
 use crate::storage::S3Storage;
 use crate::types::SnowflakeGenerator;
@@ -16,4 +17,6 @@ pub struct AppState {
     pub storage: Option<S3Storage>,
     /// OIDC provider manager (None = OIDC disabled).
     pub oidc: Option<SharedManager>,
+    /// Per-user backup job store.
+    pub backups: std::sync::Arc<BackupStore>,
 }

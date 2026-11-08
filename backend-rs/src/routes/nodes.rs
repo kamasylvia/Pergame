@@ -365,13 +365,12 @@ pub async fn delete_node(
 
     // Storage cleanup: descendant role=4 files are removed before the DB
     // cascade (Go parity: failures logged and ignored).
-    if let Some(storage) = &state.storage {
-        if let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await {
+    if let Some(storage) = &state.storage
+        && let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await {
             for (res_id, res_user, metadata) in resources {
                 storage.delete_resource_files(res_user, res_id, metadata.as_ref()).await;
             }
         }
-    }
 
     node_repo::delete(&state.db, node.id).await.map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!("OK")))

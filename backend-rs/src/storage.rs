@@ -11,6 +11,8 @@
 //! `{bucket}-backups` lifecycle mirror the Go behavior.
 
 use aws_sdk_s3::config::{Builder as S3ConfigBuilder, Credentials};
+
+const BACKUP_PRESIGN_SECONDS: u64 = 24 * 3600;
 use aws_sdk_s3::operation::create_bucket::CreateBucketOutput;
 use aws_sdk_s3::Client;
 
@@ -219,17 +221,72 @@ impl S3Storage {
         }
     }
 
+    /// GET object bytes (backup archiving).
+    pub async fn get_user_object(&self, user_id: i64, key: &str) -> Result<Vec<u8>, ApiError> {
+        let object_key = format!("{}/{}", user_id, key);
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(%object_key, error = %e, "get_object failed");
+                ApiError::BadRequest("object not found".into())
+            })?;
+        let bytes = resp
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                tracing::error!(%object_key, error = %e, "object body read failed");
+                ApiError::BadRequest("failed to read object".into())
+            })?
+            .into_bytes();
+        Ok(bytes.to_vec())
+    }
+
+    /// PUT into the backups bucket (v1.1.0 archive).
+    pub async fn put_backup_object(&self, key: &str, content: Vec<u8>) -> Result<(), String> {
+        self.client
+            .put_object()
+            .bucket(&self.backup_bucket)
+            .key(key)
+            .content_type("application/zip")
+            .body(content.into())
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// 24h presigned GET with a download filename (Go PresignedGetObject +
+    /// response-content-disposition parity).
+    pub async fn presign_backup_get(&self, key: &str, filename: &str) -> Result<String, String> {
+        use aws_sdk_s3::presigning::PresigningConfig;
+        let req = self
+            .client
+            .get_object()
+            .bucket(&self.backup_bucket)
+            .key(key)
+            .response_content_disposition(format!(r#"attachment; filename="{filename}""#));
+        let cfg = PresigningConfig::builder()
+            .expires_in(std::time::Duration::from_secs(BACKUP_PRESIGN_SECONDS))
+            .build()
+            .map_err(|e| e.to_string())?;
+        req.presigned(cfg).await.map(|p| p.uri().to_string()).map_err(|e| e.to_string())
+    }
+
     /// Storage cleanup for a deleted resource node: metadata path first, then
     /// prefix sweep (Go DeleteSingleResource parity).
     pub async fn delete_resource_files(&self, user_id: i64, node_id: i64, metadata: Option<&serde_json::Value>) {
-        if let Some(meta) = metadata {
-            if let Some(path) = meta.get("transformed_path").and_then(|v| v.as_str()) {
-                if !path.is_empty() {
+        if let Some(meta) = metadata
+            && let Some(path) = meta.get("transformed_path").and_then(|v| v.as_str())
+                && !path.is_empty() {
                     self.delete_user_object(user_id, path).await;
                     return;
                 }
-            }
-        }
         self.delete_node_prefix(user_id, node_id).await;
     }
 }

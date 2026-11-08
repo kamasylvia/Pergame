@@ -3,7 +3,6 @@
 //! parity).
 
 use axum::extract::{Multipart, Path, State};
-use axum::Json;
 use serde_json::json;
 
 use crate::auth::guard::{self, Actor, NodeAction};
@@ -136,7 +135,7 @@ fn build_metadata(filetype: &str, original_path: &str, transformed_path: &str, e
 pub async fn upload_file(
     State(state): State<AppState>,
     auth: AuthUser,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let (max_file, max_total) = cdn_limits();
     let storage = state
@@ -248,7 +247,7 @@ pub async fn upload_file(
 pub async fn upload_avatar(
     State(state): State<AppState>,
     auth: AuthUser,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let (max_file, _) = cdn_limits();
     let storage = state

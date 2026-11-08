@@ -161,7 +161,7 @@ pub async fn callback(
     let mut db = state.toasty.clone();
     let user =
         oidc_login_or_create(&mut db, &state, &manager, &provider, &user_info, &ctx).await?;
-    let is_new = false; // parity detail: LoginOrCreate signals new; surfaced via created timestamps
+    let _is_new = false; // parity detail: LoginOrCreate signals new; surfaced via created timestamps
 
     let cfg = crate::config::global();
     let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
@@ -273,7 +273,7 @@ pub async fn get_linked(
 async fn oidc_login_or_create(
     db: &mut toasty::Db,
     state: &AppState,
-    manager: &SharedManager,
+    _manager: &SharedManager,
     provider: &str,
     user_info: &UserInfo,
     ctx: &crate::extract::RequestCtx,
@@ -360,7 +360,7 @@ async fn create_user_from_oidc(
 
 /// Go GenerateUniqueUsername: sanitized preferred name (or "Alex-{adjective}")
 /// + "-%06d" of the id mod 1e6.
-fn generate_unique_username(db: &mut toasty::Db, given: Option<&str>, user_id: i64) -> String {
+fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: i64) -> String {
     let mut base = String::new();
     if let Some(name) = given {
         let trimmed = name.trim();

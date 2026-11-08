@@ -1,4 +1,5 @@
 mod auth;
+mod backup;
 mod config;
 mod db;
 mod db_toasty;
@@ -76,22 +77,28 @@ async fn main() {
     };
 
     let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
-    let state = AppState { db: pool, toasty: toasty_db, snowflake, storage, oidc: oidc_manager };
+    let state = AppState {
+        db: pool,
+        toasty: toasty_db,
+        snowflake,
+        storage,
+        oidc: oidc_manager,
+        backups: std::sync::Arc::new(backup::BackupStore::default()),
+    };
 
     // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
     auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
 
     // S3 buckets bootstrap (public-read policy + backup lifecycle, Go parity).
-    if let Some(storage) = &state.storage {
-        if let Err(e) = storage.ensure_buckets().await {
+    if let Some(storage) = &state.storage
+        && let Err(e) = storage.ensure_buckets().await {
             tracing::error!(error = %e, "S3 buckets bootstrap failed");
             std::process::exit(1);
         }
-    }
 
     // OIDC provider discovery (GO OIDC_N_* env parity).
     let oidc_manager = oidc::OidcManager::from_env().await;
-    let oidc_manager = if oidc_manager.enabled() {
+    let _oidc_manager = if oidc_manager.enabled() {
         Some(std::sync::Arc::new(oidc_manager))
     } else {
         None
@@ -122,6 +129,9 @@ async fn main() {
         .route("/api/stats/overview", get(routes::settings::overview_stats))
         .route("/api/stats/users", get(routes::settings::user_stats))
         .route("/api/stats/nodes", get(routes::settings::node_stats))
+        .route("/api/backup", post(routes::backup::create_backup))
+        .route("/api/backup/{jobId}", get(routes::backup::get_backup_status))
+        .route("/api/backup/{jobId}", delete(routes::backup::cancel_backup))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/user/{userId}", get(routes::nodes::get_user_nodes))
         .route("/api/nodes/shared/{userId}", get(routes::nodes::get_shared_nodes))
