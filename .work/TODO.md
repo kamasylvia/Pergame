@@ -19,6 +19,8 @@
 
 - [ ] **笔记软连接/克隆**(Trilium 对位):同笔记多目录出现;克隆表 node_links + 环校验 + 三端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`(已含模型决策:克隆表方案,否决 content 分离重构)。
 
+- [ ] **改名 Pergamena**(2026-11-09 定,替代现名 Pergame;**仅决定,不执行**):执行时全层落地——crate/binary、JWT/TOTP issuer、S3 桶与库名默认值、compose 容器、frontend/docs 品牌、GitHub 仓改名;破坏性,单独批次。
+
 
 ## 回收站(用户裁决 2026-11-09:本地误删恢复走回收站,不做 git 级版本)
 - [ ] **回收站机制**:删除节点进 trash(软删标记 + 保留期),可恢复/彻底删除/清空;tree 查询过滤;前端回收站视图。spec 待写。

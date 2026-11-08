@@ -1,4 +1,4 @@
-# GOAL-STATE — pergame-infra(fork 现代化改造;2026-11-08 定名 Collectanea,2026-11-09 随仓库改名全量改为 Pergame,目录名 pergame-infra)
+# GOAL-STATE — pergame-infra(fork 现代化改造;2026-11-08 定名 Collectanea,2026-11-09 随仓库改名全量改为 Pergame;最终定名 Pergamena 延期执行,目录名 pergame-infra)
 
 ## 1. 任务总览
 
