@@ -5,6 +5,7 @@ pub mod oidc;
 pub mod permissions;
 pub mod resources;
 pub mod sessions_reset;
+pub mod settings;
 pub mod totp;
 pub mod users;
 pub mod users_patch;
