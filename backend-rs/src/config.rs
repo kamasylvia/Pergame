@@ -86,10 +86,10 @@ fn default_port() -> u16 {
     5432
 }
 fn default_db_name() -> String {
-    "pergamon".into()
+    "collectanea".into()
 }
 fn default_db_user() -> String {
-    "pergamon".into()
+    "collectanea".into()
 }
 fn default_db_password() -> String {
     String::new()

@@ -1,7 +1,7 @@
 <template>
   <section>
     <h2 class="section-title">A Seamless Experience from Start to Finish</h2>
-    <p class="section-subtitle">Discover how Alexandrie empowers you at every stage — from note-taking to publishing.</p>
+    <p class="section-subtitle">Discover how Collectanea empowers you at every stage — from note-taking to publishing.</p>
 
     <div class="timeline">
       <div v-for="(step, index) in steps" :key="index" ref="items" class="timeline-item" :class="{ 'is-right': index % 2 === 1 }">

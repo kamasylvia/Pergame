@@ -12,7 +12,7 @@ export default {
     editor: {
       description: 'Write with syntax highlighting, live preview, and keyboard shortcuts. Support for tables, code blocks, math equations, and more.',
       heading: 'Powerful Markdown Editor',
-      sampleHeading: 'Welcome to Alexandrie',
+      sampleHeading: 'Welcome to Collectanea',
       sampleList: 'Lists are easy',
       sampleMarkdown: 'Write your notes in Markdown',
       sampleText: ' and ',
@@ -60,7 +60,7 @@ export default {
   contributors: {
     commitLabel: 'commits',
     cta: 'Become a contributor',
-    subtitle: 'Meet the amazing people who make Alexandrie possible',
+    subtitle: 'Meet the amazing people who make Collectanea possible',
     title: 'Built by the community',
   },
   cta: {
@@ -72,27 +72,27 @@ export default {
   },
   faq: {
     answer1:
-      'Yes, Alexandrie is 100% open-source under the MIT license. You can use it, modify it, and distribute it freely. No hidden costs, no premium tiers.',
-    answer2: 'Absolutely! You can run Alexandrie on your own infrastructure using Docker. Full documentation is available to help you get started in minutes.',
-    answer3: 'Yes, Alexandrie is designed with offline-first principles. Your notes are available locally and sync when you reconnect.',
+      'Yes, Collectanea is 100% open-source under the MIT license. You can use it, modify it, and distribute it freely. No hidden costs, no premium tiers.',
+    answer2: 'Absolutely! You can run Collectanea on your own infrastructure using Docker. Full documentation is available to help you get started in minutes.',
+    answer3: 'Yes, Collectanea is designed with offline-first principles. Your notes are available locally and sync when you reconnect.',
     answer4: 'When self-hosting, your data stays on your own server. We use industry-standard security practices, and all data transmission is encrypted.',
     answer5:
       'Yes! You can import Markdown files from other apps like Notion, Obsidian, or any Markdown editor. Export to PDF with beautiful formatting is also supported.',
     answer6: 'Definitely! We support syntax highlighting for 100+ programming languages and LaTeX math equations rendering.',
-    answer7: 'Alexandrie is a responsive web application that works great on mobile browsers. Native apps are on our roadmap.',
+    answer7: 'Collectanea is a responsive web application that works great on mobile browsers. Native apps are on our roadmap.',
     ctaDescription: "Can't find what you're looking for? Join our community!",
     ctaTitle: 'Still have questions?',
     discord: 'Join Discord',
     questions: [
-      'Is Alexandrie really free and open-source?',
-      'Can I self-host Alexandrie on my own server?',
-      'Does Alexandrie work offline?',
+      'Is Collectanea really free and open-source?',
+      'Can I self-host Collectanea on my own server?',
+      'Does Collectanea work offline?',
       'How is my data stored and secured?',
       'Can I import my notes from other apps?',
       'Does it support code blocks and math equations?',
       'Is there a mobile app available?',
     ],
-    subtitle: 'Everything you need to know about Alexandrie',
+    subtitle: 'Everything you need to know about Collectanea',
     title: 'Frequently asked questions',
   },
   footer: {
@@ -130,7 +130,7 @@ export default {
     },
     ctaPrimary: 'Get Started',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Alexandrie app preview',
+    previewAlt: 'Collectanea app preview',
     tagline: 'A powerful Markdown workspace designed for speed, clarity, and creativity.',
     titleHighlight: 'Your Notes',
     titleSuffix: ', Beautifully Organized',
@@ -156,15 +156,15 @@ export default {
     ],
     subtitle: 'Take full control of your data with a simple deployment',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container alexandrie-db Started', '✓ Container alexandrie-minio Started', '✓ Container alexandrie-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
       title: 'Terminal',
     },
     title: 'Self-host in minutes',
   },
   seo: {
-    description: 'Alexandrie is a fast, self-hostable Markdown workspace for notes, knowledge bases, collaboration, and public documentation.',
+    description: 'Collectanea is a fast, self-hostable Markdown workspace for notes, knowledge bases, collaboration, and public documentation.',
     keywords: 'Markdown notes, knowledge base, self-hosted notes, public documentation, collaboration, note taking app',
-    title: 'Alexandrie | Modern Markdown workspace',
+    title: 'Collectanea | Modern Markdown workspace',
   },
   showcase: {
     features: [
@@ -193,7 +193,7 @@ export default {
         title: 'Publish & Share',
       },
     ],
-    subtitle: 'See how Alexandrie streamlines your entire workflow',
+    subtitle: 'See how Collectanea streamlines your entire workflow',
     title: 'From idea to published docs',
   },
   stats: {
@@ -215,17 +215,17 @@ export default {
   support: {
     badge: 'A word from the creator',
     cards: {
-      sponsorDesc: 'Help cover hosting, backup infrastructure, and development costs to keep Alexandrie online and independent.',
+      sponsorDesc: 'Help cover hosting, backup infrastructure, and development costs to keep Collectanea online and independent.',
       sponsorTitle: 'Support financially',
       starDesc: 'Show your support and help other developers discover the project. It costs nothing but means everything.',
       starTitle: 'Star on GitHub',
     },
     confirm: 'I understand, thank you!',
     paragraph1:
-      "Alexandrie didn't start as a business. It started as a tool I wanted for myself. Years later, I'm still maintaining and improving it in my spare time, and I'm happy to share it with anyone who finds it useful.",
+      "Collectanea didn't start as a business. It started as a tool I wanted for myself. Years later, I'm still maintaining and improving it in my spare time, and I'm happy to share it with anyone who finds it useful.",
     paragraph2:
-      'The application does not track you, does not serve ads, and is fully open-source. However, keeping the live platform running involves hosting and infrastructure costs. If Alexandrie adds value to your daily workflow, consider supporting its independence. Even the smallest donation helps cover the servers for months.',
+      'The application does not track you, does not serve ads, and is fully open-source. However, keeping the live platform running involves hosting and infrastructure costs. If Collectanea adds value to your daily workflow, consider supporting its independence. Even the smallest donation helps cover the servers for months.',
     signature: '— Smaug',
-    title: 'Alexandrie is free, and it will stay that way.',
+    title: 'Collectanea is free, and it will stay that way.',
   },
 };

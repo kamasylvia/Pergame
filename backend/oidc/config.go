@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"alexandrie/pkg/logger"
+	"collectanea/pkg/logger"
 )
 
 type Provider struct {

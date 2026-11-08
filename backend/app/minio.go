@@ -1,8 +1,8 @@
 package app
 
 import (
-	"alexandrie/pkg/logger"
-	"alexandrie/utils"
+	"collectanea/pkg/logger"
+	"collectanea/utils"
 	"context"
 	"crypto/tls"
 	"crypto/x509"

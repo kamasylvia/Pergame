@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"alexandrie/models"
+	"collectanea/models"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"

@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"alexandrie/app"
+	"collectanea/app"
 	"errors"
 	"net/http"
 	"strconv"

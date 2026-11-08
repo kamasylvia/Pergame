@@ -31,7 +31,7 @@ function handleClose() {
               <Icon name="sparkle" display="md" />
             </div>
             <div>
-              <h2>What's new in Alexandrie?</h2>
+              <h2>What's new in Collectanea?</h2>
               <p class="version-tag">Version 8.14.0</p>
             </div>
           </div>

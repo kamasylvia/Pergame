@@ -1,11 +1,11 @@
-# Pergamon (Rust) default configuration. Override with CONFIG_PATH or env.
+# Collectanea (Rust) default configuration. Override with CONFIG_PATH or env.
 
 [Database]
 Driver = "pgx"
 Host = "localhost"
-Name = "pergamon"
+Name = "collectanea"
 Port = 5432
-User = "pergamon"
+User = "collectanea"
 Password = ""
 
 [Cdn]

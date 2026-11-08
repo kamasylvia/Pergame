@@ -1,7 +1,7 @@
-# Pergamon Backend (Rust)
+# Collectanea Backend (Rust)
 
 Fork rewrite of the Go backend in Rust (axum + sqlx + Toasty, PostgreSQL-only).
-Tracked in [issue #1](https://github.com/kamasylvia/Pergamon/issues/1); research
+Tracked in [issue #1](https://github.com/kamasylvia/Collectanea/issues/1); research
 and decision log live in `.work/rust-migration/RESEARCH.md` (and `.work/`).
 
 ## Status
@@ -24,8 +24,8 @@ Known deltas vs the Go backend (see research report §7 / GOAL-STATE):
 
 ```bash
 cp config.toml /path/to/config.toml   # or rely on env vars
-export DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=pergamon \
-       DATABASE_USER=pergamon DATABASE_PASSWORD=... \
+export DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=collectanea \
+       DATABASE_USER=collectanea DATABASE_PASSWORD=... \
        JWT_SECRET=... S3_ENDPOINT=... S3_ACCESSKEY=... S3_SECRETKEY=...
 cargo run        # BACKEND_PORT (default 8201), CONFIG_PATH overrides the toml
 ```

@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"alexandrie/app"
-	"alexandrie/models"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/app"
+	"collectanea/models"
+	"collectanea/types"
+	"collectanea/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

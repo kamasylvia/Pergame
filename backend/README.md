@@ -1,8 +1,8 @@
-# Alexandrie Backend
+# Collectanea Backend
 
 ## Overview
 
-The Alexandrie backend is a REST API built with Go and the Gin web framework. It provides authentication, nodes management, permissions, and file storage features with a layered architecture.
+The Collectanea backend is a REST API built with Go and the Gin web framework. It provides authentication, nodes management, permissions, and file storage features with a layered architecture.
 
 ## Quick Start
 

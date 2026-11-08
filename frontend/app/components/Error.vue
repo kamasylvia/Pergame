@@ -5,5 +5,5 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ error?: AlexandrieError | null }>();
+defineProps<{ error?: CollectaneaError | null }>();
 </script>

@@ -1,9 +1,9 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/repositories"
-	"alexandrie/types"
+	"collectanea/models"
+	"collectanea/repositories"
+	"collectanea/types"
 )
 
 type UserSettingsService interface {

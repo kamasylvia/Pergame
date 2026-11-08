@@ -1,13 +1,13 @@
 //! JWT signing/verification (HS256), mirroring the Go backend claims.
 //!
-//! Access token:  `{sub: "<id>", iss: "pergamon", exp, iat, role: "<role>"}`
+//! Access token:  `{sub: "<id>", iss: "collectanea", exp, iat, role: "<role>"}`
 //! Pre-auth token (TOTP flow): same shape + `pre_auth: true`, 3-minute expiry.
 //! Refresh tokens are opaque random hex (see [`refresh_token`]), not JWTs.
 
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
-pub const JWT_ISSUER: &str = "pergamon";
+pub const JWT_ISSUER: &str = "collectanea";
 const PRE_AUTH_EXPIRY_SECS: i64 = 3 * 60;
 
 #[derive(Debug, Serialize, Deserialize)]

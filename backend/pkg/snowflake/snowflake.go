@@ -1,7 +1,7 @@
 package snowflake
 
 import (
-	"alexandrie/types"
+	"collectanea/types"
 	"os"
 	"sync"
 	"time"

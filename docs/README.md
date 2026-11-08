@@ -1,6 +1,6 @@
-# Alexandrie Setup Guide
+# Collectanea Setup Guide
 
-This guide explains how to set up, configure, and deploy the Alexandrie stack.
+This guide explains how to set up, configure, and deploy the Collectanea stack.
 
 It covers both **local development** and **production deployment**, including how to configure environment variables, connect the different services, and handle HTTPS with a reverse proxy.
 
@@ -8,7 +8,7 @@ It covers both **local development** and **production deployment**, including ho
 
 ## Overview of the Stack
 
-The Alexandrie stack consists of four main services, defined in the `docker-compose.yml` file:
+The Collectanea stack consists of four main services, defined in the `docker-compose.yml` file:
 
 | Service      | Description                                                                    |
 | ------------ | ------------------------------------------------------------------------------ |
@@ -17,13 +17,13 @@ The Alexandrie stack consists of four main services, defined in the `docker-comp
 | **Backend**  | The Go-based API server providing authentication, storage, and access control. |
 | **Frontend** | A Nuxt 4 web app that communicates with the backend via REST API.              |
 
-All services are connected through a dedicated Docker network (`alexandrie-network`).
+All services are connected through a dedicated Docker network (`collectanea-network`).
 
 ---
 
 ## Quick Start
 
-For local testing, you can run Alexandrie directly using the provided `docker-compose.yml`:
+For local testing, you can run Collectanea directly using the provided `docker-compose.yml`:
 
 Download the `docker-compose.yml` file from the repository: [https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml](https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml) and run:
 
@@ -56,7 +56,7 @@ FRONTEND_URL=http://localhost:8200
 API_URL=http://localhost:8201
 CDN_URL=http://localhost:9000
 
-CDN_ENDPOINT=/alexandrie/
+CDN_ENDPOINT=/collectanea/
 ```
 
 These variables define how clients (browsers) reach your services.
@@ -64,7 +64,7 @@ These variables define how clients (browsers) reach your services.
 - `FRONTEND_URL`: The public URL for the frontend service.
 - `API_URL`: The public URL for the backend API service.
 - `CDN_URL`: The public URL for the object storage service (RustFS).
-- `CDN_ENDPOINT`: The path prefix under which files are exposed. You probably want to keep this as /alexandrie/ to match the bucket name, change it only if you changed the bucket name or if you have configured a reverse proxy path.  
+- `CDN_ENDPOINT`: The path prefix under which files are exposed. You probably want to keep this as /collectanea/ to match the bucket name, change it only if you changed the bucket name or if you have configured a reverse proxy path.  
   Final URL are constructed as: `<CDN_URL><CDN_ENDPOINT><object-path>`  
   If you have a problem with files URL just open devtools in your browser and check the actual URL used to load files and then adjust these variables accordingly.
 
@@ -114,27 +114,27 @@ These variables configure the backend API service.
 
 ```env
 POSTGRES_EXTERNAL_PORT=5432
-POSTGRES_DB=alexandrie
-POSTGRES_USER=alexandrie
+POSTGRES_DB=collectanea
+POSTGRES_USER=collectanea
 POSTGRES_PASSWORD=password
 ```
 
 These variables configure the PostgreSQL database service.
 
 - `POSTGRES_EXTERNAL_PORT`: The port exposed on your host machine for the PostgreSQL service.
-- `POSTGRES_DB`: The name of the default database created for Alexandrie.
-- `POSTGRES_USER`: The username for the default Alexandrie database user.
-- `POSTGRES_PASSWORD`: The password for the default Alexandrie database user.
+- `POSTGRES_DB`: The name of the default database created for Collectanea.
+- `POSTGRES_USER`: The username for the default Collectanea database user.
+- `POSTGRES_PASSWORD`: The password for the default Collectanea database user.
 
 ### 5. Object Storage — S3 (RustFS / MinIO-compatible) (optional, leave empty to disable)
 
 ```env
 RUSTFS_EXTERNAL_PORT=9000
 
-RUSTFS_ACCESS_KEY=alexandrie-key
-RUSTFS_SECRET_KEY=alexandrie-secret
+RUSTFS_ACCESS_KEY=collectanea-key
+RUSTFS_SECRET_KEY=collectanea-secret
 
-S3_BUCKET=alexandrie
+S3_BUCKET=collectanea
 ```
 
 These variables configure the RustFS object storage service.
@@ -142,7 +142,7 @@ These variables configure the RustFS object storage service.
 - `RUSTFS_EXTERNAL_PORT`: The port exposed on your host machine for the RustFS service.
 - `RUSTFS_ACCESS_KEY`: The access key for the RustFS S3-compatible API.
 - `RUSTFS_SECRET_KEY`: The secret key for the RustFS S3-compatible API.
-- `S3_BUCKET`: The name of the default bucket created for Alexandrie. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `alexandrie` and the backend will create `alexandrie` and `alexandrie-backups` buckets.
+- `S3_BUCKET`: The name of the default bucket created for Collectanea. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `collectanea` and the backend will create `collectanea` and `collectanea-backups` buckets.
 
 ### 6. Email — SMTP (optional)
 
@@ -196,7 +196,7 @@ Open ID Connect (OIDC) is supported since version 8.5.0. You can setup up to 10 
 
 First you have to generate client ID and client secret from your provider (refer to their doc or ask questions in discussions / discord)
 
-Then you have to configure the redirect URI (in the provider interface with this value): `https://your-alexandrie-frontend/login/oidc/callback`
+Then you have to configure the redirect URI (in the provider interface with this value): `https://your-collectanea-frontend/login/oidc/callback`
 
 To config a provider you have to fill 4 variables:
 
@@ -220,7 +220,7 @@ OIDC_1_PROVIDER_NAME: ${OIDC_1_PROVIDER_NAME}
 
 ### S3 / Minio — TLS, HTTPS and Custom Certificate Authorities
 
-Alexandrie connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client.
+Collectanea connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client.
 This client supports HTTPS, custom certificate authorities (CA), and explicit TLS configuration.
 
 This section explains how TLS is handled and how to configure it correctly.

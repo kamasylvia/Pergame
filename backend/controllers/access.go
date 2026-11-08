@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"alexandrie/permissions"
+	"collectanea/permissions"
 	"errors"
 	"net/http"
 

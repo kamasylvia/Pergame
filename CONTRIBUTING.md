@@ -6,7 +6,7 @@
 
 - Install [Bun](https://bun.sh/)
 - Install [Golang](https://go.dev/)
-- Install [MySQL](https://www.mysql.com/) and create a database with name `alexandrie` (you can change it in config.toml)
+- Install [MySQL](https://www.mysql.com/) and create a database with name `collectanea` (you can change it in config.toml)
 
 ### Steps
 

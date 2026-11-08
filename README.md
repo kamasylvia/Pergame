@@ -1,24 +1,24 @@
 <div align="center">
 
-<img src="./frontend/public/Logo/Alexandrie-logo-dark.png" width="120">
+<img src="./frontend/public/Logo/Collectanea-logo-dark.png" width="120">
 
-# Alexandrie
+# Collectanea
 
 **A self-hosted, open-source knowledge base with an extended Markdown editor.**<br>
 Organize, search, share and export your notes from any device, even offline.
 
-![Alexandrie Preview](.github/assets/preview.png)
+![Collectanea Preview](.github/assets/preview.png)
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/Smaug6739/Alexandrie?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/stargazers)
-[![GitHub release](https://img.shields.io/github/v/release/Smaug6739/Alexandrie?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/releases)
-[![GitHub license](https://img.shields.io/github/license/Smaug6739/Alexandrie?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/blob/main/LICENSE)
+[![GitHub Repo stars](https://img.shields.io/github/stars/Smaug6739/Collectanea?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/stargazers)
+[![GitHub release](https://img.shields.io/github/v/release/Smaug6739/Collectanea?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/releases)
+[![GitHub license](https://img.shields.io/github/license/Smaug6739/Collectanea?style=for-the-badge)](https://github.com/Smaug6739/Alexandrie/blob/main/LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/UPsEg6egPj)
 
 </div>
 
-## Why Alexandrie?
+## Why Collectanea?
 
-Alexandrie is an open-source self-hosted wiki and knowledge management platform built for teams and individuals. It combines a powerful Markdown editor, offline support, collaboration tools, and enterprise-grade permissions, making it an alternative to Notion, Confluence and Obsidian.
+Collectanea is an open-source self-hosted wiki and knowledge management platform built for teams and individuals. It combines a powerful Markdown editor, offline support, collaboration tools, and enterprise-grade permissions, making it an alternative to Notion, Confluence and Obsidian.
 
 - **One-Command Deployment:** Bring up the entire full-stack application instantly using Docker.
 - **Advanced Markdown Engine:** Native support for LaTeX, custom containers, interactive checkboxes, frames, snippets, and integrated diagram building.
@@ -30,7 +30,7 @@ Alexandrie is an open-source self-hosted wiki and knowledge management platform 
 
 ### Advanced Writing & Rich Markdown
 
-Alexandrie features an extended CodeMirror 6 environment tailored for technical writing. It handles complex academic blocks, custom styles, global theme alignment, and real-time scroll synchronization seamlessly.
+Collectanea features an extended CodeMirror 6 environment tailored for technical writing. It handles complex academic blocks, custom styles, global theme alignment, and real-time scroll synchronization seamlessly.
 
 ![Markdown Editor Preview](.github/assets/editor.png)
 
@@ -66,7 +66,7 @@ Locate documents across complex hierarchies effortlessly with deep structural la
 
 ### Sovereign Assets & Storage Pipelines
 
-Maintain total ownership over your binaries, media streams, and backups. Alexandrie relies on decoupled storage engines to preserve performance without external analytics dependencies.
+Maintain total ownership over your binaries, media streams, and backups. Collectanea relies on decoupled storage engines to preserve performance without external analytics dependencies.
 
 ![Storage Preview](.github/assets/cdn.png)
 
@@ -82,8 +82,8 @@ Get your instance running in less than a minute:
 
 ```bash
 # 1. Download the .env.example and docker-compose.yml files
-curl -O https://raw.githubusercontent.com/Smaug6739/Alexandrie/main/.env.example
-curl -O https://raw.githubusercontent.com/Smaug6739/Alexandrie/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Smaug6739/Collectanea/main/.env.example
+curl -O https://raw.githubusercontent.com/Smaug6739/Collectanea/main/docker-compose.yml
 
 # 2. Configure environments
 cp .env.example .env

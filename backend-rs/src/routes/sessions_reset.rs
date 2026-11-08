@@ -164,7 +164,8 @@ pub async fn request_reset(
         "Your password reset link is: {}\n\nIf you did not expect this email, please ignore it.",
         reset_url
     );
-    if let Err(e) = mail_client.send_html(&email, "Pergamon: Reset your password", &plain, &html) {
+    if let Err(e) = mail_client.send_html(&email, "Collectanea: Reset your password", &plain, &html)
+    {
         tracing::error!(error = %e, "failed to send password reset email");
     }
 

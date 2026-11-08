@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"alexandrie/app"
-	"alexandrie/models"
-	"alexandrie/utils"
+	"collectanea/app"
+	"collectanea/models"
+	"collectanea/utils"
 	"errors"
 	"net/http"
 	"os"

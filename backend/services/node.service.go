@@ -1,12 +1,12 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/permissions"
-	"alexandrie/pkg/snowflake"
-	"alexandrie/repositories"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/models"
+	"collectanea/permissions"
+	"collectanea/pkg/snowflake"
+	"collectanea/repositories"
+	"collectanea/types"
+	"collectanea/utils"
 	"context"
 	"time"
 )

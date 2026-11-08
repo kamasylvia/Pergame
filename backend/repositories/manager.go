@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"alexandrie/pkg/logger"
+	"collectanea/pkg/logger"
 
 	"github.com/jmoiron/sqlx"
 )

@@ -1,8 +1,8 @@
 package middlewares
 
 import (
-	"alexandrie/permissions"
-	"alexandrie/utils"
+	"collectanea/permissions"
+	"collectanea/utils"
 
 	"github.com/gin-gonic/gin"
 )

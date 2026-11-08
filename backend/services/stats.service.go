@@ -1,8 +1,8 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/repositories"
+	"collectanea/models"
+	"collectanea/repositories"
 	"time"
 )
 

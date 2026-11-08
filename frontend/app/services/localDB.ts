@@ -12,7 +12,7 @@ export interface OfflineDelta {
 let counter = 0;
 
 const deltaStorage = localforage.createInstance({
-  name: 'alexandrie-offline',
+  name: 'collectanea-offline',
   storeName: 'deltas',
 });
 

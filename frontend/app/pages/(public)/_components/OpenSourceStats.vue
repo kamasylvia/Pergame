@@ -75,7 +75,7 @@
 const { t } = useI18n();
 
 const owner = 'Smaug6739';
-const repo = 'Alexandrie';
+const repo = 'Collectanea';
 
 const stars = ref<number | null>(null);
 const contributors = ref<number | null>(null);

@@ -4,9 +4,9 @@ import (
 	_ "embed"
 	"os"
 
-	"alexandrie/app"
-	"alexandrie/pkg/logger"
-	"alexandrie/router"
+	"collectanea/app"
+	"collectanea/pkg/logger"
+	"collectanea/router"
 
 	"github.com/BurntSushi/toml"
 	"github.com/joho/godotenv"
@@ -16,7 +16,7 @@ import (
 var configData []byte
 
 func main() {
-	logger.Info("app", "Initializing Alexandrie backend...")
+	logger.Info("app", "Initializing Collectanea backend...")
 
 	loadEnv()
 

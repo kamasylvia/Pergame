@@ -1,6 +1,6 @@
 package models
 
-import "alexandrie/types"
+import "collectanea/types"
 
 type Session struct {
 	Id                   types.Snowflake `json:"id" db:"id"`

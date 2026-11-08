@@ -1,13 +1,13 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/permissions"
-	"alexandrie/pkg/logger"
-	"alexandrie/pkg/snowflake"
-	"alexandrie/repositories"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/models"
+	"collectanea/permissions"
+	"collectanea/pkg/logger"
+	"collectanea/pkg/snowflake"
+	"collectanea/repositories"
+	"collectanea/types"
+	"collectanea/utils"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -181,9 +181,9 @@ func sendPasswordCreatedEmail(mailClient *mail.Client, user *models.User, resetT
 	}
 
 	message := mail.NewMsg()
-	message.FromFormat("Alexandrie Team", mailFrom)
+	message.FromFormat("Collectanea Team", mailFrom)
 	message.To(*user.Email)
-	message.Subject("Alexandrie: Set your password")
+	message.Subject("Collectanea: Set your password")
 
 	message.SetBodyString(
 		mail.TypeTextPlain,

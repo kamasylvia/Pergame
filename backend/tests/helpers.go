@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"alexandrie/types"
+	"collectanea/types"
 	"bytes"
 	"encoding/json"
 	"io"

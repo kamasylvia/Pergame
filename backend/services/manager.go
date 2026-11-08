@@ -1,10 +1,10 @@
 package services
 
 import (
-	"alexandrie/permissions"
-	"alexandrie/pkg/logger"
-	"alexandrie/pkg/snowflake"
-	"alexandrie/repositories"
+	"collectanea/permissions"
+	"collectanea/pkg/logger"
+	"collectanea/pkg/snowflake"
+	"collectanea/repositories"
 	"fmt"
 
 	"github.com/minio/minio-go/v7"

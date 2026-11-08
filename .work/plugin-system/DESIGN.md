@@ -1,4 +1,4 @@
-# Alexandrie 插件系统设计提案
+# Collectanea 插件系统设计提案
 
 > 日期:2026-11-07,状态:**已批准**(2026-11-07 用户裁决;tracking issue #8)。§9 开放问题按预填建议定为:①插件读写权限跟随 UI 权限,不提权 ②v1 不做 iframe 隔离(v2 备选)③市场/签名 = v2,v1 管理员手动装 ④`net.fetch` 限方式与大小。
 > 输入:`.work/obsidian-compat/RESEARCH.md`(ob 生态盘点教训)+ 本仓架构(Nuxt 3 + CM6 + markdown-it / Rust axum + pg)。
@@ -51,10 +51,10 @@ my-plugin/
 
 分发:实例管理员上传 zip → 存 pg(插件表)+ 产物进 S3 `plugins/`;`/plugins/<id>/main.mjs` 服务;dev 模式 = 本地 origin 白名单 + 动态 import + HMR。市场 = 远期。
 
-## 3. API 面(四层,`import { ... } from "alexandrie"`)
+## 3. API 面(四层,`import { ... } from "collectanea"`)
 
 ```ts
-// 类型包 @alexandrie/plugin(独立 npm,含完整 d.ts —— 学 ob 的 d.ts 做法,但天生分层)
+// 类型包 @collectanea/plugin(独立 npm,含完整 d.ts —— 学 ob 的 d.ts 做法,但天生分层)
 export abstract class Plugin {
   static manifest: PluginManifest;
   onload(ctx: PluginContext): Promise<void>;
@@ -102,7 +102,7 @@ export interface PluginContext {
 
 要点:
 - **一切注册返回 `Disposable`** —— unload 语义强制,杜绝 ob 插件卸不干净的普遍病。
-- **`alexandrie` 模块 = 唯一宿主入口**(loader 以此包名注入),插件不直接 import 应用内部模块。
+- **`collectanea` 模块 = 唯一宿主入口**(loader 以此包名注入),插件不直接 import 应用内部模块。
 - 视图模型 v1 用**固定槽位**(侧栏面板/tab 内容区),不做 ob 的自由 dock(盘点报告 D 组:最贵最不重要)。
 
 ## 4. 加载与生命周期
@@ -139,9 +139,9 @@ export interface PluginContext {
 
 ## 7. 开发者体验
 
-- `@alexandrie/plugin` npm 包:类型 + `create-alexandrie-plugin` 脚手架 + 本地 dev server(连真实实例,`ALEXANDRIE_DEV_PLUGINS=http://localhost:5173` 热载)
+- `@collectanea/plugin` npm 包:类型 + `create-collectanea-plugin` 脚手架 + 本地 dev server(连真实实例,`COLLECTANEA_DEV_PLUGINS=http://localhost:5173` 热载)
 - 文档:API reference(d.ts 生成)+ 3 个 from-zero 教程(命令插件 / 视图插件 / md 块插件)
-- 测试:`@alexandrie/plugin-test` 内存宿主 mock(mock ctx,无浏览器)
+- 测试:`@collectanea/plugin-test` 内存宿主 mock(mock ctx,无浏览器)
 
 ## 8. 实施路线(进 Rust 重写批次的排位)
 

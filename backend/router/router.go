@@ -1,8 +1,8 @@
 package router
 
 import (
-	"alexandrie/app"
-	"alexandrie/router/routes"
+	"collectanea/app"
+	"collectanea/router/routes"
 	"os"
 	"strings"
 

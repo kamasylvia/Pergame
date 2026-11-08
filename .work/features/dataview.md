@@ -36,7 +36,7 @@ LIMIT 20
 ## 开放问题(实施时裁决)
 
 1. WHERE 相对时间(`-7d` 等 duration)首版是否支持
-2. TASK 输出——Alexandrie 无独立 task 概念 → v1 不做
+2. TASK 输出——Collectanea 无独立 task 概念 → v1 不做
 3. `metadata.*` 索引策略:按需表达式 GIN vs 全列 jsonb GIN
 4. 同 DQL 结果缓存 → v1 不缓存
 5. dataview 结果被其他笔记引用/导出 → 不做

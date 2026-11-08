@@ -7,7 +7,7 @@
         <div class="footer-brand">
           <div class="brand-logo">
             <IconApp style="width: 40px" />
-            <span class="brand-name">Alexandrie</span>
+            <span class="brand-name">Collectanea</span>
           </div>
           <p class="brand-desc">{{ t('landing.footer.brandDescription') }}</p>
           <div class="social-links">
@@ -119,7 +119,7 @@
       <!-- Footer Bottom -->
       <div class="footer-bottom">
         <div class="footer-bottom-left">
-          <p>&copy; {{ new Date().getFullYear() }} Alexandrie.</p>
+          <p>&copy; {{ new Date().getFullYear() }} Collectanea.</p>
           <span class="separator">•</span>
           <p>
             {{ t('landing.footer.madeWith') }} <span class="heart">❤️</span> {{ t('landing.footer.by') }}

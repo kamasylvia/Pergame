@@ -1,8 +1,8 @@
 [package]
-name = "pergamon-rs"
+name = "collectanea-rs"
 version = "0.1.0"
 edition = "2024"
-description = "Pergamon backend (Rust rewrite)"
+description = "Collectanea backend (Rust rewrite)"
 
 [dependencies]
 ammonia = "4.2.4"

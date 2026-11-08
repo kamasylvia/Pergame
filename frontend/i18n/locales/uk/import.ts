@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: 'Відновіть повну резервну копію Alexandrie з документами та налаштуваннями.',
+      description: 'Відновіть повну резервну копію Collectanea з документами та налаштуваннями.',
       title: 'Імпорт із резервної копії',
     },
     files: {

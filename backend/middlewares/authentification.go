@@ -1,9 +1,9 @@
 package middlewares
 
 import (
-	"alexandrie/permissions"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/permissions"
+	"collectanea/types"
+	"collectanea/utils"
 	"net/http"
 	"os"
 	"strconv"

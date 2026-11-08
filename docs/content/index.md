@@ -1,7 +1,7 @@
 ---
 seo:
-  title: Alexandrie — Documentation
-  description: Official documentation for Alexandrie, the free and self-hosted knowledge base.
+  title: Collectanea — Documentation
+  description: Official documentation for Collectanea, the free and self-hosted knowledge base.
 ---
 
 ::u-page-hero{class="dark:bg-gradient-to-b from-neutral-900 to-neutral-950"}
@@ -15,16 +15,16 @@ orientation: horizontal
 Your knowledge, [at home]{.text-primary}.
 
 #description
-Alexandrie is an open-source, self-hosted knowledge base for writing, organising, searching, and sharing documents, with extended Markdown and offline support.
+Collectanea is an open-source, self-hosted knowledge base for writing, organising, searching, and sharing documents, with extended Markdown and offline support.
 
 #links
   :::u-button
   ---
-  to: /discover/alexandrie
+  to: /discover/collectanea
   size: xl
   trailing-icon: i-lucide-arrow-right
   ---
-  Discover Alexandrie
+  Discover Collectanea
   :::
 
   :::u-button
@@ -41,8 +41,8 @@ Alexandrie is an open-source, self-hosted knowledge base for writing, organising
 
 #default
   ```bash [Terminal]
-  curl -O https://raw.githubusercontent.com/Smaug6739/Alexandrie/main/docker-compose.yml
-  curl -o .env https://raw.githubusercontent.com/Smaug6739/Alexandrie/main/.env.example
+  curl -O https://raw.githubusercontent.com/Smaug6739/Collectanea/main/docker-compose.yml
+  curl -o .env https://raw.githubusercontent.com/Smaug6739/Collectanea/main/.env.example
   docker compose up -d
   ```
 ::
@@ -71,7 +71,7 @@ Documentation for every step
   Write and organise
 
   #description
-  Master documents, permissions, media, and Alexandrie's extended Markdown.
+  Master documents, permissions, media, and Collectanea's extended Markdown.
   :::
 
   :::u-page-feature

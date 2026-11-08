@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: alexandrie-frontend
+    container_name: collectanea-frontend
     restart: unless-stopped
     volumes:
       - ./frontend:/app
@@ -20,7 +20,7 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: alexandrie-backend
+    container_name: collectanea-backend
     restart: unless-stopped
 volumes:
   nuxt_build:

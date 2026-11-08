@@ -1,4 +1,4 @@
-# Obsidian 插件生态兼容性盘点 — Alexandrie
+# Obsidian 插件生态兼容性盘点 — Collectanea
 
 > 日期:2026-11-07。产出方式:官方 `obsidian.d.ts`(obsidianmd/obsidian-api@master)实测盘点 + 生态面检索。决策门:报告读完裁决走哪条路线(见 §8)。
 
@@ -6,14 +6,14 @@
 
 - **完全复用 ob 插件生态 = 重写一个插件宿主**:API 面 11.5k 行 d.ts,浏览器缺 Node/Electron/工作区壳三层地基;单插件"能跑"门槛估 **4-8 周**,生态级兼容 = 无上限追赶。
 - **但浏览器安全子集真实存在**:下载榜头部插件(Templater/Dataview/Excalidraw/Tasks/Advanced Tables/Calendar)全部 `isDesktopOnly: false`——纯 JS 插件是生态主体。
-- **唯一已对齐的地基:编辑器同为 CodeMirror 6**(Alexandrie frontend 已用)——这是插件兼容最大的幸运点。
+- **唯一已对齐的地基:编辑器同为 CodeMirror 6**(Collectanea frontend 已用)——这是插件兼容最大的幸运点。
 - **建议**:M0 语法/数据兼容 + top 插件内置化(#5 已走此路);插件加载器列为可选 spike(M1 最小闭环验证),不进 roadmap 承诺。
 
 ## 2. 插件技术解剖(兼容到底要仿什么)
 
 ob 插件 = `manifest.json` + `main.js`(CJS)+ `styles.css`,跑在宿主 app 内,依赖五层:
 
-| 层 | 内容 | Alexandrie 现状 | 差距定性 |
+| 层 | 内容 | Collectanea 现状 | 差距定性 |
 |---|---|---|---|
 | ① `obsidian` API 模块 | 见 §3 实测 | 无 | facade 重写,大 |
 | ② 宿主加载器 | Electron `require('obsidian')` 注入 | 浏览器无 CJS require | SystemJS/运行时打包,中-大 |
@@ -27,7 +27,7 @@ ob 插件 = `manifest.json` + `main.js`(CJS)+ `styles.css`,跑在宿主 app 内,
 
 **总量:11,539 行;`export class` 77、`export interface` 112、`export function` 47。**
 
-按「在 Alexandrie 浏览器上下文可实现性」分组(类名实测归堆,量为约数):
+按「在 Collectanea 浏览器上下文可实现性」分组(类名实测归堆,量为约数):
 
 | 组 | 内容 | 代表类 | 量级 | 实现难度 |
 |---|---|---|---|---|

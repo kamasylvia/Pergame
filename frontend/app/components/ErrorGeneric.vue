@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{ error: AlexandrieError }>();
+const props = defineProps<{ error: CollectaneaError }>();
 
 const handleError = computed(() => {
   if (props.error.code > 400 && props.error.code < 500) return 'Invalid request, please check your entries.';

@@ -1,6 +1,6 @@
 package models
 
-import "alexandrie/types"
+import "collectanea/types"
 
 type UserTOTPRecoveryCode struct {
 	Id               types.Snowflake `json:"id" db:"id"`

@@ -12,10 +12,10 @@ export default defineAppConfig({
     },
   },
   seo: {
-    siteName: "Alexandrie Documentation",
+    siteName: "Collectanea Documentation",
   },
   header: {
-    title: "Alexandrie",
+    title: "Collectanea",
     to: "/",
     logo: {
       alt: "",
@@ -34,7 +34,7 @@ export default defineAppConfig({
     ],
   },
   footer: {
-    credits: `Alexandrie • © ${new Date().getFullYear()}`,
+    credits: `Collectanea • © ${new Date().getFullYear()}`,
     colorMode: false,
     links: [
       {
@@ -47,14 +47,14 @@ export default defineAppConfig({
         icon: "i-simple-icons-github",
         to: "https://github.com/Smaug6739/Alexandrie",
         target: "_blank",
-        "aria-label": "Alexandrie on GitHub",
+        "aria-label": "Collectanea on GitHub",
       },
     ],
   },
   toc: {
     title: "On this page",
     bottom: {
-      title: "Alexandrie",
+      title: "Collectanea",
       edit: "https://github.com/Smaug6739/Alexandrie/edit/main/docs/content",
       links: [
         {

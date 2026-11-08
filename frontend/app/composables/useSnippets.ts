@@ -123,7 +123,7 @@ export function useSnippets() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'alexandrie-snippets.json';
+    a.download = 'collectanea-snippets.json';
     a.click();
     URL.revokeObjectURL(url);
     notifications.add({ title: 'Snippets exported', type: 'success' });

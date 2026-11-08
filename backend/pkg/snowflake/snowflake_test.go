@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"alexandrie/types"
+	"collectanea/types"
 )
 
 // generateWithin runs fn and fails the test if it has not returned within limit.

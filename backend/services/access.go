@@ -1,7 +1,7 @@
 package services
 
 import (
-	"alexandrie/permissions"
+	"collectanea/permissions"
 	"context"
 )
 

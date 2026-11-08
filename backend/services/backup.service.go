@@ -1,10 +1,10 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/repositories"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/models"
+	"collectanea/repositories"
+	"collectanea/types"
+	"collectanea/utils"
 	"archive/zip"
 	"bytes"
 	"context"
@@ -351,7 +351,7 @@ func (s *backupService) processBackup(ctx context.Context, job *types.BackupJob,
 	reqParams := make(url.Values)
 	reqParams.Set(
 		"response-content-disposition",
-		`attachment; filename="alexandrie-backup-`+time.Now().Format("2006-01-02_15-04-05")+`.zip"`,
+		`attachment; filename="collectanea-backup-`+time.Now().Format("2006-01-02_15-04-05")+`.zip"`,
 	)
 
 	// Sign the URL using the public endpoint

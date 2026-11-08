@@ -26,5 +26,5 @@
 ## 维护说明
 
 - 项目约定与决策记录 → 根 `AGENTS.md`。
-- 批次/续接点 → `alexandrie-infra/GOAL-STATE.md`;教训 → `LESSONS.md`;spec → `features/`、`plugin-system/`、`rust-migration/`、`obsidian-compat/`。
+- 批次/续接点 → `collectanea-infra/GOAL-STATE.md`;教训 → `LESSONS.md`;spec → `features/`、`plugin-system/`、`rust-migration/`、`obsidian-compat/`。
 - issue 索引:#1 pg · #2 S3 改名(已实施) · #3 MCP · #4 索引 · #5 dataview · #6/#7 批次 A · #8 插件系统。

@@ -1,7 +1,7 @@
 package app
 
 import (
-	"alexandrie/pkg/logger"
+	"collectanea/pkg/logger"
 	"embed"
 	"fmt"
 

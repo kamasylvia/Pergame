@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"alexandrie/app"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/app"
+	"collectanea/types"
+	"collectanea/utils"
 	"encoding/json"
 	"errors"
 	"io"

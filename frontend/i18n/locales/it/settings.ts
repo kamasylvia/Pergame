@@ -4,14 +4,14 @@ export default {
     client: 'Client',
     contact: 'Se hai domande, suggerimenti o se hai trovato un bug, non esitare a contattarci! Puoi aprire una segnalazione sulla',
     description:
-      'Alexandrie è uno strumento per la gestione della conoscenza personale progettato per aiutarti a organizzare e recuperare le note in modo efficiente.',
+      'Collectanea è uno strumento per la gestione della conoscenza personale progettato per aiutarti a organizzare e recuperare le note in modo efficiente.',
     features: "Fornisce funzionalità come l'organizzazione dei documenti, i tag e la ricerca avanzata.",
     githubRepo: 'Repository GitHub',
     pwa: 'PWA',
     seeFullChangelog: 'Guarda il changelog completo su',
     subtitle: "Informazioni sull'app.",
-    title: 'Informazioni su Alexandrie',
-    version: 'Versione di Alexandrie',
+    title: 'Informazioni su Collectanea',
+    version: 'Versione di Collectanea',
     website: 'Sito web',
   },
 

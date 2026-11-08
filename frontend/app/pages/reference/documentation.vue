@@ -1,15 +1,15 @@
 <template>
   <div class="body-container">
     <article class="markdown-preview modern-theme document-content" style="font-family: Poppins; font-size: 16px; line-height: 1.5">
-      <h1 id="alexandrie-setup-guide">Alexandrie Setup Guide</h1>
-      <p>This guide explains how to set up, configure, and deploy the Alexandrie stack.</p>
+      <h1 id="collectanea-setup-guide">Collectanea Setup Guide</h1>
+      <p>This guide explains how to set up, configure, and deploy the Collectanea stack.</p>
       <p>
         It covers both <strong>local development</strong> and <strong>production deployment</strong>, including how to configure environment variables, connect
         the different services, and handle HTTPS with a reverse proxy.
       </p>
       <hr />
       <h2 id="overview-of-the-stack">Overview of the Stack</h2>
-      <p>The Alexandrie stack consists of four main services, defined in the <code>docker-compose.yml</code> file:</p>
+      <p>The Collectanea stack consists of four main services, defined in the <code>docker-compose.yml</code> file:</p>
       <table>
         <thead>
           <tr>
@@ -36,10 +36,10 @@
           </tr>
         </tbody>
       </table>
-      <p>All services are connected through a dedicated Docker network (<code>alexandrie-network</code>).</p>
+      <p>All services are connected through a dedicated Docker network (<code>collectanea-network</code>).</p>
       <hr />
       <h2 id="quick-start">Quick Start</h2>
-      <p>For local testing, you can run Alexandrie directly using the provided <code>docker-compose.yml</code>:</p>
+      <p>For local testing, you can run Collectanea directly using the provided <code>docker-compose.yml</code>:</p>
       <p>
         Download the <code>docker-compose.yml</code> file from the repository:
         <a href="https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml">https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml</a>
@@ -74,7 +74,7 @@
 API_URL=http://localhost:8201
 CDN_URL=http://localhost:9000
 
-CDN_ENDPOINT=/alexandrie/
+CDN_ENDPOINT=/collectanea/
 </code></pre>
       </div>
       <p>These variables define how clients (browsers) reach your services.</p>
@@ -83,7 +83,7 @@ CDN_ENDPOINT=/alexandrie/
         <li><code>API_URL</code>: The public URL for the backend API service.</li>
         <li><code>CDN_URL</code>: The public URL for the object storage service (RustFS).</li>
         <li>
-          <code>CDN_ENDPOINT</code>: The path prefix under which files are exposed. You probably want to keep this as /alexandrie/ to match the bucket name,
+          <code>CDN_ENDPOINT</code>: The path prefix under which files are exposed. You probably want to keep this as /collectanea/ to match the bucket name,
           change it only if you changed the bucket name or if you have configured a reverse proxy path.<br />
           Final URL are constructed as: <code>&lt;CDN_URL&gt;&lt;CDN_ENDPOINT&gt;&lt;object-path&gt;</code><br />
           If you have a problem with files URL just open devtools in your browser and check the actual URL used to load files and then adjust these variables
@@ -150,17 +150,17 @@ JWT_SECRET=your-secure-jwt-secret-key-change-this-in-production
 
       <div class="code-block-wrapper">
         <pre><code class="hljs language-env">POSTGRES_EXTERNAL_PORT=5432
-POSTGRES_DB=alexandrie
-POSTGRES_USER=alexandrie
+POSTGRES_DB=collectanea
+POSTGRES_USER=collectanea
 POSTGRES_PASSWORD=password
 </code></pre>
       </div>
       <p>These variables configure the PostgreSQL database service.</p>
       <ul>
         <li><code>POSTGRES_EXTERNAL_PORT</code>: The port exposed on your host machine for the PostgreSQL service.</li>
-        <li><code>POSTGRES_DB</code>: The name of the default database created for Alexandrie.</li>
-        <li><code>POSTGRES_USER</code>: The username for the default Alexandrie database user.</li>
-        <li><code>POSTGRES_PASSWORD</code>: The password for the default Alexandrie database user.</li>
+        <li><code>POSTGRES_DB</code>: The name of the default database created for Collectanea.</li>
+        <li><code>POSTGRES_USER</code>: The username for the default Collectanea database user.</li>
+        <li><code>POSTGRES_PASSWORD</code>: The password for the default Collectanea database user.</li>
       </ul>
       <h3 id="5.-object-storage-%E2%80%94-s3-(rustfs-%2F-minio-compatible)-(optional%2C-leave-empty-to-disable)">
         <a class="header-anchor" href="#5.-object-storage-%E2%80%94-s3-(rustfs-%2F-minio-compatible)-(optional%2C-leave-empty-to-disable)" aria-hidden="true"
@@ -172,10 +172,10 @@ POSTGRES_PASSWORD=password
       <div class="code-block-wrapper">
         <pre><code class="hljs language-env">RUSTFS_EXTERNAL_PORT=9000
 
-RUSTFS_ACCESS_KEY=alexandrie-key
-RUSTFS_SECRET_KEY=alexandrie-secret
+RUSTFS_ACCESS_KEY=collectanea-key
+RUSTFS_SECRET_KEY=collectanea-secret
 
-S3_BUCKET=alexandrie
+S3_BUCKET=collectanea
 </code></pre>
       </div>
       <p>These variables configure the RustFS object storage service.</p>
@@ -184,9 +184,9 @@ S3_BUCKET=alexandrie
         <li><code>RUSTFS_ACCESS_KEY</code>: The access key for the RustFS S3-compatible API.</li>
         <li><code>RUSTFS_SECRET_KEY</code>: The secret key for the RustFS S3-compatible API.</li>
         <li>
-          <code>S3_BUCKET</code>: The name of the default bucket created for Alexandrie. Note that this bucket name should match the
-          <code>CDN_ENDPOINT</code> variable in the backend configuration. By default, it is set to <code>alexandrie</code> and the backend will create
-          <code>alexandrie</code> and <code>alexandrie-backups</code> buckets.
+          <code>S3_BUCKET</code>: The name of the default bucket created for Collectanea. Note that this bucket name should match the
+          <code>CDN_ENDPOINT</code> variable in the backend configuration. By default, it is set to <code>collectanea</code> and the backend will create
+          <code>collectanea</code> and <code>collectanea-backups</code> buckets.
         </li>
       </ul>
       <h3 id="6.-email-%E2%80%94-smtp-(optional)">6. Email — SMTP (optional)</h3>
@@ -235,7 +235,7 @@ SMTP_PASSWORD=
       <p>First you have to generate client ID and client secret from your provider (refer to their doc or ask questions in discussions / discord)</p>
       <p>
         Then you have to configure the redirect URI (in the provider interface with this value):
-        <code>https://your-alexandrie-frontend/login/oidc/callback</code>
+        <code>https://your-collectanea-frontend/login/oidc/callback</code>
       </p>
       <p>To config a provider you have to fill 4 variables:</p>
 
@@ -263,7 +263,7 @@ OIDC_{i}_PROVIDER_NAME= # e.g. Google, Discord, Microsoft...
       </div>
       <h3 id="s3-%2F-minio-%E2%80%94-tls%2C-https-and-custom-certificate-authorities">S3 / Minio — TLS, HTTPS and Custom Certificate Authorities</h3>
       <p>
-        Alexandrie connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client. This client supports HTTPS, custom certificate
+        Collectanea connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client. This client supports HTTPS, custom certificate
         authorities (CA), and explicit TLS configuration.
       </p>
       <p>This section explains how TLS is handled and how to configure it correctly.</p>

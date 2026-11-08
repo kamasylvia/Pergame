@@ -1,10 +1,10 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/pkg/logger"
-	"alexandrie/repositories"
-	"alexandrie/types"
+	"collectanea/models"
+	"collectanea/pkg/logger"
+	"collectanea/repositories"
+	"collectanea/types"
 	"time"
 )
 

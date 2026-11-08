@@ -1,9 +1,9 @@
 package app
 
 import (
-	"alexandrie/pkg/snowflake"
-	"alexandrie/repositories"
-	"alexandrie/services"
+	"collectanea/pkg/snowflake"
+	"collectanea/repositories"
+	"collectanea/services"
 	"log"
 
 	_ "github.com/go-sql-driver/mysql"

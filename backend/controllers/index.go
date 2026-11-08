@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"alexandrie/app"
+	"collectanea/app"
 )
 
 type Controller struct {

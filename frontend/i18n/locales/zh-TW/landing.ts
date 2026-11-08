@@ -12,7 +12,7 @@ export default {
     editor: {
       description: '寫作時享有語法高亮、即時預覽與鍵盤快捷鍵，並支援表格、程式碼區塊、數學公式等等。',
       heading: '強大的 Markdown 編輯器',
-      sampleHeading: '歡迎使用 Alexandrie',
+      sampleHeading: '歡迎使用 Collectanea',
       sampleList: '清單輕鬆上手',
       sampleMarkdown: '用 Markdown 撰寫你的筆記',
       sampleText: ' 與 ',
@@ -60,7 +60,7 @@ export default {
   contributors: {
     commitLabel: '次提交',
     cta: '成為貢獻者',
-    subtitle: '認識讓 Alexandrie 得以誕生的這群夥伴',
+    subtitle: '認識讓 Collectanea 得以誕生的這群夥伴',
     title: '由社群共同打造',
   },
   cta: {
@@ -71,26 +71,26 @@ export default {
     title: '準備好開始寫出更好的筆記了嗎？',
   },
   faq: {
-    answer1: '是的，Alexandrie 採用 MIT 授權，100% 開放原始碼。你可以自由使用、修改與散布，沒有隱藏費用，也沒有付費方案。',
-    answer2: '當然可以！你可以使用 Docker 在自己的基礎設施上執行 Alexandrie。我們提供完整文件，幫助你在幾分鐘內完成部署。',
-    answer3: '可以，Alexandrie 以離線優先的原則設計。你的筆記可在本機取用，並在重新連線時同步。',
+    answer1: '是的，Collectanea 採用 MIT 授權，100% 開放原始碼。你可以自由使用、修改與散布，沒有隱藏費用，也沒有付費方案。',
+    answer2: '當然可以！你可以使用 Docker 在自己的基礎設施上執行 Collectanea。我們提供完整文件，幫助你在幾分鐘內完成部署。',
+    answer3: '可以，Collectanea 以離線優先的原則設計。你的筆記可在本機取用，並在重新連線時同步。',
     answer4: '自架時，你的資料會留在自己的伺服器上。我們採用業界標準的安全實務，所有資料傳輸皆經過加密。',
     answer5: '可以！你可以從 Notion、Obsidian 或任何 Markdown 編輯器匯入 Markdown 檔案，也支援匯出為排版精美的 PDF。',
     answer6: '當然！我們支援 100 種以上程式語言的語法高亮，以及 LaTeX 數學公式渲染。',
-    answer7: 'Alexandrie 是響應式網頁應用程式，在行動裝置瀏覽器上也能順暢使用。原生應用程式已列入我們的開發藍圖。',
+    answer7: 'Collectanea 是響應式網頁應用程式，在行動裝置瀏覽器上也能順暢使用。原生應用程式已列入我們的開發藍圖。',
     ctaDescription: '找不到你想知道的答案嗎？加入我們的社群吧！',
     ctaTitle: '還有其他問題嗎？',
     discord: '加入 Discord',
     questions: [
-      'Alexandrie 真的免費且開放原始碼嗎？',
-      '我可以在自己的伺服器上自架 Alexandrie 嗎？',
-      'Alexandrie 可以離線使用嗎？',
+      'Collectanea 真的免費且開放原始碼嗎？',
+      '我可以在自己的伺服器上自架 Collectanea 嗎？',
+      'Collectanea 可以離線使用嗎？',
       '我的資料如何儲存與保護？',
       '我可以從其他應用程式匯入筆記嗎？',
       '支援程式碼區塊與數學公式嗎？',
       '有行動裝置應用程式嗎？',
     ],
-    subtitle: '關於 Alexandrie，你需要知道的一切',
+    subtitle: '關於 Collectanea，你需要知道的一切',
     title: '常見問題',
   },
   footer: {
@@ -128,7 +128,7 @@ export default {
     },
     ctaPrimary: '立即開始',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Alexandrie 應用程式預覽',
+    previewAlt: 'Collectanea 應用程式預覽',
     tagline: '為速度、清晰與創意而生的強大 Markdown 工作區。',
     titleHighlight: '你的筆記',
     titleSuffix: '，井然有序又賞心悅目',
@@ -154,15 +154,15 @@ export default {
     ],
     subtitle: '透過簡單的部署方式，完全掌控你的資料',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container alexandrie-db Started', '✓ Container alexandrie-minio Started', '✓ Container alexandrie-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
       title: '終端機',
     },
     title: '幾分鐘內完成自架',
   },
   seo: {
-    description: 'Alexandrie 是一個快速、可自架的 Markdown 工作區，適用於筆記、知識庫、協作與公開文件。',
+    description: 'Collectanea 是一個快速、可自架的 Markdown 工作區，適用於筆記、知識庫、協作與公開文件。',
     keywords: 'Markdown 筆記, 知識庫, 自架筆記, 公開文件, 協作, 筆記應用程式',
-    title: 'Alexandrie | 現代化的 Markdown 工作區',
+    title: 'Collectanea | 現代化的 Markdown 工作區',
   },
   showcase: {
     features: [
@@ -191,7 +191,7 @@ export default {
         title: '發布與分享',
       },
     ],
-    subtitle: '看看 Alexandrie 如何簡化你的整個工作流程',
+    subtitle: '看看 Collectanea 如何簡化你的整個工作流程',
     title: '從靈感到發布文件',
   },
   stats: {
@@ -213,17 +213,17 @@ export default {
   support: {
     badge: '來自作者的話',
     cards: {
-      sponsorDesc: '協助分擔主機、備份基礎設施與開發成本，讓 Alexandrie 保持線上且獨立。',
+      sponsorDesc: '協助分擔主機、備份基礎設施與開發成本，讓 Collectanea 保持線上且獨立。',
       sponsorTitle: '在財務上支持',
       starDesc: '表達你的支持，並幫助其他開發者發現這個專案。這不需要任何花費，卻意義非凡。',
       starTitle: '在 GitHub 上加星',
     },
     confirm: '我了解了，謝謝！',
     paragraph1:
-      'Alexandrie 一開始並不是一門生意，而是我為自己打造的工具。多年之後，我仍利用空閒時間維護與改進它，也很樂意分享給任何覺得它有用的人。',
+      'Collectanea 一開始並不是一門生意，而是我為自己打造的工具。多年之後，我仍利用空閒時間維護與改進它，也很樂意分享給任何覺得它有用的人。',
     paragraph2:
-      '這個應用程式不會追蹤你、不投放廣告，而且完全開放原始碼。不過，維持線上平台運作仍需要主機與基礎設施費用。如果 Alexandrie 為你的日常工作帶來價值，歡迎支持它的獨立運作。即使是最小額的贊助，也足以支付好幾個月的伺服器費用。',
+      '這個應用程式不會追蹤你、不投放廣告，而且完全開放原始碼。不過，維持線上平台運作仍需要主機與基礎設施費用。如果 Collectanea 為你的日常工作帶來價值，歡迎支持它的獨立運作。即使是最小額的贊助，也足以支付好幾個月的伺服器費用。',
     signature: '— Smaug',
-    title: 'Alexandrie 是免費的，未來也會一直如此。',
+    title: 'Collectanea 是免費的，未來也會一直如此。',
   },
 };

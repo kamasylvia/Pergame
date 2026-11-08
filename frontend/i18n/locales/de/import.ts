@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: 'Stelle ein vollständiges Alexandrie-Backup mit Dokumenten und Einstellungen wieder her.',
+      description: 'Stelle ein vollständiges Collectanea-Backup mit Dokumenten und Einstellungen wieder her.',
       title: 'Aus Backup importieren',
     },
     files: {

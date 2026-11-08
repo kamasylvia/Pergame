@@ -1,8 +1,8 @@
 package repositories
 
 import (
-	"alexandrie/models"
-	"alexandrie/types"
+	"collectanea/models"
+	"collectanea/types"
 	"fmt"
 	"time"
 

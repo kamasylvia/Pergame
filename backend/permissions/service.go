@@ -1,9 +1,9 @@
 package permissions
 
 import (
-	"alexandrie/models"
-	"alexandrie/repositories"
-	"alexandrie/types"
+	"collectanea/models"
+	"collectanea/repositories"
+	"collectanea/types"
 	"context"
 	"errors"
 )

@@ -1,6 +1,6 @@
 package models
 
-import "alexandrie/types"
+import "collectanea/types"
 
 type MonthlyCount struct {
 	Month string `json:"month" db:"month"`

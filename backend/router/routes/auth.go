@@ -1,10 +1,10 @@
 package routes
 
 import (
-	"alexandrie/app"
-	"alexandrie/controllers"
-	"alexandrie/middlewares"
-	"alexandrie/utils"
+	"collectanea/app"
+	"collectanea/controllers"
+	"collectanea/middlewares"
+	"collectanea/utils"
 
 	"github.com/gin-gonic/gin"
 )

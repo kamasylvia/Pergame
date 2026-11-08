@@ -1,12 +1,12 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/oidc"
-	"alexandrie/pkg/snowflake"
-	"alexandrie/repositories"
-	"alexandrie/types"
-	"alexandrie/utils"
+	"collectanea/models"
+	"collectanea/oidc"
+	"collectanea/pkg/snowflake"
+	"collectanea/repositories"
+	"collectanea/types"
+	"collectanea/utils"
 	"context"
 	"crypto/rand"
 	"encoding/base64"

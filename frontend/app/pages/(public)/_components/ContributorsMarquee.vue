@@ -45,7 +45,7 @@ const commitLabel = computed(() => t('landing.contributors.commitLabel'));
 
 async function fetchContributors() {
   try {
-    const res = await fetch(`https://api.github.com/repos/Smaug6739/Alexandrie/contributors?per_page=50`);
+    const res = await fetch(`https://api.github.com/repos/Smaug6739/Collectanea/contributors?per_page=50`);
     if (!res.ok) return;
     const data = await res.json();
     avatars.value = Array.isArray(data) ? (data as Contributor[]) : [];

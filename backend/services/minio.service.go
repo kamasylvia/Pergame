@@ -1,8 +1,8 @@
 package services
 
 import (
-	"alexandrie/models"
-	"alexandrie/types"
+	"collectanea/models"
+	"collectanea/types"
 	"context"
 	"fmt"
 	"os"

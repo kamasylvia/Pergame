@@ -29,7 +29,7 @@ fn totp_for_secret(base32_secret: &str) -> Result<Totp, ApiError> {
         .with_skew(1)
         .with_step_duration(30)
         .with_secret(raw)
-        .with_account_name("pergamon")
+        .with_account_name("collectanea")
         .build()
         .map_err(|e| {
             tracing::error!(error = %e, "totp build failed");
@@ -37,7 +37,7 @@ fn totp_for_secret(base32_secret: &str) -> Result<Totp, ApiError> {
         })
 }
 
-/// Generates a new secret + otpauth URL for enrollment (issuer "Pergamon").
+/// Generates a new secret + otpauth URL for enrollment (issuer "Collectanea").
 pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
     let totp = totp_rs::Builder::new()
         .with_algorithm(Algorithm::SHA1)
@@ -46,7 +46,7 @@ pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
         .with_step_duration(30)
         .with_secret(Secret::generate())
         .with_account_name(username)
-        .with_issuer(Some("Pergamon"))
+        .with_issuer(Some("Collectanea"))
         .build()
         .map_err(|e| {
             tracing::error!(error = %e, "totp generate failed");
