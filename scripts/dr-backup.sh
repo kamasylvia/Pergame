@@ -62,6 +62,40 @@ run() {
   if [ "$DRY_RUN" = 1 ]; then log "DRY-RUN: $*"; else "$@"; fi
 }
 
+# resolve_host <host> — print the first IPv4 for <host>, falling back to the
+# hostname itself (dedup still groups when no resolver is available).
+resolve_host() {
+  local h="$1" out=""
+  if command -v getent >/dev/null 2>&1; then
+    out="$(getent ahostsv4 "$h" 2>/dev/null | awk '{print $1; exit}')"
+  fi
+  if [ -z "$out" ] && command -v host >/dev/null 2>&1; then
+    out="$(host "$h" 2>/dev/null | awk '/has address/{print $4; exit}')"
+  fi
+  if [ -z "$out" ] && command -v python3 >/dev/null 2>&1; then
+    out="$(python3 -c 'import socket,sys
+try: print(socket.gethostbyname(sys.argv[1]))
+except Exception: pass' "$h" 2>/dev/null)"
+  fi
+  printf '%s' "${out:-$h}"
+}
+
+url_host() {
+  local rest="${1#*://}"
+  rest="${rest%%/*}"; rest="${rest%%\?*}"
+  printf '%s' "${rest%%:*}"
+}
+
+url_port() {
+  local rest="${1#*://}"; rest="${rest%%/*}"
+  case "$rest" in
+    *:*) printf '%s' "${rest##*:}" ;;
+    *)   printf '%s' "$2" ;;
+  esac
+}
+
+norm_prefix() { p="${1#/}"; p="${p%/}"; printf '%s' "${p:--}"; }
+
 # define_remote <remote-name> — exports RCLONE_CONFIG_* env vars for one
 # destination record and echoes the record again for logging.
 define_s3_remote() {            # s3|name|endpoint|bucket|prefix|access|secret|secure|region|provider
@@ -101,6 +135,41 @@ trap 'rm -rf "$WORKDIR"' EXIT
 TOTAL_FAIL=0
 declare -a FAILURES=()
 
+# --- destination dedup: same target via IP and domain counts as one; the
+# --- LAST configured record for a target wins, earlier ones auto-disable.
+declare -a DEST_KEYS=()     # canonical keys, first-seen order
+declare -a DEST_WINNER=()   # winning record per key (same index)
+register_dest() {           # <kind> <record>
+  local kind="$1" rec="$2" key idx=-1 i
+  if [ "$kind" = s3 ]; then
+    IFS='|' read -r _ name endpoint bucket prefix _r <<<"$rec"
+    key="$(resolve_host "$(url_host "$endpoint")"):$(url_port "$endpoint" 443)|${bucket}|$(norm_prefix "$prefix")"
+  else
+    IFS='|' read -r _ name url user pass prefix _r <<<"$rec"
+    key="$(resolve_host "$(url_host "$url")"):$(url_port "$url" 443)|$(norm_prefix "$prefix")"
+  fi
+  for i in "${!DEST_KEYS[@]}"; do
+    [ "${DEST_KEYS[$i]}" = "$key" ] && { idx=$i; break; }
+  done
+  if [ "$idx" -ge 0 ]; then
+    log "WARN: ${kind} destination '${name}' resolves to an already-configured target (${key}); earlier entry auto-disabled, this one wins"
+    DEST_WINNER[$idx]="$rec"
+  else
+    DEST_KEYS+=("$key")
+    DEST_WINNER+=("$rec")
+  fi
+}
+for dest in ${S3_DESTINATIONS[@]+"${S3_DESTINATIONS[@]}"}; do register_dest s3 "$dest"; done
+for dest in ${WEBDAV_DESTINATIONS[@]+"${WEBDAV_DESTINATIONS[@]}"}; do register_dest dav "$dest"; done
+
+# Materialize deduped destinations in first-seen order.
+ACTIVE_S3=()
+ACTIVE_DAV=()
+for i in "${!DEST_WINNER[@]}"; do
+  rec="${DEST_WINNER[$i]}"
+  case "$rec" in s3\|*) ACTIVE_S3+=("$rec");; *) ACTIVE_DAV+=("$rec");; esac
+done
+
 for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
   IFS='|' read -r kind name host port user pass db <<<"$src"
   [ "$kind" = "pg" ] || { fail "Skipping unsupported source kind: $kind ($name)"; continue; }
@@ -122,7 +191,7 @@ for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
   log "Source '${name}': dump ok (${size} bytes, sha256 ${sha:0:12}...)"
 
   # --- fan out to every destination of every kind ---
-  for dest in ${S3_DESTINATIONS[@]+"${S3_DESTINATIONS[@]}"}; do
+  for dest in ${ACTIVE_S3[@]+"${ACTIVE_S3[@]}"}; do
     IFS='|' read -r kind destName bucket prefix _rest <<<"$dest"
     if [ "$kind" != "s3" ]; then fail "Skipping non-s3 record in S3_DESTINATIONS: $kind"; continue; fi
     remote="$(define_s3_remote "$dest")"
@@ -146,7 +215,7 @@ for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
       log "WARN: prune failed on s3/${destName} (non-fatal)"
   done
 
-  for dest in ${WEBDAV_DESTINATIONS[@]+"${WEBDAV_DESTINATIONS[@]}"}; do
+  for dest in ${ACTIVE_DAV[@]+"${ACTIVE_DAV[@]}"}; do
     IFS='|' read -r kind destName _url _user _pass prefix <<<"$dest"
     if [ "$kind" != "webdav" ]; then fail "Skipping non-webdav record in WEBDAV_DESTINATIONS: $kind"; continue; fi
     remote="$(define_webdav_remote "$dest")"
