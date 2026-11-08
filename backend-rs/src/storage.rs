@@ -50,7 +50,7 @@ pub fn parse_env() -> Result<S3Storage, String> {
     let endpoint = env("S3_ENDPOINT").ok_or("S3 NOT CONFIGURED")?;
     let access = env("S3_ACCESSKEY").ok_or("S3 NOT CONFIGURED")?;
     let secret = env("S3_SECRETKEY").ok_or("S3 NOT CONFIGURED")?;
-    let bucket = env("S3_BUCKET").unwrap_or_else(|| "alexandrie".into());
+    let bucket = env("S3_BUCKET").unwrap_or_else(|| "pergamon".into());
     let secure_env = std::env::var("S3_SECURE").ok();
     let url = resolve_endpoint(&endpoint, secure_env.as_deref());
 

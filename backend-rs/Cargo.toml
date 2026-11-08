@@ -1,8 +1,8 @@
 [package]
-name = "alexandrie-rs"
+name = "pergamon-rs"
 version = "0.1.0"
 edition = "2024"
-description = "Alexandrie backend (Rust rewrite)"
+description = "Pergamon backend (Rust rewrite)"
 
 [dependencies]
 ammonia = "4.2.4"

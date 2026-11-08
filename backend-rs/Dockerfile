@@ -1,4 +1,4 @@
-# Backend (Rust) Dockerfile for Alexandrie
+# Backend (Rust) Dockerfile for Pergamon
 FROM rust:1.85-slim AS builder
 
 WORKDIR /app
@@ -20,8 +20,8 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /app
 
-COPY --from=builder --chown=nonroot:nonroot /app/target/release/alexandrie-rs ./
+COPY --from=builder --chown=nonroot:nonroot /app/target/release/pergamon-rs ./
 
 EXPOSE 8201
 
-ENTRYPOINT ["./alexandrie-rs"]
+ENTRYPOINT ["./pergamon-rs"]

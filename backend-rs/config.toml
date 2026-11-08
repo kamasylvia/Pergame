@@ -1,11 +1,11 @@
-# Alexandrie (Rust) default configuration. Override with CONFIG_PATH or env.
+# Pergamon (Rust) default configuration. Override with CONFIG_PATH or env.
 
 [Database]
 Driver = "pgx"
 Host = "localhost"
-Name = "alexandrie"
+Name = "pergamon"
 Port = 5432
-User = "alexandrie"
+User = "pergamon"
 Password = ""
 
 [Cdn]

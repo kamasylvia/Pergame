@@ -86,10 +86,10 @@ fn default_port() -> u16 {
     5432
 }
 fn default_db_name() -> String {
-    "alexandrie".into()
+    "pergamon".into()
 }
 fn default_db_user() -> String {
-    "alexandrie".into()
+    "pergamon".into()
 }
 fn default_db_password() -> String {
     String::new()
