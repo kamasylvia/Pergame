@@ -22,7 +22,14 @@ struct Client {
 impl Client {
     fn new() -> Self {
         Self {
-            http: reqwest::Client::builder().build().expect("client"),
+            // Cookie jar is required: auth relies on the Authorization cookie.
+            // no_proxy(): never route through env proxies (http_proxy/ALL_PROXY
+            // from shell tooling) — the target is always this host.
+            http: reqwest::Client::builder()
+                .cookie_store(true)
+                .no_proxy()
+                .build()
+                .expect("client"),
         }
     }
 }
@@ -48,7 +55,10 @@ async fn post_json(client: &Client, path: &str, body: &Value) -> (u16, ApiRespon
         .await
         .unwrap();
     let status = resp.status().as_u16();
-    (status, resp.json().await.unwrap())
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from POST {path} [{status}]: {text:?} ({e})"));
+    (status, parsed)
 }
 
 async fn get(client: &Client, path: &str) -> (u16, ApiResponse) {
@@ -59,7 +69,10 @@ async fn get(client: &Client, path: &str) -> (u16, ApiResponse) {
         .await
         .unwrap();
     let status = resp.status().as_u16();
-    (status, resp.json().await.unwrap())
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from GET {path} [{status}]: {text:?} ({e})"));
+    (status, parsed)
 }
 
 async fn del(client: &Client, path: &str) -> (u16, ApiResponse) {
@@ -73,6 +86,22 @@ async fn del(client: &Client, path: &str) -> (u16, ApiResponse) {
     (status, resp.json().await.unwrap())
 }
 
+async fn patch_json(client: &Client, path: &str, body: &Value) -> (u16, ApiResponse) {
+    let resp = client
+        .http
+        .patch(format!("{BASE_URL}{path}"))
+        .json(body)
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status().as_u16();
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from PATCH {path} [{status}]: {text:?} ({e})"));
+    (status, parsed)
+}
+
+#[allow(dead_code)] // parity helper: PUT exists on nodes, not users
 async fn put_json(client: &Client, path: &str, body: &Value) -> (u16, ApiResponse) {
     let resp = client
         .http
@@ -82,7 +111,10 @@ async fn put_json(client: &Client, path: &str, body: &Value) -> (u16, ApiRespons
         .await
         .unwrap();
     let status = resp.status().as_u16();
-    (status, resp.json().await.unwrap())
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from PUT {path} [{status}]: {text:?} ({e})"));
+    (status, parsed)
 }
 
 fn result_id_string(r: &ApiResponse) -> String {
@@ -98,12 +130,22 @@ fn result_id_string(r: &ApiResponse) -> String {
 
 /// Signup + login a unique user; returns (user_id, username).
 async fn signup_and_login(client: &Client) -> (String, String) {
+    signup_and_login_tagged(client, "t").await
+}
+
+/// `tag` disambiguates parallel tests so usernames never collide.
+async fn signup_and_login_tagged(client: &Client, tag: &str) -> (String, String) {
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos()
         .to_string();
-    let username = format!("test{}", &suffix[..12]);
+    let username = format!(
+        "{}_{}_{}",
+        tag,
+        &suffix[suffix.len().saturating_sub(10)..],
+        &tag[..1]
+    );
     let (status, r) = post_json(
         client,
         "/users",
@@ -152,7 +194,7 @@ async fn auth_and_user_lifecycle() {
     assert_eq!(r.message.as_deref(), Some("Invalid credentials"));
 
     // Signup + login + @me.
-    let (user_id, _username) = signup_and_login(&client).await;
+    let (user_id, _username) = signup_and_login_tagged(&client, "auth").await;
 
     // Get user by ID.
     let (status, r) = get(&client, &format!("/users/{user_id}")).await;
@@ -167,7 +209,7 @@ async fn auth_and_user_lifecycle() {
     let _ = username2;
 
     // PATCH own profile.
-    let (status, r) = put_json(
+    let (status, r) = patch_json(
         &client,
         &format!("/users/{user_id}"),
         &json!({"firstname": "Integration"}),
@@ -177,14 +219,14 @@ async fn auth_and_user_lifecycle() {
     assert_eq!(r.result.get("firstname"), Some(&json!("Integration")));
 
     // Password change requires the current password.
-    let (status, _) = put_json(
+    let (status, _) = patch_json(
         &client,
         &format!("/users/{user_id}/password"),
         &json!({"password": "newpass456"}),
     )
     .await;
     assert_eq!(status, 400);
-    let (status, _) = put_json(
+    let (status, _) = patch_json(
         &client,
         &format!("/users/{user_id}/password"),
         &json!({"current_password": "testpass123", "password": "newpass456"}),
@@ -199,7 +241,7 @@ async fn auth_and_user_lifecycle() {
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
 async fn nodes_lifecycle() {
     let client = Client::new();
-    let (user_id, suffix) = signup_and_login(&client).await;
+    let (user_id, suffix) = signup_and_login_tagged(&client, "nodes").await;
 
     // Unauthenticated access denied.
     let (status, _) = get(&Client::new(), &format!("/nodes/user/{user_id}")).await;
@@ -273,7 +315,7 @@ async fn permissions_and_invitations() {
     let owner = Client::new();
     let collab = Client::new();
     let (_owner_id, osuffix) = signup_and_login(&owner).await;
-    let (collab_id, _csuffix) = signup_and_login(&collab).await;
+    let (collab_id, _csuffix) = signup_and_login_tagged(&collab, "permc").await;
 
     let (status, r) = post_json(
         &owner,
@@ -284,9 +326,9 @@ async fn permissions_and_invitations() {
     assert_eq!(status, 200);
     let doc_id = result_id_string(&r);
 
-    // Denied without permission.
+    // Denied without permission → 403 Forbidden (Go statusFromAccessError parity).
     let (status, _) = get(&collab, &format!("/nodes/{doc_id}")).await;
-    assert_eq!(status, 404);
+    assert_eq!(status, 403);
 
     // Grant read.
     let (status, r) = post_json(
@@ -366,7 +408,7 @@ async fn permissions_and_invitations() {
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
 async fn user_settings_roundtrip() {
     let client = Client::new();
-    let _ = signup_and_login(&client).await;
+    let _ = signup_and_login_tagged(&client, "settings").await;
 
     let (status, r) = get(&client, "/user/settings").await;
     assert_eq!(status, 200);
@@ -393,7 +435,7 @@ async fn user_settings_roundtrip() {
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
 async fn snowflake_ids_are_strings_on_the_wire() {
     let client = Client::new();
-    let (user_id, _) = signup_and_login(&client).await;
+    let (user_id, _) = signup_and_login_tagged(&client, "snow").await;
     let (status, r) = get(&client, "/users/@me").await;
     assert_eq!(status, 200);
     // Raw JSON text check: the id must be a quoted string.

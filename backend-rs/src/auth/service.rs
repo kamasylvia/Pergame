@@ -251,6 +251,17 @@ pub async fn signup(
         .exec(db)
         .await
         .map_err(|e| {
+            // Race-safe duplicate handling: the pre-check above can pass for two
+            // concurrent signups; the unique constraint is the final arbiter.
+            // (toasty 0.11 has no dedicated unique-violation variant — the pg
+            // driver surfaces 23505 inside the generic driver error message.)
+            let msg = e.to_string();
+            if msg.contains("duplicate key")
+                || msg.contains("23505")
+                || msg.contains("users_username_key")
+            {
+                return ApiError::Conflict("Username already exists".into());
+            }
             tracing::error!(error = %e, "signup insert failed");
             ApiError::BadRequest("failed to create user".into())
         })?;

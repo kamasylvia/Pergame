@@ -22,14 +22,14 @@ pub async fn list_all(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sqlx:
         r#"
         WITH RECURSIVE user_nodes AS (
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
-                   n.icon, n.theme, n.accessibility, n.access, n.display, n."order", n.size,
+                   n.icon, n.theme, n.accessibility, n.access, n.display, n."order" AS node_order, n.size,
                    n.metadata, n.created_timestamp, n.updated_timestamp,
                    CASE WHEN n.role IN (1, 2) THEN n.thumbnail ELSE NULL END AS thumbnail
             FROM nodes n
             WHERE n.user_id = $1
             UNION
             SELECT c.id, c.user_id, c.parent_id, c.name, c.description, c.tags, c.role, c.color,
-                   c.icon, c.theme, c.accessibility, c.access, c.display, c."order", c.size,
+                   c.icon, c.theme, c.accessibility, c.access, c.display, c."order" AS node_order, c.size,
                    c.metadata, c.created_timestamp, c.updated_timestamp,
                    CASE WHEN c.role IN (1, 2) THEN c.thumbnail ELSE NULL END AS thumbnail
             FROM nodes c
@@ -48,14 +48,14 @@ pub async fn list_shared(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sq
         r#"
         WITH RECURSIVE shared_nodes AS (
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
-                   n.icon, n.theme, n.accessibility, n.access, n.display, n."order", n.size,
+                   n.icon, n.theme, n.accessibility, n.access, n.display, n."order" AS node_order, n.size,
                    n.metadata, n.created_timestamp, n.updated_timestamp
             FROM nodes n
             JOIN permissions p ON p.node_id = n.id
             WHERE p.user_id = $1
             UNION
             SELECT c.id, c.user_id, c.parent_id, c.name, c.description, c.tags, c.role, c.color,
-                   c.icon, c.theme, c.accessibility, c.access, c.display, c."order", c.size,
+                   c.icon, c.theme, c.accessibility, c.access, c.display, c."order" AS node_order, c.size,
                    c.metadata, c.created_timestamp, c.updated_timestamp
             FROM nodes c
             JOIN shared_nodes an ON an.id = c.parent_id
@@ -91,7 +91,7 @@ pub async fn get_by_id(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, s
     // Column list spelled out (sqlx audit lint; same as NODE_FULL_COLS).
     sqlx::query_as::<_, NodeRow>(
         "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, \
-         thumbnail, theme, accessibility, access, display, \"order\", content, \
+         thumbnail, theme, accessibility, access, display, \"order\" AS node_order, content, \
          content_compiled, size, metadata, created_timestamp, updated_timestamp \
          FROM nodes WHERE id = $1",
     )
@@ -111,7 +111,7 @@ pub async fn get_public(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, 
             FROM nodes n JOIN ancestors a ON n.id = a.parent_id
         )
         SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail, theme,
-               accessibility, access, display, "order", content, content_compiled, size, metadata,
+               accessibility, access, display, "order" AS node_order, content, content_compiled, size, metadata,
                created_timestamp, updated_timestamp
         FROM nodes
         WHERE id = $1 AND EXISTS (SELECT 1 FROM ancestors WHERE accessibility = 3)"#,
@@ -127,13 +127,13 @@ pub async fn public_descendants(pool: &PgPool, node_id: i64) -> Result<Vec<NodeR
         r#"
         WITH RECURSIVE descendant_nodes AS (
             SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail,
-                   theme, accessibility, access, display, "order", size, metadata,
+                   theme, accessibility, access, display, "order" AS node_order, size, metadata,
                    created_timestamp, updated_timestamp
             FROM nodes
             WHERE parent_id = $1 AND role IN (1, 2, 3)
             UNION ALL
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
-                   n.icon, n.thumbnail, n.theme, n.accessibility, n.access, n.display, n."order",
+                   n.icon, n.thumbnail, n.theme, n.accessibility, n.access, n.display, n."order" AS node_order,
                    n.size, n.metadata, n.created_timestamp, n.updated_timestamp
             FROM nodes n
             JOIN descendant_nodes d ON n.parent_id = d.id
@@ -148,10 +148,11 @@ pub async fn public_descendants(pool: &PgPool, node_id: i64) -> Result<Vec<NodeR
 
 /// Total upload size (Go: SUM(size) over the user's nodes).
 pub async fn uploads_size(pool: &PgPool, user_id: i64) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0) FROM nodes WHERE user_id = $1")
-        .bind(user_id)
-        .fetch_one(pool)
-        .await?;
+    let row: (i64,) =
+        sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM nodes WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(pool)
+            .await?;
     Ok(row.0)
 }
 
@@ -378,8 +379,8 @@ pub async fn search(
             r#"
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role,
                    n.accessibility, n.icon,
-                   ts_rank(n.content_tsv, to_tsquery('simple', $2)) AS relevance,
-                   ts_headline('simple', n.content, q.query,
+                   ts_rank(n.content_tsv, to_tsquery('simple', $2))::float8 AS relevance,
+                   ts_headline('simple', n.content, to_tsquery('simple', $2),
                                'MaxWords=35, MinWords=15, MaxFragments=1') AS content_snippet,
                    n.created_timestamp, n.updated_timestamp
             FROM nodes n
@@ -398,7 +399,7 @@ pub async fn search(
             r#"
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role,
                    n.accessibility, n.icon,
-                   ts_rank(n.search_tsv, to_tsquery('simple', $2)) AS relevance,
+                   ts_rank(n.search_tsv, to_tsquery('simple', $2))::float8 AS relevance,
                    NULL::text AS content_snippet,
                    n.created_timestamp, n.updated_timestamp
             FROM nodes n

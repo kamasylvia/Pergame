@@ -62,7 +62,7 @@ pub async fn nodes_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
 }
 
 pub async fn nodes_total_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    let (v,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0) FROM nodes")
+    let (v,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM nodes")
         .fetch_one(pool)
         .await?;
     Ok(v)
@@ -122,7 +122,7 @@ async fn top_users(
     let sql = match by {
         TopOrder::NodeCount => {
             r#"SELECT n.user_id AS user_id, u.username AS username,
-                  COUNT(n.id) AS node_count, COALESCE(SUM(n.size), 0) AS total_size
+                  COUNT(n.id) AS node_count, COALESCE(SUM(n.size), 0)::bigint AS total_size
            FROM nodes n
            JOIN users u ON u.id = n.user_id
            GROUP BY n.user_id, u.username
@@ -131,7 +131,7 @@ async fn top_users(
         }
         TopOrder::TotalSize => {
             r#"SELECT n.user_id AS user_id, u.username AS username,
-                  COUNT(n.id) AS node_count, COALESCE(SUM(n.size), 0) AS total_size
+                  COUNT(n.id) AS node_count, COALESCE(SUM(n.size), 0)::bigint AS total_size
            FROM nodes n
            JOIN users u ON u.id = n.user_id
            GROUP BY n.user_id, u.username

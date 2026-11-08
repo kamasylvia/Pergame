@@ -9,13 +9,74 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use toasty::Model;
 
+/// P0 wire contract: Snowflake ids serialize as JSON strings (deserialize
+/// accepts both strings and numbers).
+pub mod sf {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &i64, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(&v.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        match v {
+            serde_json::Value::String(s) => s
+                .parse::<u64>()
+                .map(|u| u as i64)
+                .map_err(serde::de::Error::custom),
+            serde_json::Value::Number(n) => n
+                .as_u64()
+                .map(|u| u as i64)
+                .or_else(|| n.as_i64())
+                .ok_or_else(|| serde::de::Error::custom("snowflake out of range")),
+            _ => Err(serde::de::Error::custom("expected string or number")),
+        }
+    }
+}
+
+/// Option<i64> variant: None serializes as null.
+pub mod sf_opt {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(id) => super::sf::serialize(id, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<i64>, D::Error> {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        match v {
+            serde_json::Value::Null => Ok(None),
+            serde_json::Value::String(s) => s
+                .parse::<u64>()
+                .map(|u| Some(u as i64))
+                .map_err(serde::de::Error::custom),
+            serde_json::Value::Number(n) => Ok(Some(
+                n.as_u64()
+                    .map(|u| u as i64)
+                    .or_else(|| n.as_i64())
+                    .ok_or_else(|| serde::de::Error::custom("snowflake out of range"))?,
+            )),
+            _ => Err(serde::de::Error::custom("expected string or number")),
+        }
+    }
+}
+
 /// Node row for reads (sqlx escape hatch). Mirrors `models.Node` JSON tags:
 /// ids are JSON strings (Snowflake), metadata is a JSON object.
 #[derive(Debug, Clone, FromRow, Serialize)]
 #[serde(default)]
 pub struct NodeRow {
+    #[serde(with = "sf")]
     pub id: i64,
+    #[serde(with = "sf")]
     pub user_id: i64,
+    #[serde(with = "sf_opt")]
     pub parent_id: Option<i64>,
     pub name: String,
     pub description: Option<String>,
@@ -29,8 +90,11 @@ pub struct NodeRow {
     pub access: i32,
     pub display: Option<i32>,
     #[serde(rename = "order")]
+    #[sqlx(default)]
     pub node_order: Option<i32>,
+    #[sqlx(default)]
     pub content: Option<String>,
+    #[sqlx(default)]
     pub content_compiled: Option<String>,
     pub size: Option<i64>,
     pub metadata: Option<serde_json::Value>,
@@ -41,8 +105,11 @@ pub struct NodeRow {
 /// Permission row (reads only; permission CRUD is the P3.5 domain).
 #[derive(Debug, FromRow, Serialize)]
 pub struct PermissionRow {
+    #[serde(with = "sf")]
     pub id: i64,
+    #[serde(with = "sf")]
     pub node_id: i64,
+    #[serde(with = "sf")]
     pub user_id: i64,
     pub permission: i32,
     pub created_timestamp: i64,
@@ -51,8 +118,11 @@ pub struct PermissionRow {
 /// Search hit (Go NodeSearchResult; content_snippet omitted when absent).
 #[derive(Debug, FromRow, Serialize)]
 pub struct NodeSearchRow {
+    #[serde(with = "sf")]
     pub id: i64,
+    #[serde(with = "sf")]
     pub user_id: i64,
+    #[serde(with = "sf_opt")]
     pub parent_id: Option<i64>,
     pub name: String,
     pub description: Option<String>,
@@ -73,6 +143,7 @@ pub struct User {
     /// Application-assigned Snowflake (no `#[auto]` — not a DB sequence).
     #[key]
     #[column("id")]
+    #[serde(with = "sf")]
     pub id: i64,
 
     #[column("username")]

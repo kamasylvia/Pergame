@@ -135,7 +135,7 @@ pub async fn get_public_node(
 
 #[derive(Debug, Deserialize)]
 pub struct NodeInput {
-    #[serde(default)]
+    #[serde(default, with = "crate::models::sf_opt")]
     pub parent_id: Option<i64>,
     #[serde(default)]
     pub name: String,

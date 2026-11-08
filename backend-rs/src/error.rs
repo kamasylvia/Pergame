@@ -59,9 +59,14 @@ impl From<sqlx::Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status();
+        // Go utils.Error parity: capitalize the first letter of the message.
+        let mut message = self.message();
+        if let Some(first) = message.get_mut(..1) {
+            first.make_ascii_uppercase();
+        }
         let body = json!({
             "status": "error",
-            "message": self.message(),
+            "message": message,
         });
         (status, axum::Json(body)).into_response()
     }

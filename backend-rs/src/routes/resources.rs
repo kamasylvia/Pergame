@@ -110,18 +110,19 @@ async fn read_upload(
 > {
     let mut file = None;
     let mut fields = std::collections::HashMap::new();
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|_| ApiError::BadRequest("file too large or failed to get file".into()))?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        tracing::warn!(error = %e, "multipart next_field failed");
+        ApiError::BadRequest("file too large or failed to get file".into())
+    })? {
         let name = field.name().unwrap_or("").to_string();
+        tracing::info!(%name, "multipart field seen");
         match name.as_str() {
             "file" => {
                 let filename = field.file_name().unwrap_or("").to_string();
                 let content_type = field.content_type().unwrap_or("").to_string();
-                let bytes = field.bytes().await.map_err(|_| {
-                    ApiError::BadRequest("file too large or failed to get file".into())
+                let bytes = field.bytes().await.map_err(|e| {
+                    tracing::warn!(error = %e, "field bytes read failed");
+                    ApiError::BadRequest(format!("file too large or failed to get file: {e}"))
                 })?;
                 file = Some(UploadedPart {
                     filename,
@@ -186,6 +187,7 @@ pub async fn upload_file(
 
     let (file, fields) = read_upload(multipart).await?;
     let Some(file) = file else {
+        tracing::warn!("debug: file field missing after read");
         return Err(ApiError::BadRequest(
             "file too large or failed to get file".into(),
         ));
@@ -314,6 +316,7 @@ pub async fn upload_avatar(
 
     let (file, _) = read_upload(multipart).await?;
     let Some(file) = file else {
+        tracing::warn!("debug: file field missing after read");
         return Err(ApiError::BadRequest(
             "file too large or failed to get file".into(),
         ));
@@ -360,18 +363,19 @@ pub async fn update_file(
     let actor: Actor = auth.into();
     let mut file: Option<UploadedPart> = None;
     let mut fields = std::collections::HashMap::new();
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|_| ApiError::BadRequest("file too large or failed to get file".into()))?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        tracing::warn!(error = %e, "multipart next_field failed");
+        ApiError::BadRequest("file too large or failed to get file".into())
+    })? {
         let name = field.name().unwrap_or("").to_string();
+        tracing::info!(%name, "multipart field seen");
         match name.as_str() {
             "file" => {
                 let filename = field.file_name().unwrap_or("").to_string();
                 let content_type = field.content_type().unwrap_or("").to_string();
-                let bytes = field.bytes().await.map_err(|_| {
-                    ApiError::BadRequest("file too large or failed to get file".into())
+                let bytes = field.bytes().await.map_err(|e| {
+                    tracing::warn!(error = %e, "field bytes read failed");
+                    ApiError::BadRequest(format!("file too large or failed to get file: {e}"))
                 })?;
                 file = Some(UploadedPart {
                     filename,
