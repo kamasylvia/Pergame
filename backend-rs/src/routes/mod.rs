@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod backup;
 pub mod health;
+pub mod links;
 pub mod nodes;
 pub mod oidc;
 pub mod permissions;

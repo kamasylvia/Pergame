@@ -67,6 +67,18 @@ pub mod sf_opt {
     }
 }
 
+/// Soft-link row: one extra tree position for a note (spec note-links.md).
+#[derive(Debug, FromRow, Serialize)]
+pub struct LinkRow {
+    #[serde(with = "sf")]
+    pub id: i64,
+    #[serde(with = "sf")]
+    pub parent_id: i64,
+    #[serde(with = "sf")]
+    pub node_id: i64,
+    pub created_timestamp: i64,
+}
+
 /// Node row for reads (sqlx escape hatch). Mirrors `models.Node` JSON tags:
 /// ids are JSON strings (Snowflake), metadata is a JSON object.
 #[derive(Debug, Clone, FromRow, Serialize)]

@@ -168,6 +168,15 @@ async fn main() {
             get(routes::backup::get_backup_status),
         )
         .route("/api/backup/{jobId}", delete(routes::backup::cancel_backup))
+        .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))
+        .route(
+            "/api/nodes/{nodeId}/links",
+            post(routes::links::create_link),
+        )
+        .route(
+            "/api/nodes/{nodeId}/links/{linkId}",
+            delete(routes::links::delete_link),
+        )
         .route("/api/nodes/search", get(routes::nodes::search))
         .route(
             "/api/nodes/user/{userId}",
