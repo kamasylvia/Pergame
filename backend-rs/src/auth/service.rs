@@ -143,27 +143,6 @@ pub async fn logout(db: &mut Db, refresh_token: &str) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// P0 finding: Go used golang.org/x/crypto/bcrypt (default cost 10), which
-    /// emits $2a$-prefixed hashes. The Rust bcrypt crate verifies them directly,
-    /// so existing user passwords carry over with zero migration.
-    #[test]
-    fn verifies_bcrypt_hashes_roundtrip() {
-        let hash = bcrypt::hash("correct horse battery", bcrypt::DEFAULT_COST).unwrap();
-        assert!(hash.starts_with("$2"));
-        assert!(bcrypt::verify("correct horse battery", &hash).unwrap());
-        assert!(!bcrypt::verify("wrong password", &hash).unwrap());
-    }
-
-    #[test]
-    fn login_error_text_matches_go() {
-        assert_eq!(bad_credentials().message(), "invalid credentials");
-    }
-}
-
 pub struct SignupInput {
     pub username: String,
     pub firstname: Option<String>,
@@ -226,8 +205,9 @@ pub async fn signup(
             reset_url
         );
         let email_addr = input.email.clone().unwrap_or_default();
-        if let Err(_e) =
-            mail_client.send_html(&email_addr, "Alexandrie: Set your password", &plain, &html)
+        if mail_client
+            .send_html(&email_addr, "Alexandrie: Set your password", &plain, &html)
+            .is_err()
         {
             return Err(ApiError::BadRequest(
                 "failed to send account creation email".into(),
@@ -288,4 +268,25 @@ pub fn set_password_token(user_id: i64) -> String {
         &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
     )
     .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// P0 finding: Go used golang.org/x/crypto/bcrypt (default cost 10), which
+    /// emits $2a$-prefixed hashes. The Rust bcrypt crate verifies them directly,
+    /// so existing user passwords carry over with zero migration.
+    #[test]
+    fn verifies_bcrypt_hashes_roundtrip() {
+        let hash = bcrypt::hash("correct horse battery", bcrypt::DEFAULT_COST).unwrap();
+        assert!(hash.starts_with("$2"));
+        assert!(bcrypt::verify("correct horse battery", &hash).unwrap());
+        assert!(!bcrypt::verify("wrong password", &hash).unwrap());
+    }
+
+    #[test]
+    fn login_error_text_matches_go() {
+        assert_eq!(bad_credentials().message(), "invalid credentials");
+    }
 }

@@ -1,26 +1,21 @@
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: alexandrie-mysql
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: alexandrie-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-alexandrie}
-      MYSQL_USER: ${MYSQL_USER:-alexandrie}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
+      POSTGRES_USER: ${POSTGRES_USER:-alexandrie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-alexandrie}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${MYSQL_EXTERNAL_PORT:-3307}:3306"
+      - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     networks:
       - alexandrie-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mysql -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} -e 'SELECT 1' $${MYSQL_DATABASE}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       timeout: 10s
       retries: 5
       interval: 30s
@@ -75,11 +70,11 @@ services:
       CONFIG_DISABLE_NATIVE_LOGIN: "${CONFIG_DISABLE_NATIVE_LOGIN:-false}" # Disable native username/password login if set to 'true' (useful if you only want OAuth providers)
 
       # Database Configuration
-      DATABASE_HOST: mysql
-      DATABASE_PORT: 3306
-      DATABASE_NAME: ${MYSQL_DATABASE:-alexandrie}
-      DATABASE_USER: ${MYSQL_USER:-alexandrie}
-      DATABASE_PASSWORD: ${MYSQL_PASSWORD:-password}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-alexandrie}
+      DATABASE_USER: ${POSTGRES_USER:-alexandrie}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-password}
 
       # Object storage configuration (S3 compatible like RustFS, MinIO, etc.)
       # OPTIONAL: If you don't want to use the CDN feature you can leave these variables empty
@@ -103,7 +98,7 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       rustfs:
         condition: service_healthy
@@ -143,6 +138,6 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
   rustfs_data:
   rustfs_logs:

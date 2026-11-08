@@ -12,7 +12,7 @@ The Alexandrie stack consists of four main services, defined in the `docker-comp
 
 | Service      | Description                                                                    |
 | ------------ | ------------------------------------------------------------------------------ |
-| **MySQL**    | Relational database used to store user data and metadata.                      |
+| **PostgreSQL** | Relational database used to store user data and metadata.                     |
 | **RustFS**   | S3-compatible object storage used for file and media storage.                  |
 | **Backend**  | The Go-based API server providing authentication, storage, and access control. |
 | **Frontend** | A Nuxt 4 web app that communicates with the backend via REST API.              |
@@ -110,23 +110,21 @@ These variables configure the backend API service.
 - `JWT_SECRET`: Secret key used to sign JWT tokens. You should change this to a random long string correcly generated (with openssl or similar) in production for security. Changing this value will invalidate all existing sessions.
 - `ADMIN_ACCOUNTS`: Comma-separated list of user IDs that should have admin privileges (e.g., `1,2,3`). Optional.
 
-### 4. Database — MySQL
+### 4. Database — PostgreSQL
 
 ```env
-MYSQL_EXTERNAL_PORT=3307
-MYSQL_DATABASE=alexandrie
-MYSQL_USER=alexandrie
-MYSQL_PASSWORD=password
-MYSQL_ROOT_PASSWORD=rootpassword
+POSTGRES_EXTERNAL_PORT=5432
+POSTGRES_DB=alexandrie
+POSTGRES_USER=alexandrie
+POSTGRES_PASSWORD=password
 ```
 
-These variables configure the MySQL database service.
+These variables configure the PostgreSQL database service.
 
-- `MYSQL_EXTERNAL_PORT`: The port exposed on your host machine for the MySQL service.
-- `MYSQL_DATABASE`: The name of the default database created for Alexandrie.
-- `MYSQL_USER`: The username for the default Alexandrie database user.
-- `MYSQL_PASSWORD`: The password for the default Alexandrie database user.
-- `MYSQL_ROOT_PASSWORD`: The password for the MySQL root user.
+- `POSTGRES_EXTERNAL_PORT`: The port exposed on your host machine for the PostgreSQL service.
+- `POSTGRES_DB`: The name of the default database created for Alexandrie.
+- `POSTGRES_USER`: The username for the default Alexandrie database user.
+- `POSTGRES_PASSWORD`: The password for the default Alexandrie database user.
 
 ### 5. Object Storage — S3 (RustFS / MinIO-compatible) (optional, leave empty to disable)
 
@@ -176,7 +174,7 @@ In production, this is usually only accessed by a reverse proxy.
 
 In production, you should:
 
-- NOT expose MySQL or RustFS directly
+- NOT expose PostgreSQL or RustFS directly
 - Use a reverse proxy (Nginx, Traefik, Caddy)
 - Terminate HTTPS at the proxy
 

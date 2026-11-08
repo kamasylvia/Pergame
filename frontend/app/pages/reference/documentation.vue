@@ -19,7 +19,7 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>MySQL</strong></td>
+            <td><strong>PostgreSQL</strong></td>
             <td>Relational database used to store user data and metadata.</td>
           </tr>
           <tr>
@@ -146,23 +146,21 @@ JWT_SECRET=your-secure-jwt-secret-key-change-this-in-production
           similar) in production for security. Changing this value will invalidate all existing sessions.
         </li>
       </ul>
-      <h3 id="4.-database-%E2%80%94-mysql">4. Database — MySQL</h3>
+      <h3 id="4.-database-%E2%80%94-postgresql">4. Database — PostgreSQL</h3>
 
       <div class="code-block-wrapper">
-        <pre><code class="hljs language-env">MYSQL_EXTERNAL_PORT=3307
-MYSQL_DATABASE=alexandrie
-MYSQL_USER=alexandrie
-MYSQL_PASSWORD=password
-MYSQL_ROOT_PASSWORD=rootpassword
+        <pre><code class="hljs language-env">POSTGRES_EXTERNAL_PORT=5432
+POSTGRES_DB=alexandrie
+POSTGRES_USER=alexandrie
+POSTGRES_PASSWORD=password
 </code></pre>
       </div>
-      <p>These variables configure the MySQL database service.</p>
+      <p>These variables configure the PostgreSQL database service.</p>
       <ul>
-        <li><code>MYSQL_EXTERNAL_PORT</code>: The port exposed on your host machine for the MySQL service.</li>
-        <li><code>MYSQL_DATABASE</code>: The name of the default database created for Alexandrie.</li>
-        <li><code>MYSQL_USER</code>: The username for the default Alexandrie database user.</li>
-        <li><code>MYSQL_PASSWORD</code>: The password for the default Alexandrie database user.</li>
-        <li><code>MYSQL_ROOT_PASSWORD</code>: The password for the MySQL root user.</li>
+        <li><code>POSTGRES_EXTERNAL_PORT</code>: The port exposed on your host machine for the PostgreSQL service.</li>
+        <li><code>POSTGRES_DB</code>: The name of the default database created for Alexandrie.</li>
+        <li><code>POSTGRES_USER</code>: The username for the default Alexandrie database user.</li>
+        <li><code>POSTGRES_PASSWORD</code>: The password for the default Alexandrie database user.</li>
       </ul>
       <h3 id="5.-object-storage-%E2%80%94-s3-(rustfs-%2F-minio-compatible)-(optional%2C-leave-empty-to-disable)">
         <a class="header-anchor" href="#5.-object-storage-%E2%80%94-s3-(rustfs-%2F-minio-compatible)-(optional%2C-leave-empty-to-disable)" aria-hidden="true"
@@ -216,7 +214,7 @@ SMTP_PASSWORD=
       <h2 id="production-deployment-notes">Production Deployment Notes</h2>
       <p>In production, you should:</p>
       <ul>
-        <li>NOT expose MySQL or RustFS directly</li>
+        <li>NOT expose PostgreSQL or RustFS directly</li>
         <li>Use a reverse proxy (Nginx, Traefik, Caddy)</li>
         <li>Terminate HTTPS at the proxy</li>
       </ul>
