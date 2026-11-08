@@ -453,3 +453,85 @@ async fn snowflake_ids_are_strings_on_the_wire() {
 /// evolve.
 #[allow(dead_code)]
 type KeepMap = HashMap<String, String>;
+
+// ---------------------------------------------------------------- soft links
+
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn soft_links_lifecycle() {
+    let client = Client::new();
+    let (owner_id, suffix) = signup_and_login_tagged(&client, "links").await;
+
+    // ws1 (canonical parent), doc inside ws1, ws2 (link target).
+    let mk = |name: String| json!({"name": name, "role": 1});
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws1-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws1 = result_id_string(&r);
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("doc-{suffix}"), "role": 3, "parent_id": ws1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let doc = result_id_string(&r);
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws2-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws2 = result_id_string(&r);
+
+    // Link doc into ws2.
+    let (status, r) = post_json(
+        &client,
+        &format!("/nodes/{doc}/links"),
+        &json!({"parent_id": ws2}),
+    )
+    .await;
+    assert_eq!(status, 201, "link create failed: {:?}", r.message);
+    let link_id = result_id_string(&r);
+
+    // Duplicate link rejected (409 via unique constraint).
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{doc}/links"),
+        &json!({"parent_id": ws2}),
+    )
+    .await;
+    assert_eq!(status, 409);
+
+    // Cycle rejection: linking ws1 into its own descendant doc → 400.
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{ws1}/links"),
+        &json!({"parent_id": doc}),
+    )
+    .await;
+    assert_eq!(status, 400);
+
+    // Subtree rejection: linking ws1 under doc's... (doc is a leaf; use ws2
+    // into ws1's subtree — ws1 is not in doc's subtree so this would succeed;
+    // instead verify self-link rejection).
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{doc}/links"),
+        &json!({"parent_id": doc}),
+    )
+    .await;
+    assert_eq!(status, 400);
+
+    // Positions list.
+    let (status, r) = get(&client, &format!("/nodes/{doc}/links")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().map(|a| a.len()), Some(1));
+
+    // Tree listing still 200 with the link present.
+    let (status, _) = get(&client, &format!("/nodes/user/{owner_id}")).await;
+    assert_eq!(status, 200);
+
+    // Remove position.
+    let (status, r) = del(&client, &format!("/nodes/{doc}/links/{link_id}")).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/nodes/{doc}/links")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().map(|a| a.len()), Some(0));
+    let _ = owner_id;
+}

@@ -68,7 +68,7 @@ pub async fn is_self_or_descendant(
             UNION ALL
             SELECT n.id FROM nodes n JOIN descendants d ON n.parent_id = d.id
         )
-        SELECT 1 FROM descendants WHERE id = $2 LIMIT 1"#,
+        SELECT 1::bigint FROM descendants WHERE id = $2 LIMIT 1"#,
     )
     .bind(node_id)
     .bind(candidate_id)

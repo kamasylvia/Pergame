@@ -70,7 +70,13 @@ pub async fn create_link(
     let id = state.snowflake.generate().as_i64();
     link_repo::create(&state.db, id, parent, node, crate::auth::service::now_ms())
         .await
-        .map_err(ApiError::from)?;
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("duplicate key") || msg.contains("23505") {
+                return ApiError::Conflict("link already exists in that folder".into());
+            }
+            ApiError::from(e)
+        })?;
 
     let row = link_repo::get_by_id(&state.db, id)
         .await

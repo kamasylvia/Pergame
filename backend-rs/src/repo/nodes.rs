@@ -33,7 +33,10 @@ pub async fn list_all(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sqlx:
                    c.metadata, c.created_timestamp, c.updated_timestamp,
                    CASE WHEN c.role IN (1, 2) THEN c.thumbnail ELSE NULL END AS thumbnail
             FROM nodes c
-            JOIN user_nodes un ON un.id = c.parent_id
+            JOIN user_nodes un
+              ON un.id = c.parent_id
+              OR EXISTS (SELECT 1 FROM node_links nl
+                         WHERE nl.node_id = c.id AND nl.parent_id = un.id)
         )
         SELECT * FROM user_nodes ORDER BY role, name"#,
     )
@@ -58,7 +61,10 @@ pub async fn list_shared(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sq
                    c.icon, c.theme, c.accessibility, c.access, c.display, c."order" AS node_order, c.size,
                    c.metadata, c.created_timestamp, c.updated_timestamp
             FROM nodes c
-            JOIN shared_nodes an ON an.id = c.parent_id
+            JOIN shared_nodes an
+              ON an.id = c.parent_id
+              OR EXISTS (SELECT 1 FROM node_links nl
+                         WHERE nl.node_id = c.id AND nl.parent_id = an.id)
         )
         SELECT * FROM shared_nodes"#,
     )
@@ -131,12 +137,15 @@ pub async fn public_descendants(pool: &PgPool, node_id: i64) -> Result<Vec<NodeR
                    created_timestamp, updated_timestamp
             FROM nodes
             WHERE parent_id = $1 AND role IN (1, 2, 3)
-            UNION ALL
+            UNION
             SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
                    n.icon, n.thumbnail, n.theme, n.accessibility, n.access, n.display, n."order" AS node_order,
                    n.size, n.metadata, n.created_timestamp, n.updated_timestamp
             FROM nodes n
-            JOIN descendant_nodes d ON n.parent_id = d.id
+            JOIN descendant_nodes d
+              ON d.id = n.parent_id
+              OR EXISTS (SELECT 1 FROM node_links nl
+                         WHERE nl.node_id = n.id AND nl.parent_id = d.id)
             WHERE n.role IN (1, 2, 3)
         )
         SELECT * FROM descendant_nodes ORDER BY role ASC, "order" DESC, name ASC"#,
