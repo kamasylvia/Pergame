@@ -17,3 +17,12 @@
 - **sqlx FromRow 列映射坑**:`#[derive(FromRow)]` 按字段名匹配列;`#[serde(rename)]` 只管序列化**不影响** sqlx。字段名≠列名(如 session_type←`type`)必须在字段上加 `#[sqlx(rename = "type")]`,否则运行期 decode 报错→500。`#[sqlx(default)]` 会把列缺失静默成 None(丢数据),partial SELECT 必须配别名(如 `"order" AS node_order`)而非靠 default 兜。
 - **requests 会话不发 localhost host-only cookie**(domain 归一成 localhost.local 不匹配)→ 程序化测 cookie 鉴权用 curl 显式 `-H "Cookie: ..."` 或改用 127.0.0.1 别名,非后端 bug。
 - **backend-rs 启动即自举 S3**:建桶 + pergame 设公共读 policy + pergame-backups 设 24h lifecycle(删桶后重跑会自动重建,幂等)。
+
+## 2026-11-09 备份子系统批次
+
+- **静默 replace 是最大返工源**:本批多处 `str.replace(old,new)` 因锚点不匹配而空转(registered 打印成功但实际未改),导致「明明改了却仍是旧行为」的连环排查(list_snapshots、download_snapshot、main.rs 路由注册)。**规则:所有批量文本替换必须带 `assert old in s`,改后立刻用 `grep -c` 验证目标串出现次数**。
+- **两套写入路径必须共用校验**:v2 快照改为 manifest+blobs 后,`restore_from_zip` 引擎仍需 `manifest.json` 成员(格式门),组装时必须补上;新格式上线同时要放行 `MAX_FORMAT`。教训:改了存储格式先跑一遍「读回」路径,不要只验写入。
+- **JSON 手写易错**:shell 侧用 sed/awk 生成 JSON 时必须转义 `\n \r \t " \\` 并删控制字符;漏掉换行会让 API 侧 500(错误信息「control character found while parsing」)。无 python 的镜像是常态,写 escape 函数后要有独立冒烟。
+- **掩码写入的经典陷阱**:读时掩码 `***`、写时回填旧值——字符串重组的切片边界(`&line[q2..]` vs `[q2+1..]`)错了会每次 round-trip 多一个引号,而宽容的解析器不报错。**掩码往返必须有 assert 等值测试**(`unmask_content(masked) == original`)。
+- **DR/备份类权限面**:全库还原能力只给 role=2 admin,且要在前端做二次确认;conf 里目的地密钥经 admin API 可写但读永远掩码。
+- **本机无 pg_dump/rclone**:DR sidecar 端到端只能验到「job 协议 + 脚本被调用 + 错误回传」,真实 dump 必须在有 docker 的机器上验;`postgres:17-alpine` 做 sidecar 基础镜像可保证 pg_dump 与库版本匹配。

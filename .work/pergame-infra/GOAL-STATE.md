@@ -40,25 +40,50 @@
 
 **改名落地(2026-11-09)✅**:Collectanea → Pergame 全量(brand + go.mod/crate `pergame-rs`/容器名/DB 与桶默认值/JWT issuer/前端运行时标识/logo 资产 `Pergame-logo-*`/链接;上游 alexandrie 遗留清理为 fork 身份)。验证:go vet/build、cargo check + 20/20 单测、eslint、grep 闸门全绿。
 
-## 3. 续接点(2026-11-09 换机落盘)
+## 3. 续接点(2026-11-09 第二次换机落盘)
 
-- **换机续接指引**:backend-rs 可 `cargo run` 直连 NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(PG_*/QUOBJECT_*);集成套件 `cargo test --test integration -- --ignored`(5+1 用例全绿);本仓 main 已推远程(2026-11-09)。
-- **快照管理 + 双入口还原 ✅(2026-11-09,commits cd86c459/6700c63d/2106cf70)**:备份多版本化(`{uid}/snapshots/<ts>.zip`,保留 10 份,桶 lifecycle 撤除)+ `GET/DELETE/restore/download` 快照 API + restore.rs replace 引擎(1.1.0/1.2.0 兼容、links 跳过报告、files 经 transformed_path 回填、settings upsert)+ 上传 zip 还原(multipart 256MB)+ dr-backup `-l/-R` 子命令(非交互需 `-y`)。验证:集成 8/8(含 snapshot_restore_roundtrip)、22/22 单测、clippy 0、eslint/stylelint 0、浏览器走查截图。spec = `features/backup-restore.md`。
-- **批次 B:快照存储 v2(增量去重 + 可选加密)✅(2026-11-09)**:manifest+blobs 内容寻址(跨快照附件去重)、可选 AES-GCM/scrypt 端到端 blob 加密(env passphrase)、legacy v1 zip 兼容读取、下载统一直出、blob GC。集成 8/8、24/24 单测、clippy 0。spec §8-9。
-- **push 落地(2026-11-09)**:15 个本地 commits 按公开仓规则压缩为 **5 个主题 commits** 后 `--force-with-lease` 推上 origin/main(`224ff57b..6e0abd8a`)。⚠️ 压缩后本地历史里的旧 SHA 全部孤儿化,引用按映射换算:①`30c8ba06` ← 9b3ac579+f9ea3dac(改名);②`b445b6fa` ← 20c61946+53dec342+09c293c4+d50f7e81(上游追踪+移植);③`100473d2` ← f8129dc3+c0109748+030af825(活测修复);④`ad76b47d` ← b58bb38b(TLS);⑤`6e0abd8a` ← 4da3779e+81fee759+ab9dea10+d03fb6a2+d2ee9aa8(软链端到端)。考古 = reflog / `git log --all`。
-- **软连接全链路 ✅(2026-11-09 深夜)**:NL-A/B/C 三阶段全落地(NL-B 后端 `81fee759` = migration 0004 order 列 + `GET /nodes/links` + **@me 解析修复** + **CORS 层补齐**(Go frontendCORSConfig 对位;前端联调暴露的两缺口);NL-B 前端 `ab9dea10` = store links 集合 + TreeBuilder 位置合成 + `*` 角标 + CloneTo/Remove 菜单 + Delete 克隆提示 + i18n×8;**真浏览器走查全过**(克隆→双位置角标→移除→删除提示,nuxt dev + cargo run + IAB 截图存证);NL-C `4da3779e`)。设计稿定稿:`features/note-links-ui.md`(O1-O4 决议 + Trilium Notes 官方实现对位)。集成 7/7、clippy 0、eslint/stylelint 0。
-- **2FA 全链路 ✅**(pyotp 程序化:enroll→confirm→登录拦截 pre_auth→TOTP verify→recovery 一次性→disable 全过,测户已删)。
-- **OIDC ✅**(2026-11-09:Keycloak `pergame-test` 临时 realm 全链授权码流 + sessions 200 + backup order 实测;顺手修 2 个列映射 bug;realm 测后已删)。
-- **邮件链路 ✅(2026-11-09)**:SMTP = zoho(配置源 = Portainer joplin 容器 env,`MAILER_*` → `SMTP_*` 映射);backend-rs 实发 account-create + password-reset 两封(`kamasylvia@zohomail.com`);独立 smtplib relay 对照通;**送达肉眼复核 ✅(2026-11-09 用户确认收件)**。
-- **S3 TLS ✅**(`b58bb38b`:S3_CA_PATH 进 TrustStore;S3_INSECURE_TLS = smithy 生态缺口,告警 + 文档化)。
-- **docs Rust 化 ✅**(S3_INSECURE_TLS 文档对齐实现、selfhost 补 fork 镜像现状);Go tests build 修复(`f8129dc3`)。
-- 旧续接点(2026-11-08/09 夜间):
+### 当前精确位置
 
-- **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
-- ~~**新增批次候选:Collectanea 改名落地**~~ **✅ 已落地(2026-11-09,全量 + fork 身份清理,用户拍板;见 AGENTS.md 决策记录 2026-11-09 行)**。
-- **下一步(按序)**:① 软连接 NL-B 后端完成 ✅(本轮:CTE link 臂并入递归项 OR EXISTS、活验证 6/6 含 soft_links 生命周期);前端部分待设计确认;② NL-C 备份 zip 含 links;③ 2FA 全链路自测(可程序化,无需扫码);④ OIDC/邮件待 provider/SMTP;⑤ push(待拍板);dr-backup 去重 ✅(375c423b)。② 活环境剩余手测(2FA 扫码/OIDC/邮件实测);③ docs 站 deploy 文档 Rust 化;④ S3 TLS delta;⑤ push + 镜像发布(待拍板)。原「全部待用户/活环境」清单并入以上。① 活环境联调:compose up(postgres 已切,994a2af0)→ 跑 `cargo test --test integration -- --ignored` + Go tests/ + 手测 OIDC/2FA/backup;② push + 镜像发布工作流(用户拍板);③ S3 CA_PATH/INSECURE_TLS(已记录 delta)。
-- **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
-- 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
+主力全部收口,`origin/main` = `9fe0c3d5`(本地无未推提交、工作树干净)。备份子系统已按用户裁决完成完整分层:
+
+| 层 | 载体 | 用途 | 状态 |
+|---|---|---|---|
+| 用户级快照(应用内) | v2 manifest + 内容寻址 blobs(`{uid}/manifests/`+`blobs[-e2e]/`),keep-10 + GC | 误删/误改恢复、可下载、可上传还原 | ✅ 全部实现 |
+| 定时自动快照 | `SNAPSHOT_INTERVAL_HOURS` ticker,复用 run_backup | 无人值守的用户级保护 | ✅ 实现(默认关) |
+| 实例级 3-2-1 异地 | dr-backup sidecar(pg_dump → 多 S3/WebDAV 目的地) | **主力备份目标** | ✅ 实现,待容器内实机验证 |
+| 本地误删恢复 | 回收站 | 用户明确要求,替代 git 级版本历史 | ⬜ **未做(下一个开发项)** |
+| git 级版本控制 | — | 用户明确否决,不再评估 | ❌ 不做 |
+
+### 下一步动作(按序)
+
+1. **回收站机制**(用户 2026-11-09 裁决,已进 TODO):删除节点 → trash(软删标记 + 保留期)→ 恢复/彻底删/清空;tree 查询过滤;前端回收站视图。**先落 spec 再实施**。
+2. 容器内实机验证备份全链(本机无 docker):`docker compose up` → 设置 Instance DR 配 conf → 立即备份 / `-l` / `-R` 还原;同时验证应用内快照创建/还原/下载。
+3. 部署 smoke(思源笔记 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南` 有 9 步清单,含新增的快照与 DR 步骤)。
+4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
+
+### 换机续接指引
+
+- **编译/测试环境**:backend-rs 需 `rustup override set 1.95.0`(仓库根 `backend-rs` 目录,toasty 要求 ≥1.95);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。
+- **活环境**:NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(`PG_HOST/PG_PORT/PG_USERNAME/PG_PASSWORD`, `QUOBJECT_ENDPOINT/ACCESS_KEY/SECRET_KEY`;QUOBJECT_ENDPOINT 值是容器内主机名,本机用需替换为 `qnap.elf-balance.ts.net`)。Keycloak(`KEYCLOAK_URL` :10002)可复用于 OIDC 测试。
+- **集成套件**:`cargo test --test integration -- --ignored`(8 用例,需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` 环境变量供直连断言)。
+- **验证门**:`cargo test`(26 单测)、`cargo clippy --all-targets`(0)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
+- **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
+
+### 最近完成的批次(供考古)
+
+- **备份子系统 A/B/C**(2026-11-09,commits `8ed0d261`/`2d0d9d55`/`1d8b1c71`/`5dcec24a`/`736057b3`/`571ec174`/`9fe0c3d5`):
+  - A:还原前自动安全快照 + 快照 memo(manifest+sidecar)+ 还原预检(`/preview` 双入口,返回 incoming/current/replaced/added/removed/文件碰撞)
+  - B:存储 v2 = manifest + 内容寻址 blobs(跨快照去重)+ 可选 AES-256-GCM/scrypt 加密(`PERGAME_SNAPSHOT_PASSPHRASE`)+ legacy v1 zip 兼容 + 下载直出 + blob GC
+  - C:实例 DR = sidecar 容器 + admin API(conf `***` 掩码/回填、job 文件协议)+ 前端 Instance DR 视图 + `SNAPSHOT_INTERVAL_HOURS` 定时快照
+  - 走查中抓到的真 bug(已修+单测):掩码重组重复尾引号、sidecar JSON 转义漏换行、v2 组装漏 manifest.json 成员、引擎格式门未放行 2.0、`skipped_files` 反序列化缺 default、`@me` 解析拒 sentinel、backend-rs 无 CORS 层
+- **更早批次**:改名落地(5 主题压缩推送,旧 SHA 映射见下)、软连接 NL-A/B/C、2FA/OIDC/邮件活测、S3 TLS、docs Rust 化、上游两 fix 移植
+
+### 历史记录(旧续接点,勿据此判断现状)
+
+- **push 压缩映射(2026-11-09 第一次)**:15 commits → 5 主题(`30c8ba06` 改名 / `b445b6fa` 上游追踪 / `100473d2` 活测修复 / `ad76b47d` TLS / `6e0abd8a` 软链端到端),`--force-with-lease` 推 origin。旧 SHA 考古走 reflog。
+- **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅ 骨架+spike → P2 核心认证域 ✅(`19d0643c`,13/13 单测)。
+- **改名落地 ✅**、**2FA ✅**、**OIDC ✅**、**邮件 ✅(用户确认收件)**、**S3 TLS ✅**、**docs Rust 化 ✅**、**软连接三阶段 ✅** —— 详见 queue 与 commit 历史。
+- **运行时验证欠账**:Toasty 生成 SQL vs 0001 schema 实测(首个活 pg 时);Rust 集成套件已镜像 Go tests/ 主路径(8 用例)。
 
 ## 4. 机制配置指针
 
