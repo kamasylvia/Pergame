@@ -4,13 +4,17 @@
 //! S3_SECRETKEY / S3_BUCKET / S3_PUBLIC_URL / S3_SECURE / S3_INSECURE_TLS /
 //! S3_CA_PATH.
 //!
-//! Known deltas vs the Go client (recorded in GOAL-STATE): S3_CA_PATH custom
-//! roots and S3_INSECURE_TLS verification bypass are not wired into the AWS
-//! SDK's TLS stack yet — those env vars log a warning when set. Endpoint
-//! scheme normalization, the localhost→HTTP fallback and the
-//! `{bucket}-backups` lifecycle mirror the Go behavior.
+//! TLS semantics vs the Go client: S3_CA_PATH loads a PEM bundle as extra
+//! trust roots on top of the platform store via the smithy TLS context.
+//! S3_INSECURE_TLS stays unimplemented — aws-smithy-http-client offers no
+//! certificate-verifier bypass, so verification cannot be turned off (the
+//! env var logs a warning when set). Endpoint scheme normalization, the
+//! localhost→HTTP fallback and the `{bucket}-backups` lifecycle mirror the
+//! Go behavior.
 
 use aws_sdk_s3::config::{Builder as S3ConfigBuilder, Credentials};
+use aws_smithy_http_client::tls::{TlsContext, TrustStore};
+use aws_smithy_runtime_api::client::http::SharedHttpClient;
 
 const BACKUP_PRESIGN_SECONDS: u64 = 24 * 3600;
 use aws_sdk_s3::Client;
@@ -55,23 +59,28 @@ pub fn parse_env() -> Result<S3Storage, String> {
     let url = resolve_endpoint(&endpoint, secure_env.as_deref());
 
     if env("S3_CA_PATH").is_some() {
-        tracing::warn!(
-            "S3_CA_PATH is not supported by the Rust storage client yet (custom CA not loaded)"
-        );
+        tracing::info!("S3_CA_PATH set; loading custom CA bundle into the TLS trust store");
     }
     if env("S3_INSECURE_TLS").is_some() {
         tracing::warn!(
-            "S3_INSECURE_TLS is not supported by the Rust storage client yet (verification stays on)"
+            "S3_INSECURE_TLS is not honored: aws-smithy-http-client has no certificate-verifier \
+             bypass, certificate verification stays ON"
         );
     }
 
-    let s3cfg = S3ConfigBuilder::new()
+    let mut s3cfg = S3ConfigBuilder::new()
         .behavior_version(crate_state_version())
         .endpoint_url(url)
         .region(aws_sdk_s3::config::Region::new("us-east-1"))
         .credentials_provider(Credentials::new(access, secret, None, None, "S3Storage"))
-        .force_path_style(true)
-        .build();
+        .force_path_style(true);
+
+    if let Some(ca_path) = env("S3_CA_PATH") {
+        let http_client = load_custom_ca_client(&ca_path)?;
+        s3cfg = s3cfg.http_client(http_client);
+    }
+
+    let s3cfg = s3cfg.build();
 
     Ok(S3Storage {
         client: Client::from_conf(s3cfg),
@@ -82,6 +91,23 @@ pub fn parse_env() -> Result<S3Storage, String> {
 
 fn crate_state_version() -> aws_sdk_s3::config::BehaviorVersion {
     aws_sdk_s3::config::BehaviorVersion::latest()
+}
+
+/// Builds an HTTP client whose TLS context trusts the PEM bundle at `ca_path`
+/// in addition to the platform roots (Go parity: S3_CA_PATH custom CA).
+fn load_custom_ca_client(ca_path: &str) -> Result<SharedHttpClient, String> {
+    let pem = std::fs::read_to_string(ca_path)
+        .map_err(|e| format!("S3_CA_PATH: cannot read {ca_path}: {e}"))?;
+    let tls = TlsContext::builder()
+        .with_trust_store(TrustStore::default().with_pem_certificate(pem))
+        .build()
+        .map_err(|e| format!("S3_CA_PATH: invalid certificate bundle: {e}"))?;
+    Ok(aws_smithy_http_client::Builder::new()
+        .tls_provider(aws_smithy_http_client::tls::Provider::rustls(
+            aws_smithy_http_client::tls::rustls_provider::CryptoMode::Ring,
+        ))
+        .tls_context(tls)
+        .build_https())
 }
 
 impl S3Storage {
@@ -318,5 +344,47 @@ impl S3Storage {
             return;
         }
         self.delete_node_prefix(user_id, node_id).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_endpoint_scheme_quirks() {
+        // Go parity: unset S3_SECURE defaults to HTTPS; localhost/127.* and an
+        // explicit non-true value downgrade to HTTP; full URLs pass through.
+        assert_eq!(
+            resolve_endpoint("s3.example.com:9000", None),
+            "https://s3.example.com:9000"
+        );
+        assert_eq!(
+            resolve_endpoint("localhost:9000", None),
+            "http://localhost:9000"
+        );
+        assert_eq!(
+            resolve_endpoint("127.0.0.1:9000", Some("true")),
+            "http://127.0.0.1:9000"
+        );
+        assert_eq!(
+            resolve_endpoint("s3.example.com:9000", Some("false")),
+            "http://s3.example.com:9000"
+        );
+        assert_eq!(
+            resolve_endpoint("https://s3.example.com", Some("false")),
+            "https://s3.example.com"
+        );
+    }
+
+    #[test]
+    fn custom_ca_client_builds_and_bad_path_errors() {
+        // PEM bytes are only validated at handshake time; the builder path must
+        // succeed for any file content and fail on an unreadable path.
+        let path = std::env::temp_dir().join("pergame-storage-test-ca.pem");
+        std::fs::write(&path, "not a real pem").unwrap();
+        assert!(load_custom_ca_client(path.to_str().unwrap()).is_ok());
+        assert!(load_custom_ca_client("/nonexistent/pergame-ca.pem").is_err());
+        std::fs::remove_file(&path).ok();
     }
 }
