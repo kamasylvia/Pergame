@@ -12,7 +12,7 @@ export default {
     editor: {
       description: 'Write with syntax highlighting, live preview, and keyboard shortcuts. Support for tables, code blocks, math equations, and more.',
       heading: 'Powerful Markdown Editor',
-      sampleHeading: 'Welcome to Collectanea',
+      sampleHeading: 'Welcome to Pergame',
       sampleList: 'Lists are easy',
       sampleMarkdown: 'Write your notes in Markdown',
       sampleText: ' and ',
@@ -60,7 +60,7 @@ export default {
   contributors: {
     commitLabel: 'commits',
     cta: 'Become a contributor',
-    subtitle: 'Meet the amazing people who make Collectanea possible',
+    subtitle: 'Meet the amazing people who make Pergame possible',
     title: 'Built by the community',
   },
   cta: {
@@ -72,27 +72,27 @@ export default {
   },
   faq: {
     answer1:
-      'Yes, Collectanea is 100% open-source under the MIT license. You can use it, modify it, and distribute it freely. No hidden costs, no premium tiers.',
-    answer2: 'Absolutely! You can run Collectanea on your own infrastructure using Docker. Full documentation is available to help you get started in minutes.',
-    answer3: 'Yes, Collectanea is designed with offline-first principles. Your notes are available locally and sync when you reconnect.',
+      'Yes, Pergame is 100% open-source under the MIT license. You can use it, modify it, and distribute it freely. No hidden costs, no premium tiers.',
+    answer2: 'Absolutely! You can run Pergame on your own infrastructure using Docker. Full documentation is available to help you get started in minutes.',
+    answer3: 'Yes, Pergame is designed with offline-first principles. Your notes are available locally and sync when you reconnect.',
     answer4: 'When self-hosting, your data stays on your own server. We use industry-standard security practices, and all data transmission is encrypted.',
     answer5:
       'Yes! You can import Markdown files from other apps like Notion, Obsidian, or any Markdown editor. Export to PDF with beautiful formatting is also supported.',
     answer6: 'Definitely! We support syntax highlighting for 100+ programming languages and LaTeX math equations rendering.',
-    answer7: 'Collectanea is a responsive web application that works great on mobile browsers. Native apps are on our roadmap.',
+    answer7: 'Pergame is a responsive web application that works great on mobile browsers. Native apps are on our roadmap.',
     ctaDescription: "Can't find what you're looking for? Join our community!",
     ctaTitle: 'Still have questions?',
     discord: 'Join Discord',
     questions: [
-      'Is Collectanea really free and open-source?',
-      'Can I self-host Collectanea on my own server?',
-      'Does Collectanea work offline?',
+      'Is Pergame really free and open-source?',
+      'Can I self-host Pergame on my own server?',
+      'Does Pergame work offline?',
       'How is my data stored and secured?',
       'Can I import my notes from other apps?',
       'Does it support code blocks and math equations?',
       'Is there a mobile app available?',
     ],
-    subtitle: 'Everything you need to know about Collectanea',
+    subtitle: 'Everything you need to know about Pergame',
     title: 'Frequently asked questions',
   },
   footer: {
@@ -130,7 +130,7 @@ export default {
     },
     ctaPrimary: 'Get Started',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Collectanea app preview',
+    previewAlt: 'Pergame app preview',
     tagline: 'A powerful Markdown workspace designed for speed, clarity, and creativity.',
     titleHighlight: 'Your Notes',
     titleSuffix: ', Beautifully Organized',
@@ -140,7 +140,7 @@ export default {
     steps: [
       {
         description:
-          'Get the config files from GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml">Download the docker-compose.yml file</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/.env.example">Download the .env.example file</a> ',
+          'Get the config files from GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml">Download the docker-compose.yml file</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/.env.example">Download the .env.example file</a> ',
         title: 'Clone the repo',
       },
       {
@@ -156,15 +156,15 @@ export default {
     ],
     subtitle: 'Take full control of your data with a simple deployment',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container pergame-db Started', '✓ Container pergame-minio Started', '✓ Container pergame-app Started'],
       title: 'Terminal',
     },
     title: 'Self-host in minutes',
   },
   seo: {
-    description: 'Collectanea is a fast, self-hostable Markdown workspace for notes, knowledge bases, collaboration, and public documentation.',
+    description: 'Pergame is a fast, self-hostable Markdown workspace for notes, knowledge bases, collaboration, and public documentation.',
     keywords: 'Markdown notes, knowledge base, self-hosted notes, public documentation, collaboration, note taking app',
-    title: 'Collectanea | Modern Markdown workspace',
+    title: 'Pergame | Modern Markdown workspace',
   },
   showcase: {
     features: [
@@ -193,7 +193,7 @@ export default {
         title: 'Publish & Share',
       },
     ],
-    subtitle: 'See how Collectanea streamlines your entire workflow',
+    subtitle: 'See how Pergame streamlines your entire workflow',
     title: 'From idea to published docs',
   },
   stats: {
@@ -215,17 +215,17 @@ export default {
   support: {
     badge: 'A word from the creator',
     cards: {
-      sponsorDesc: 'Help cover hosting, backup infrastructure, and development costs to keep Collectanea online and independent.',
+      sponsorDesc: 'Help cover hosting, backup infrastructure, and development costs to keep Pergame online and independent.',
       sponsorTitle: 'Support financially',
       starDesc: 'Show your support and help other developers discover the project. It costs nothing but means everything.',
       starTitle: 'Star on GitHub',
     },
     confirm: 'I understand, thank you!',
     paragraph1:
-      "Collectanea didn't start as a business. It started as a tool I wanted for myself. Years later, I'm still maintaining and improving it in my spare time, and I'm happy to share it with anyone who finds it useful.",
+      "Pergame didn't start as a business. It started as a tool I wanted for myself. Years later, I'm still maintaining and improving it in my spare time, and I'm happy to share it with anyone who finds it useful.",
     paragraph2:
-      'The application does not track you, does not serve ads, and is fully open-source. However, keeping the live platform running involves hosting and infrastructure costs. If Collectanea adds value to your daily workflow, consider supporting its independence. Even the smallest donation helps cover the servers for months.',
+      'The application does not track you, does not serve ads, and is fully open-source. However, keeping the live platform running involves hosting and infrastructure costs. If Pergame adds value to your daily workflow, consider supporting its independence. Even the smallest donation helps cover the servers for months.',
     signature: '— Smaug',
-    title: 'Collectanea is free, and it will stay that way.',
+    title: 'Pergame is free, and it will stay that way.',
   },
 };

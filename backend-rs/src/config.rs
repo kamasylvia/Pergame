@@ -98,10 +98,10 @@ fn default_port() -> u16 {
     5432
 }
 fn default_db_name() -> String {
-    "collectanea".into()
+    "pergame".into()
 }
 fn default_db_user() -> String {
-    "collectanea".into()
+    "pergame".into()
 }
 fn default_db_password() -> String {
     String::new()

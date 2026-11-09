@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: '恢复包含文档与设置的完整 Collectanea 备份。',
+      description: '恢复包含文档与设置的完整 Pergame 备份。',
       title: '从备份导入',
     },
     files: {

@@ -1,6 +1,6 @@
 package models
 
-import "collectanea/types"
+import "pergame/types"
 
 type Session struct {
 	Id                   types.Snowflake `json:"id" db:"id"`

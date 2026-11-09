@@ -1,12 +1,6 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/oidc"
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
-	"collectanea/types"
-	"collectanea/utils"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -16,6 +10,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"pergame/models"
+	"pergame/oidc"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
+	"pergame/types"
+	"pergame/utils"
 	"strings"
 	"sync"
 	"time"

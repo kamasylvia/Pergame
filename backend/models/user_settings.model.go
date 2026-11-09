@@ -1,6 +1,6 @@
 package models
 
-import "collectanea/types"
+import "pergame/types"
 
 type UserSettings struct {
 	UserID   types.Snowflake `json:"user_id" db:"user_id"`

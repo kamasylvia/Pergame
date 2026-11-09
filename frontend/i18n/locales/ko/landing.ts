@@ -12,7 +12,7 @@ export default {
     editor: {
       description: '구문 강조, 실시간 미리보기, 키보드 단축키를 사용해 작성하세요. 표, 코드 블록, 수학 방정식 등을 지원합니다.',
       heading: '강력한 Markdown 편집기',
-      sampleHeading: 'Collectanea에 오신 것을 환영합니다',
+      sampleHeading: 'Pergame에 오신 것을 환영합니다',
       sampleList: '목록은 쉽습니다',
       sampleMarkdown: 'Markdown으로 노트를 작성하세요',
       sampleText: ' 그리고 ',
@@ -60,7 +60,7 @@ export default {
   contributors: {
     commitLabel: '커밋',
     cta: '기여자가 되기',
-    subtitle: 'Collectanea를 가능하게 하는 멋진 사람들을 만나보세요',
+    subtitle: 'Pergame를 가능하게 하는 멋진 사람들을 만나보세요',
     title: '커뮤니티가 만든',
   },
   cta: {
@@ -71,26 +71,26 @@ export default {
     title: '더 나은 노트를 준비되셨나요?',
   },
   faq: {
-    answer1: '네, Collectanea는 MIT 라이선스 하에 100% 오픈 소스입니다. 자유롭게 사용, 수정, 배포할 수 있습니다. 숨은 비용도, 프리미엄 요금제도 없습니다.',
-    answer2: '물론입니다! Docker를 사용해 자신의 인프라에서 Collectanea를 실행할 수 있습니다. 완전한 문서가 몇 분 만에 시작할 수 있도록 도와줍니다.',
-    answer3: '네, Collectanea는 오프라인 우선 원칙으로 설계되었습니다. 노트는 로컬에서 사용 가능하며 다시 연결되면 동기화됩니다.',
+    answer1: '네, Pergame는 MIT 라이선스 하에 100% 오픈 소스입니다. 자유롭게 사용, 수정, 배포할 수 있습니다. 숨은 비용도, 프리미엄 요금제도 없습니다.',
+    answer2: '물론입니다! Docker를 사용해 자신의 인프라에서 Pergame를 실행할 수 있습니다. 완전한 문서가 몇 분 만에 시작할 수 있도록 도와줍니다.',
+    answer3: '네, Pergame는 오프라인 우선 원칙으로 설계되었습니다. 노트는 로컬에서 사용 가능하며 다시 연결되면 동기화됩니다.',
     answer4: '자체 호스팅 시 데이터는 자신의 서버에 남아 있습니다. 업계 표준 보안 관행을 사용하며 모든 데이터 전송은 암호화됩니다.',
     answer5: '네! Notion, Obsidian 또는 다른 Markdown 편집기에서 Markdown 파일을 가져올 수 있습니다. 아름답게 서식이 적용된 PDF 내보내기도 지원됩니다.',
     answer6: '물론입니다! 100개 이상의 프로그래밍 언어에 대한 구문 강조와 LaTeX 수학식 렌더링을 지원합니다.',
-    answer7: 'Collectanea는 모바일 브라우저에서 잘 작동하는 반응형 웹 애플리케이션입니다. 네이티브 앱은 로드맵에 있습니다.',
+    answer7: 'Pergame는 모바일 브라우저에서 잘 작동하는 반응형 웹 애플리케이션입니다. 네이티브 앱은 로드맵에 있습니다.',
     ctaDescription: '찾고 있는 것을 못 찾으셨나요? 커뮤니티에 참여하세요!',
     ctaTitle: '아직 궁금한가요?',
     discord: 'Discord 참여',
     questions: [
-      'Collectanea는 정말 무료이고 오픈 소스인가요?',
-      '내 서버에서 Collectanea를 자체 호스팅할 수 있나요?',
-      'Collectanea는 오프라인에서도 작동하나요?',
+      'Pergame는 정말 무료이고 오픈 소스인가요?',
+      '내 서버에서 Pergame를 자체 호스팅할 수 있나요?',
+      'Pergame는 오프라인에서도 작동하나요?',
       '내 데이터는 어떻게 저장되고 보호되나요?',
       '다른 앱에서 노트를 가져올 수 있나요?',
       '코드 블록과 수학 방정식을 지원하나요?',
       '모바일 앱이 있나요?',
     ],
-    subtitle: 'Collectanea에 대해 알아야 할 모든 것',
+    subtitle: 'Pergame에 대해 알아야 할 모든 것',
     title: '자주 묻는 질문',
   },
   footer: {
@@ -128,7 +128,7 @@ export default {
     },
     ctaPrimary: '시작하기',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Collectanea 앱 미리보기',
+    previewAlt: 'Pergame 앱 미리보기',
     tagline: '속도, 명확성, 창의성을 위해 설계된 강력한 Markdown 작업 공간입니다.',
     titleHighlight: '당신의 노트',
     titleSuffix: ', 아름답게 정리된',
@@ -138,7 +138,7 @@ export default {
     steps: [
       {
         description:
-          'GitHub에서 설정 파일을 받으세요 <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml">docker-compose.yml 파일 다운로드</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/.env.example">.env.example 파일 다운로드</a> ',
+          'GitHub에서 설정 파일을 받으세요 <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml">docker-compose.yml 파일 다운로드</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/.env.example">.env.example 파일 다운로드</a> ',
         title: '저장소 복제',
       },
       {
@@ -154,15 +154,15 @@ export default {
     ],
     subtitle: '간단한 배포로 데이터를 완전히 제어하세요',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container pergame-db Started', '✓ Container pergame-minio Started', '✓ Container pergame-app Started'],
       title: '터미널',
     },
     title: '몇 분 안에 자체 호스팅',
   },
   seo: {
-    description: 'Collectanea는 노트, 지식 베이스, 협업, 공개 문서를 위한 빠르고 자체 호스팅 가능한 Markdown 작업 공간입니다.',
+    description: 'Pergame는 노트, 지식 베이스, 협업, 공개 문서를 위한 빠르고 자체 호스팅 가능한 Markdown 작업 공간입니다.',
     keywords: 'Markdown 노트, 지식 베이스, 자체 호스팅 노트, 공개 문서, 협업, 노트 앱',
-    title: 'Collectanea | 현대적인 Markdown 작업 공간',
+    title: 'Pergame | 현대적인 Markdown 작업 공간',
   },
   showcase: {
     features: [
@@ -191,7 +191,7 @@ export default {
         title: '게시하고 공유',
       },
     ],
-    subtitle: 'Collectanea가 전체 워크플로우를 어떻게 단순화하는지 확인하세요',
+    subtitle: 'Pergame가 전체 워크플로우를 어떻게 단순화하는지 확인하세요',
     title: '아이디어에서 게시된 문서까지',
   },
   stats: {
@@ -213,17 +213,17 @@ export default {
   support: {
     badge: '제작자의 한마디',
     cards: {
-      sponsorDesc: '호스팅, 백업 인프라, 개발 비용을 지원해 Collectanea가 온라인과 독립성을 유지하도록 도와주세요.',
+      sponsorDesc: '호스팅, 백업 인프라, 개발 비용을 지원해 Pergame가 온라인과 독립성을 유지하도록 도와주세요.',
       sponsorTitle: '재정적으로 지원하기',
       starDesc: '지원을 보여주고 다른 개발자들이 프로젝트를 발견하도록 도와주세요. 비용은 들지 않지만 의미는 큽니다.',
       starTitle: 'GitHub에서 별표',
     },
     confirm: '알겠습니다, 감사합니다!',
     paragraph1:
-      'Collectanea는 사업으로 시작된 것이 아닙니다. 제가 스스로 쓰고 싶어서 만든 도구로 시작했습니다. 몇 년이 지난 지금도 여가 시간에 유지보수와 개선을 계속하고 있으며, 유용하다고 느끼는 사람들과 기꺼이 공유하고 있습니다.',
+      'Pergame는 사업으로 시작된 것이 아닙니다. 제가 스스로 쓰고 싶어서 만든 도구로 시작했습니다. 몇 년이 지난 지금도 여가 시간에 유지보수와 개선을 계속하고 있으며, 유용하다고 느끼는 사람들과 기꺼이 공유하고 있습니다.',
     paragraph2:
-      '이 애플리케이션은 사용자를 추적하지 않고 광고도 없으며 완전히 오픈 소스입니다. 하지만 실서비스를 유지하려면 호스팅과 인프라 비용이 듭니다. Collectanea가 당신의 일상 업무에 가치를 더한다면 독립성을 지원해 주세요. 작은 후원도 서버 비용을 몇 달이나 충당하는 데 도움이 됩니다.',
+      '이 애플리케이션은 사용자를 추적하지 않고 광고도 없으며 완전히 오픈 소스입니다. 하지만 실서비스를 유지하려면 호스팅과 인프라 비용이 듭니다. Pergame가 당신의 일상 업무에 가치를 더한다면 독립성을 지원해 주세요. 작은 후원도 서버 비용을 몇 달이나 충당하는 데 도움이 됩니다.',
     signature: '— Smaug',
-    title: 'Collectanea는 무료이며 앞으로도 그럴 것입니다.',
+    title: 'Pergame는 무료이며 앞으로도 그럴 것입니다.',
   },
 };

@@ -4,9 +4,9 @@ import (
 	_ "embed"
 	"os"
 
-	"collectanea/app"
-	"collectanea/pkg/logger"
-	"collectanea/router"
+	"pergame/app"
+	"pergame/pkg/logger"
+	"pergame/router"
 
 	"github.com/BurntSushi/toml"
 	"github.com/joho/godotenv"
@@ -16,7 +16,7 @@ import (
 var configData []byte
 
 func main() {
-	logger.Info("app", "Initializing Collectanea backend...")
+	logger.Info("app", "Initializing Pergame backend...")
 
 	loadEnv()
 

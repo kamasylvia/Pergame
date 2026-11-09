@@ -4,10 +4,10 @@
 
     <div class="splash-content">
       <div class="logo-card">
-        <img src="/Logo/Collectanea-logo-light.png" alt="Collectanea" class="splash-logo" width="128" height="128" />
+        <img src="/Logo/Pergame-logo-light.png" alt="Pergame" class="splash-logo" width="128" height="128" />
       </div>
 
-      <h1 class="splash-title">Collectanea</h1>
+      <h1 class="splash-title">Pergame</h1>
       <p class="splash-subtitle">Your Notes, Beautifully Organized</p>
 
       <div class="loading-line">

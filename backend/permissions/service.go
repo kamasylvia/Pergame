@@ -1,11 +1,11 @@
 package permissions
 
 import (
-	"collectanea/models"
-	"collectanea/repositories"
-	"collectanea/types"
 	"context"
 	"errors"
+	"pergame/models"
+	"pergame/repositories"
+	"pergame/types"
 )
 
 type Actor struct {

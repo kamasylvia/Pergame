@@ -1,6 +1,6 @@
 package models
 
-import "collectanea/types"
+import "pergame/types"
 
 type MonthlyCount struct {
 	Month string `json:"month" db:"month"`

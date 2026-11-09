@@ -4,7 +4,7 @@
 
 ## 需求
 
-把 Collectanea 笔记库暴露为 MCP server,AI agent(Claude/Cursor 等)可读写笔记。
+把 Pergame 笔记库暴露为 MCP server,AI agent(Claude/Cursor 等)可读写笔记。
 
 ## 已定决策
 

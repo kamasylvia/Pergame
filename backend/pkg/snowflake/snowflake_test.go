@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"collectanea/types"
+	"pergame/types"
 )
 
 // generateWithin runs fn and fails the test if it has not returned within limit.

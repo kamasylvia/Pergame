@@ -1,10 +1,6 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/repositories"
-	"collectanea/types"
-	"collectanea/utils"
 	"archive/zip"
 	"bytes"
 	"context"
@@ -15,6 +11,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"pergame/models"
+	"pergame/repositories"
+	"pergame/types"
+	"pergame/utils"
 	"sync"
 	"time"
 
@@ -351,7 +351,7 @@ func (s *backupService) processBackup(ctx context.Context, job *types.BackupJob,
 	reqParams := make(url.Values)
 	reqParams.Set(
 		"response-content-disposition",
-		`attachment; filename="collectanea-backup-`+time.Now().Format("2006-01-02_15-04-05")+`.zip"`,
+		`attachment; filename="pergame-backup-`+time.Now().Format("2006-01-02_15-04-05")+`.zip"`,
 	)
 
 	// Sign the URL using the public endpoint

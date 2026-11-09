@@ -1,4 +1,4 @@
-module collectanea
+module pergame
 
 go 1.26.0
 

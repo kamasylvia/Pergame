@@ -39,12 +39,12 @@ const { t } = useI18nT();
 const copied = ref(false);
 
 function downloadCodes() {
-  const text = `COLLECTANEA RECOVERY CODES\nGenerated on: ${new Date().toLocaleDateString()}\n\n` + props.backupCodes.join('\n');
+  const text = `PERGAME RECOVERY CODES\nGenerated on: ${new Date().toLocaleDateString()}\n\n` + props.backupCodes.join('\n');
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `collectanea-backup-codes.txt`;
+  a.download = `pergame-backup-codes.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

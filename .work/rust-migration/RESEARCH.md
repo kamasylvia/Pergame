@@ -1,6 +1,6 @@
-# Rust 后端技术栈调研 — Collectanea
+# Rust 后端技术栈调研 — Pergame
 
-> 日期:2026-11-07。结论回填 issue [kamasylvia/Collectanea#1](https://github.com/kamasylvia/Collectanea/issues/1)。
+> 日期:2026-11-07。结论回填 issue [kamasylvia/Pergame#1](https://github.com/kamasylvia/Pergame/issues/1)。
 > 范围:评估将 Go backend(gin + sqlx)重写为 Rust 的技术选型、parity 面、工作量与风险。**本报告只调研不实施**;go/no-go 由用户裁决。
 
 ## 1. 现状盘点(Go backend)
@@ -35,7 +35,7 @@
 | 性能 | 略逊(多线程 tokio worker) | 最快梯队(worker 单线程 runtime) |
 | 社区共识(2025-2026) | **默认首选**,"team will actually maintain six months later" | 极限吞吐场景选它 |
 
-**建议:axum**。Collectanea 是自托管知识库,吞吐非瓶颈;tower/tokio 生态与维护性优先。tower-http 直接覆盖现有 gin 中间件(CORS、logger)。
+**建议:axum**。Pergame 是自托管知识库,吞吐非瓶颈;tower/tokio 生态与维护性优先。tower-http 直接覆盖现有 gin 中间件(CORS、logger)。
 
 ## 3. 数据库层(PostgreSQL)
 

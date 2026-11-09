@@ -10,28 +10,28 @@
       </div>
       <div class="hero-content">
         <IconApp class="logo" style="width: 110px" fill="white" />
-        <h1><span class="gradient-text">About Collectanea</span></h1>
+        <h1><span class="gradient-text">About Pergame</span></h1>
         <p class="tagline">
           Behind every great idea lies a place to think, write, and connect ideas.
-          <br />Collectanea is that place — a modern Markdown workspace built for clarity, performance, and creative freedom.
+          <br />Pergame is that place — a modern Markdown workspace built for clarity, performance, and creative freedom.
         </p>
         <div class="cta-buttons">
           <NuxtLink :prefetch="false" to="/dashboard" class="btn primary glow">Get Started</NuxtLink>
-          <NuxtLink to="https://github.com/Smaug6739/Alexandrie" target="_blank" class="btn secondary"> GitHub </NuxtLink>
+          <NuxtLink to="https://github.com/kamasylvia/Pergame" target="_blank" class="btn secondary"> GitHub </NuxtLink>
         </div>
       </div>
-      <img src="/screenshots/mock/1.png" class="hero-image" alt="Collectanea interface preview" />
+      <img src="/screenshots/mock/1.png" class="hero-image" alt="Pergame interface preview" />
     </section>
 
     <!-- Story -->
     <section class="reveal about-section">
-      <h2 class="section-title">The Story Behind Collectanea</h2>
+      <h2 class="section-title">The Story Behind Pergame</h2>
       <p class="section-text">
-        Collectanea was born from a simple observation: note-taking tools are either too basic or too heavy. Most students, developers, and researchers want
+        Pergame was born from a simple observation: note-taking tools are either too basic or too heavy. Most students, developers, and researchers want
         something lightweight, structured, and expressive — a space where Markdown and LaTeX blend seamlessly.
         <br /><br />
         The project started as an experiment to rethink how we take notes digitally: fast to open, pleasant to use, and built with a focus on information
-        structure rather than visual clutter. Today, Collectanea has grown into a powerful open-source workspace, designed to make knowledge organization feel
+        structure rather than visual clutter. Today, Pergame has grown into a powerful open-source workspace, designed to make knowledge organization feel
         effortless.
       </p>
     </section>
@@ -40,9 +40,9 @@
     <section class="reveal about-section alt">
       <h2 class="section-title">Our Vision</h2>
       <p class="section-text">
-        Collectanea is more than a note-taking app — it’s a philosophy of simplicity and longevity. Every design choice follows a single question:
+        Pergame is more than a note-taking app — it’s a philosophy of simplicity and longevity. Every design choice follows a single question:
         <em>does this help the user think better?</em> <br /><br />
-        From the minimal UI to the transparent database model, Collectanea encourages users to build their own personal knowledge libraries — free of
+        From the minimal UI to the transparent database model, Pergame encourages users to build their own personal knowledge libraries — free of
         distractions, locked formats, or subscription walls. Open-source at its core, the project invites contributors to improve, extend, and evolve it
         together.
       </p>
@@ -55,7 +55,7 @@
         Behind its minimalist interface lies a robust and modular architecture built for performance and maintainability.
         <br /><br />
         The frontend is powered by <strong>Vue 3 / Nuxt</strong>, ensuring smooth transitions, reactivity, and a clean component design. On the backend,
-        Collectanea leverages <strong>Go</strong> for its speed and concurrency, backed by <strong>MySQL</strong> for reliable data management. <br /><br />
+        Pergame leverages <strong>Go</strong> for its speed and concurrency, backed by <strong>MySQL</strong> for reliable data management. <br /><br />
         Markdown and LaTeX rendering are optimized to handle long, complex documents while maintaining real-time responsiveness. Every keystroke is preserved
         instantly, making the editing experience feel natural — even with thousands of lines.
       </p>
@@ -63,8 +63,8 @@
 
     <!-- Highlights -->
     <section class="reveal about-section alt">
-      <h2 class="section-title">What Makes Collectanea Unique</h2>
-      <p class="section-text">Collectanea is not just about writing — it’s about <strong>building a digital library</strong> that evolves with you.</p>
+      <h2 class="section-title">What Makes Pergame Unique</h2>
+      <p class="section-text">Pergame is not just about writing — it’s about <strong>building a digital library</strong> that evolves with you.</p>
 
       <ul class="feature-list">
         <li><strong>Hierarchical Workspaces</strong> — Organize notes in nested structures of categories, files, and resources.</li>

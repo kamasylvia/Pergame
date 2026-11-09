@@ -5,5 +5,5 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ error?: CollectaneaError | null }>();
+defineProps<{ error?: PergameError | null }>();
 </script>

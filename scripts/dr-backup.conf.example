@@ -7,7 +7,7 @@
 # ---- PostgreSQL sources (X) --------------------------------------------------
 # pg|name|host|port|username|password|database
 SOURCES=(
-  "pg|collectanea|localhost|5432|backup_user|change-me|collectanea"
+  "pg|pergame|localhost|5432|backup_user|change-me|pergame"
   # "pg|second-db|db.example.com|5432|backup_user|change-me|other_app"
 )
 
@@ -18,14 +18,14 @@ SOURCES=(
 #   region:   default us-east-1
 #   provider: rclone s3 provider, default "Other" (MinIO/RustFS/Garage/...; "AWS" for AWS)
 S3_DESTINATIONS=(
-  "s3|primary|https://s3.example.com:9000|collectanea-backups|pg|ACCESS_KEY|SECRET|true|us-east-1|Other"
-  # "s3|offsite|https://s3.other.tld|collectanea-dr|pg|KEY|SECRET|true|us-east-1|Other"
+  "s3|primary|https://s3.example.com:9000|pergame-backups|pg|ACCESS_KEY|SECRET|true|us-east-1|Other"
+  # "s3|offsite|https://s3.other.tld|pergame-dr|pg|KEY|SECRET|true|us-east-1|Other"
 )
 
 # ---- WebDAV destinations (Z) -------------------------------------------------
 # webdav|name|url|username|password|prefix
 WEBDAV_DESTINATIONS=(
-  "webdav|nas|https://nas.example.com/dav/|backup_user|change-me|collectanea/pg"
+  "webdav|nas|https://nas.example.com/dav/|backup_user|change-me|pergame/pg"
 )
 
 # ---- Retention ---------------------------------------------------------------

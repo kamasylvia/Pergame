@@ -1,8 +1,8 @@
 package middlewares
 
 import (
-	"collectanea/permissions"
-	"collectanea/utils"
+	"pergame/permissions"
+	"pergame/utils"
 
 	"github.com/gin-gonic/gin"
 )

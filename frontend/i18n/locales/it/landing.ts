@@ -13,7 +13,7 @@ export default {
       description:
         'Scrivi con evidenziazione della sintassi, anteprima live e scorciatoie da tastiera. Supporto per tabelle, blocchi di codice, equazioni matematiche e altro.',
       heading: 'Editor Markdown potente',
-      sampleHeading: 'Benvenuto in Collectanea',
+      sampleHeading: 'Benvenuto in Pergame',
       sampleList: 'Gli elenchi sono semplici',
       sampleMarkdown: 'Scrivi le tue note in Markdown',
       sampleText: ' e ',
@@ -61,7 +61,7 @@ export default {
   contributors: {
     commitLabel: 'commit',
     cta: 'Diventa un contributore',
-    subtitle: 'Incontra le persone straordinarie che rendono possibile Collectanea',
+    subtitle: 'Incontra le persone straordinarie che rendono possibile Pergame',
     title: 'Costruito dalla comunità',
   },
   cta: {
@@ -73,27 +73,27 @@ export default {
   },
   faq: {
     answer1:
-      'Sì, Collectanea è open source al 100% sotto licenza MIT. Puoi usarlo, modificarlo e distribuirlo liberamente. Nessun costo nascosto, nessun piano premium.',
-    answer2: 'Assolutamente! Puoi eseguire Collectanea sulla tua infrastruttura usando Docker. La documentazione completa ti aiuta a partire in pochi minuti.',
-    answer3: 'Sì, Collectanea è progettato secondo principi offline-first. Le tue note sono disponibili localmente e si sincronizzano quando torni online.',
+      'Sì, Pergame è open source al 100% sotto licenza MIT. Puoi usarlo, modificarlo e distribuirlo liberamente. Nessun costo nascosto, nessun piano premium.',
+    answer2: 'Assolutamente! Puoi eseguire Pergame sulla tua infrastruttura usando Docker. La documentazione completa ti aiuta a partire in pochi minuti.',
+    answer3: 'Sì, Pergame è progettato secondo principi offline-first. Le tue note sono disponibili localmente e si sincronizzano quando torni online.',
     answer4: 'Quando lo self-hosti, i tuoi dati restano sul tuo server. Usiamo pratiche di sicurezza standard e tutta la trasmissione dei dati è cifrata.',
     answer5:
       'Sì! Puoi importare file Markdown da altre app come Notion, Obsidian o qualsiasi editor Markdown. È supportata anche l’esportazione in PDF ben formattata.',
     answer6: 'Certamente! Supportiamo l’evidenziazione della sintassi per oltre 100 linguaggi di programmazione e il rendering di equazioni matematiche LaTeX.',
-    answer7: 'Collectanea è una web app responsive che funziona benissimo sui browser mobili. Le app native sono nella roadmap.',
+    answer7: 'Pergame è una web app responsive che funziona benissimo sui browser mobili. Le app native sono nella roadmap.',
     ctaDescription: 'Non trovi quello che cerchi? Unisciti alla nostra community!',
     ctaTitle: 'Hai ancora domande?',
     discord: 'Unisciti a Discord',
     questions: [
-      'Collectanea è davvero gratuito e open source?',
-      'Posso self-hostare Collectanea sul mio server?',
-      'Collectanea funziona offline?',
+      'Pergame è davvero gratuito e open source?',
+      'Posso self-hostare Pergame sul mio server?',
+      'Pergame funziona offline?',
       'Come vengono archiviati e protetti i miei dati?',
       'Posso importare le mie note da altre app?',
       'Supporta blocchi di codice ed equazioni matematiche?',
       'Esiste un’app mobile?',
     ],
-    subtitle: 'Tutto quello che devi sapere su Collectanea',
+    subtitle: 'Tutto quello che devi sapere su Pergame',
     title: 'Domande frequenti',
   },
   footer: {
@@ -131,7 +131,7 @@ export default {
     },
     ctaPrimary: 'Inizia',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Anteprima dell’app Collectanea',
+    previewAlt: 'Anteprima dell’app Pergame',
     tagline: 'Un potente workspace Markdown progettato per velocità, chiarezza e creatività.',
     titleHighlight: 'Le tue note',
     titleSuffix: ', organizzate con eleganza',
@@ -141,7 +141,7 @@ export default {
     steps: [
       {
         description:
-          'Scarica i file di configurazione da GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml">Scarica il file docker-compose.yml</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/.env.example">Scarica il file .env.example</a> ',
+          'Scarica i file di configurazione da GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml">Scarica il file docker-compose.yml</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/.env.example">Scarica il file .env.example</a> ',
         title: 'Clona il repository',
       },
       {
@@ -157,15 +157,15 @@ export default {
     ],
     subtitle: 'Prendi il controllo completo dei tuoi dati con una semplice distribuzione',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container pergame-db Started', '✓ Container pergame-minio Started', '✓ Container pergame-app Started'],
       title: 'Terminale',
     },
     title: 'Self-host in pochi minuti',
   },
   seo: {
-    description: 'Collectanea è un workspace Markdown veloce e self-hostable per note, knowledge base, collaborazione e documentazione pubblica.',
+    description: 'Pergame è un workspace Markdown veloce e self-hostable per note, knowledge base, collaborazione e documentazione pubblica.',
     keywords: 'note Markdown, knowledge base, note self-hosted, documentazione pubblica, collaborazione, app per prendere appunti',
-    title: 'Collectanea | Workspace Markdown moderno',
+    title: 'Pergame | Workspace Markdown moderno',
   },
   showcase: {
     features: [
@@ -194,7 +194,7 @@ export default {
         title: 'Pubblica e condividi',
       },
     ],
-    subtitle: 'Scopri come Collectanea semplifica l’intero flusso di lavoro',
+    subtitle: 'Scopri come Pergame semplifica l’intero flusso di lavoro',
     title: 'Dall’idea alla documentazione pubblicata',
   },
   stats: {
@@ -216,17 +216,17 @@ export default {
   support: {
     badge: 'Una parola dal creatore',
     cards: {
-      sponsorDesc: 'Aiuta a coprire hosting, backup e costi di sviluppo per mantenere Collectanea online e indipendente.',
+      sponsorDesc: 'Aiuta a coprire hosting, backup e costi di sviluppo per mantenere Pergame online e indipendente.',
       sponsorTitle: 'Sostieni economicamente',
       starDesc: 'Mostra il tuo supporto e aiuta altri sviluppatori a scoprire il progetto. Non costa nulla ma vale moltissimo.',
       starTitle: 'Metti una stella su GitHub',
     },
     confirm: 'Capisco, grazie!',
     paragraph1:
-      'Collectanea non è nato come un business. È iniziato come uno strumento che volevo per me stesso. Anni dopo, lo mantengo e lo miglioro nel tempo libero, e sono felice di condividerlo con chiunque lo trovi utile.',
+      'Pergame non è nato come un business. È iniziato come uno strumento che volevo per me stesso. Anni dopo, lo mantengo e lo miglioro nel tempo libero, e sono felice di condividerlo con chiunque lo trovi utile.',
     paragraph2:
-      'L’applicazione non ti traccia, non mostra pubblicità ed è completamente open source. Tuttavia, mantenere attiva la piattaforma comporta costi di hosting e infrastruttura. Se Collectanea aggiunge valore al tuo flusso di lavoro, considera di sostenerne l’indipendenza. Anche una piccola donazione aiuta a coprire i server per mesi.',
+      'L’applicazione non ti traccia, non mostra pubblicità ed è completamente open source. Tuttavia, mantenere attiva la piattaforma comporta costi di hosting e infrastruttura. Se Pergame aggiunge valore al tuo flusso di lavoro, considera di sostenerne l’indipendenza. Anche una piccola donazione aiuta a coprire i server per mesi.',
     signature: '— Smaug',
-    title: 'Collectanea è gratuito, e lo resterà.',
+    title: 'Pergame è gratuito, e lo resterà.',
   },
 };

@@ -206,7 +206,7 @@ pub async fn signup(
         );
         let email_addr = input.email.clone().unwrap_or_default();
         if mail_client
-            .send_html(&email_addr, "Collectanea: Set your password", &plain, &html)
+            .send_html(&email_addr, "Pergame: Set your password", &plain, &html)
             .is_err()
         {
             return Err(ApiError::BadRequest(

@@ -1,8 +1,8 @@
 package snowflake
 
 import (
-	"collectanea/types"
 	"os"
+	"pergame/types"
 	"sync"
 	"time"
 )

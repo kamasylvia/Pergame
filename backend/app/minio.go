@@ -1,8 +1,6 @@
 package app
 
 import (
-	"collectanea/pkg/logger"
-	"collectanea/utils"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -10,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"pergame/pkg/logger"
+	"pergame/utils"
 	"strings"
 
 	"github.com/minio/minio-go/v7"

@@ -1,11 +1,6 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
-	"collectanea/types"
-	"collectanea/utils"
 	"bytes"
 	"crypto/rand"
 	"errors"
@@ -13,6 +8,11 @@ import (
 	"html/template"
 	"math/big"
 	"os"
+	"pergame/models"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
+	"pergame/types"
+	"pergame/utils"
 	"strconv"
 	"time"
 
@@ -140,7 +140,7 @@ func (s *authService) RefreshSession(refreshToken string) (*models.User, *models
 func (s *authService) SignAccessToken(user *models.User, accessTokenExpiry int) (string, error) {
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":  strconv.FormatUint(uint64(user.Id), 10),
-		"iss":  "collectanea",
+		"iss":  "pergame",
 		"exp":  time.Now().Add(time.Duration(time.Second * time.Duration(accessTokenExpiry))).Unix(),
 		"iat":  time.Now().Unix(),
 		"role": strconv.Itoa(user.Role),
@@ -221,9 +221,9 @@ func sendPasswordResetEmail(mailClient *mail.Client, user *models.User, resetTok
 	}
 
 	message := mail.NewMsg()
-	message.FromFormat("Collectanea Team", mailFrom)
+	message.FromFormat("Pergame Team", mailFrom)
 	message.To(*user.Email)
-	message.Subject("Collectanea: Reset your password")
+	message.Subject("Pergame: Reset your password")
 
 	message.SetBodyString(
 		mail.TypeTextPlain,
@@ -336,7 +336,7 @@ func (s *authService) VerifyTOTPAndLogin(preAuthToken, code, ip, userAgent strin
 
 func (s *authService) GenerateTOTPSecret(user *models.User) (string, string, error) {
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Collectanea",
+		Issuer:      "Pergame",
 		AccountName: user.Username,
 	})
 	if err != nil {
@@ -433,7 +433,7 @@ func (s *authService) validateCode(user *models.User, code string) bool {
 func signPreAuthToken(userId types.Snowflake) (string, error) {
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":      strconv.FormatUint(uint64(userId), 10),
-		"iss":      "collectanea",
+		"iss":      "pergame",
 		"exp":      time.Now().Add(3 * time.Minute).Unix(),
 		"iat":      time.Now().Unix(),
 		"pre_auth": true,

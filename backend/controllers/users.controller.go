@@ -1,12 +1,12 @@
 package controllers
 
 import (
-	"collectanea/app"
-	"collectanea/models"
-	"collectanea/utils"
 	"errors"
 	"net/http"
 	"os"
+	"pergame/app"
+	"pergame/models"
+	"pergame/utils"
 
 	"github.com/gin-gonic/gin"
 )

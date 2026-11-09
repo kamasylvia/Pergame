@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"collectanea/app"
 	"errors"
 	"net/http"
+	"pergame/app"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

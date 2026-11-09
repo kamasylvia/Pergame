@@ -53,11 +53,11 @@
       </p>
       <div class="center" style="flex-direction: row">
         <div class="center">
-          <img src="/Logo/Collectanea-logo-light.svg" alt="Example Image" style="width: 200px; height: auto" />
+          <img src="/Logo/Pergame-logo-light.svg" alt="Example Image" style="width: 200px; height: auto" />
           <code>![image | 200x200](image.png)</code>
         </div>
         <div class="center">
-          <img src="/Logo/Collectanea-logo-light.svg" alt="Example Image" style="width: 150px; height: auto" />
+          <img src="/Logo/Pergame-logo-light.svg" alt="Example Image" style="width: 150px; height: auto" />
           <code>![image | 150x150](image.png)</code>
         </div>
       </div>

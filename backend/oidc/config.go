@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"collectanea/pkg/logger"
+	"pergame/pkg/logger"
 )
 
 type Provider struct {

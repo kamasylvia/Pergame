@@ -1,11 +1,11 @@
 package services
 
 import (
-	"collectanea/permissions"
-	"collectanea/pkg/logger"
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
 	"fmt"
+	"pergame/permissions"
+	"pergame/pkg/logger"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/wneessen/go-mail"

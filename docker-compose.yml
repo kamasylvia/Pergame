@@ -2,18 +2,18 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:17-alpine
-    container_name: collectanea-postgres
+    container_name: pergame-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-collectanea}
+      POSTGRES_USER: ${POSTGRES_USER:-pergame}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-collectanea}
+      POSTGRES_DB: ${POSTGRES_DB:-pergame}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     networks:
-      - collectanea-network
+      - pergame-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       timeout: 10s
@@ -24,11 +24,11 @@ services:
   # Object Storage (RustFS, S3 compatible)
   rustfs:
     image: rustfs/rustfs:latest
-    container_name: collectanea-rustfs
+    container_name: pergame-rustfs
     restart: unless-stopped
     environment:
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-collectanea-key}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-collectanea-secret}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-pergame-key}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-pergame-secret}
       RUSTFS_CONSOLE_ENABLE: "${RUSTFS_CONSOLE_ENABLE:-false}"
       RUSTFS_LOG_LEVEL: ${RUSTFS_LOG_LEVEL:-info}
     ports:
@@ -37,7 +37,7 @@ services:
       - rustfs_data:/data
       - rustfs_logs:/logs
     networks:
-      - collectanea-network
+      - pergame-network
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 9000 || exit 1"]
       interval: 30s
@@ -45,15 +45,15 @@ services:
       retries: 3
       start_period: 20s
 
-  # Collectanea Backend
+  # Pergame Backend
   backend:
     # Fork build (Rust backend): the upstream prebuilt image does not support
     # the S3_* env vars or PostgreSQL.
-    image: collectanea-backend:local
+    image: pergame-backend:local
     build:
       context: ./backend-rs
       dockerfile: Dockerfile
-    container_name: collectanea-backend
+    container_name: pergame-backend
     environment:
       # General configuration
       BACKEND_PORT: 8201
@@ -72,8 +72,8 @@ services:
       # Database Configuration
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
-      DATABASE_NAME: ${POSTGRES_DB:-collectanea}
-      DATABASE_USER: ${POSTGRES_USER:-collectanea}
+      DATABASE_NAME: ${POSTGRES_DB:-pergame}
+      DATABASE_USER: ${POSTGRES_USER:-pergame}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-password}
 
       # Object storage configuration (S3 compatible like RustFS, MinIO, etc.)
@@ -82,9 +82,9 @@ services:
       S3_PUBLIC_URL: ${CDN_URL:-http://localhost:${RUSTFS_EXTERNAL_PORT:-9000}}
       S3_SECURE: "${S3_SECURE:-false}" # Set to 'true' if your S3 endpoint uses HTTPS
       S3_INSECURE_TLS: "${S3_INSECURE_TLS:-false}" # Set to 'true' if your S3 endpoint uses self-signed certificates
-      S3_ACCESSKEY: ${RUSTFS_ACCESS_KEY:-collectanea-key}
-      S3_SECRETKEY: ${RUSTFS_SECRET_KEY:-collectanea-secret}
-      S3_BUCKET: ${S3_BUCKET:-collectanea}
+      S3_ACCESSKEY: ${RUSTFS_ACCESS_KEY:-pergame-key}
+      S3_SECRETKEY: ${RUSTFS_SECRET_KEY:-pergame-secret}
+      S3_BUCKET: ${S3_BUCKET:-pergame}
 
       # SMTP Configuration (only for password reset emails)
       # OPTIONAL: If you don't want to use email features, you can leave these variables empty
@@ -103,15 +103,15 @@ services:
       rustfs:
         condition: service_healthy
     networks:
-      - collectanea-network
+      - pergame-network
 
-  # Collectanea Frontend
+  # Pergame Frontend
   frontend:
-    image: ghcr.io/smaug6739/alexandrie-frontend:latest
+    image: ghcr.io/kamasylvia/pergame-frontend:latest
     #build:
     #  context: ./frontend
     #  dockerfile: Dockerfile
-    container_name: collectanea-frontend
+    container_name: pergame-frontend
     restart: unless-stopped
     environment:
       PORT: 8200
@@ -123,7 +123,7 @@ services:
       # Runtime configuration - builds with these values at startup
       NUXT_PUBLIC_BASE_API: ${API_URL:-http://localhost:8201}
       NUXT_PUBLIC_BASE_CDN: ${CDN_URL:-http://localhost:9000}
-      NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/collectanea/}
+      NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/pergame/}
       NUXT_PUBLIC_BASE_URL: ${FRONTEND_URL:-http://localhost:8200}
 
     ports:
@@ -131,10 +131,10 @@ services:
     depends_on:
       - backend
     networks:
-      - collectanea-network
+      - pergame-network
 
 networks:
-  collectanea-network:
+  pergame-network:
     driver: bridge
 
 volumes:

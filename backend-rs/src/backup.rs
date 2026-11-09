@@ -384,7 +384,7 @@ pub async fn run_backup(
     let object_name = format!("{user_id}/backup.zip");
     let now_parts = time::OffsetDateTime::now_utc();
     let filename = format!(
-        "collectanea-backup-{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
+        "pergame-backup-{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
         now_parts.year(),
         u8::from(now_parts.month()),
         now_parts.day(),

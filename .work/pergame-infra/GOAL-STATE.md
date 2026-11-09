@@ -1,4 +1,4 @@
-# GOAL-STATE — collectanea-infra(fork 现代化改造;2026-11-08 定名 Collectanea,目录名沿用)
+# GOAL-STATE — pergame-infra(fork 现代化改造;2026-11-08 定名 Collectanea,2026-11-09 随仓库改名全量改为 Pergame,目录名 pergame-infra)
 
 ## 1. 任务总览
 
@@ -38,6 +38,8 @@
 
 **B6(Backup v2)已取消(2026-11-08)**:issue #9 关闭,设计存档 `features/backup-v2.md`;替代 = 运维件 `scripts/dr-backup.sh`(N pg 源 × M rclone 目的地,已 dry-run 验证,实机验证待人工)。
 
+**改名落地(2026-11-09)✅**:Collectanea → Pergame 全量(brand + go.mod/crate `pergame-rs`/容器名/DB 与桶默认值/JWT issuer/前端运行时标识/logo 资产 `Pergame-logo-*`/链接;上游 alexandrie 遗留清理为 fork 身份)。验证:go vet/build、cargo check + 20/20 单测、eslint、grep 闸门全绿。
+
 ## 3. 续接点(2026-11-09 换机落盘)
 
 - **换机续接指引**:backend-rs 可 `cargo run` 直连 NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(PG_*/QUOBJECT_*);集成套件 `cargo test --test integration -- --ignored`(5+1 用例全绿);本仓 main 已推远程(2026-11-09)。
@@ -45,7 +47,7 @@
 - 旧续接点(2026-11-08/09 夜间):
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
-- **新增批次候选:Collectanea 改名落地**(仓库/品牌/env/容器名,破坏性,范围待拍板)。
+- ~~**新增批次候选:Collectanea 改名落地**~~ **✅ 已落地(2026-11-09,全量 + fork 身份清理,用户拍板;见 AGENTS.md 决策记录 2026-11-09 行)**。
 - **下一步(按序)**:① 软连接 NL-B 后端完成 ✅(本轮:CTE link 臂并入递归项 OR EXISTS、活验证 6/6 含 soft_links 生命周期);前端部分待设计确认;② NL-C 备份 zip 含 links;③ 2FA 全链路自测(可程序化,无需扫码);④ OIDC/邮件待 provider/SMTP;⑤ push(待拍板);dr-backup 去重 ✅(375c423b)。② 活环境剩余手测(2FA 扫码/OIDC/邮件实测);③ docs 站 deploy 文档 Rust 化;④ S3 TLS delta;⑤ push + 镜像发布(待拍板)。原「全部待用户/活环境」清单并入以上。① 活环境联调:compose up(postgres 已切,994a2af0)→ 跑 `cargo test --test integration -- --ignored` + Go tests/ + 手测 OIDC/2FA/backup;② push + 镜像发布工作流(用户拍板);③ S3 CA_PATH/INSECURE_TLS(已记录 delta)。
 - **运行时验证欠账**(首个活 pg 时):Toasty 生成 SQL vs 0001 schema 实测;Rust 版集成测试镜像 Go tests/ auth 用例。
 - 环境限制:本机无 docker/pg/mysql → 编译+单测级验证。批次 A 待开工令;GitHub secrets 改名待用户手动。
@@ -61,7 +63,7 @@
 
 ## 6. 环境备忘
 
-- origin = `git@github.com:kamasylvia/Collectanea.git`(公开 fork);upstream = Smaug6739。
+- origin = `git@github.com:kamasylvia/Pergame.git`(公开 fork);upstream = Smaug6739。
 - compose backend = 本地构建(`build: ./backend`);上游预构建镜像不认 `S3_*`/pg。
 - 本地开发对象存储:`make minio`(minio 二进制,9000/9001);compose 默认 rustfs。
 - 本机(macOS M2)无可用 docker runtime(`/usr/local/bin/docker` 死链)。

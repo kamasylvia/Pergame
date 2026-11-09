@@ -1,4 +1,4 @@
-# Frontend Dockerfile for Collectanea - Runtime build with build-time config
+# Frontend Dockerfile for Pergame - Runtime build with build-time config
 FROM node:24-alpine
 
 # Install bun

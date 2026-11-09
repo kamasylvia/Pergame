@@ -6,7 +6,7 @@
       <section class="header">
         <span class="name">
           <IconApp />
-          <NuxtLink class="home-link" to="/dashboard">Collectanea</NuxtLink>
+          <NuxtLink class="home-link" to="/dashboard">Pergame</NuxtLink>
         </span>
         <IconClose class="btn" />
       </section>

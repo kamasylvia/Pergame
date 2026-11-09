@@ -54,7 +54,7 @@ const element = computed(() => elementComponent.value?.rootElement as HTMLElemen
 
 const { data, pending } = await useAsyncData(
   `public-doc-${route.params.id}`,
-  async (): Promise<{ node: Node | undefined; children: Node[]; error: null | CollectaneaError }> => {
+  async (): Promise<{ node: Node | undefined; children: Node[]; error: null | PergameError }> => {
     const documentId = route.params.id;
     if (!documentId || typeof documentId !== 'string') return { node: undefined, children: [], error: { code: 404, message: '' } };
     const request = await makeRequest(`nodes/public/${documentId}`, 'GET', {});
@@ -82,10 +82,10 @@ const baseUrl = requestUrl.origin || config.public.baseUrl || '';
 
 useSeoMeta({
   title: () => data.value?.node?.name || 'Unknown document',
-  description: () => data.value?.node?.description || 'Public document published on Collectanea, a modern Markdown-based note-taking platform.',
+  description: () => data.value?.node?.description || 'Public document published on Pergame, a modern Markdown-based note-taking platform.',
 
   ogTitle: () => data.value?.node?.name || 'Unknown document',
-  ogDescription: () => data.value?.node?.description || 'Public document published on Collectanea, a modern Markdown-based note-taking platform.',
+  ogDescription: () => data.value?.node?.description || 'Public document published on Pergame, a modern Markdown-based note-taking platform.',
   ogType: 'article',
   ogUrl: () => `${baseUrl}/doc/${route.params.id}`,
   ogImage: () => (data.value?.node?.thumbnail ? `${baseUrl}${data.value?.node.thumbnail}` : `${baseUrl}/og/default-data.png`),
@@ -95,7 +95,7 @@ useSeoMeta({
 
   twitterCard: 'summary_large_image',
   twitterTitle: () => data.value?.node?.name || 'Unknown document',
-  twitterDescription: () => data.value?.node?.description || 'Public document published on Collectanea, a modern Markdown-based note-taking platform.',
+  twitterDescription: () => data.value?.node?.description || 'Public document published on Pergame, a modern Markdown-based note-taking platform.',
   twitterImage: () => (data.value?.node?.thumbnail ? `${baseUrl}${data.value?.node.thumbnail}` : `${baseUrl}/og/default-data.png`),
 });
 </script>

@@ -21,7 +21,7 @@ export const DEFAULT_PREFERENCES = {
   primaryColor: -2 as number, // -2 default primary; -1 unset; >= 0 app color index
   docSize: 1 as number, // 0 = small, 1 = large
   style: 'default' as 'default' | 'glassmorphism',
-  theme: 'collectanea' as string,
+  theme: 'pergame' as string,
   documentAutoSave: true as boolean, // Enable automatic saving of documents
   documentFontSize: 16 as number,
   documentFontFamily: 'Poppins' as string,

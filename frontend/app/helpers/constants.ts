@@ -8,7 +8,7 @@ export const appColors = ['blue', 'red', 'green', 'yellow', 'orange', 'purple', 
 
 // Document display themes
 export const DOCUMENT_THEMES = [
-  { label: 'Collectanea', id: 'collectanea' },
+  { label: 'Pergame', id: 'pergame' },
   { label: 'Modern', id: 'modern' },
   { label: 'Academic', id: 'academic' },
   { label: 'Material', id: 'material' },

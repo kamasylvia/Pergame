@@ -68,7 +68,7 @@ useHead({
           '@graph': [
             {
               '@type': 'WebSite',
-              name: 'Collectanea',
+              name: 'Pergame',
               url: canonicalUrl.value,
               inLanguage: i18nHead.value.htmlAttrs?.lang || 'en',
               description: t('landing.seo.description'),
@@ -76,7 +76,7 @@ useHead({
             {
               '@type': 'SoftwareApplication',
               applicationCategory: 'ProductivityApplication',
-              name: 'Collectanea',
+              name: 'Pergame',
               operatingSystem: 'Web',
               url: canonicalUrl.value,
               description: t('landing.seo.description'),

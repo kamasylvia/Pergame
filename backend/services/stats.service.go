@@ -1,8 +1,8 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/repositories"
+	"pergame/models"
+	"pergame/repositories"
 	"time"
 )
 

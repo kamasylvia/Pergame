@@ -1,6 +1,6 @@
-# Collectanea Setup Guide
+# Pergame Setup Guide
 
-This guide explains how to set up, configure, and deploy the Collectanea stack.
+This guide explains how to set up, configure, and deploy the Pergame stack.
 
 It covers both **local development** and **production deployment**, including how to configure environment variables, connect the different services, and handle HTTPS with a reverse proxy.
 
@@ -8,7 +8,7 @@ It covers both **local development** and **production deployment**, including ho
 
 ## Overview of the Stack
 
-The Collectanea stack consists of four main services, defined in the `docker-compose.yml` file:
+The Pergame stack consists of four main services, defined in the `docker-compose.yml` file:
 
 | Service      | Description                                                                    |
 | ------------ | ------------------------------------------------------------------------------ |
@@ -17,15 +17,15 @@ The Collectanea stack consists of four main services, defined in the `docker-com
 | **Backend**  | The Go-based API server providing authentication, storage, and access control. |
 | **Frontend** | A Nuxt 4 web app that communicates with the backend via REST API.              |
 
-All services are connected through a dedicated Docker network (`collectanea-network`).
+All services are connected through a dedicated Docker network (`pergame-network`).
 
 ---
 
 ## Quick Start
 
-For local testing, you can run Collectanea directly using the provided `docker-compose.yml`:
+For local testing, you can run Pergame directly using the provided `docker-compose.yml`:
 
-Download the `docker-compose.yml` file from the repository: [https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml](https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml) and run:
+Download the `docker-compose.yml` file from the repository: [https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml](https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml) and run:
 
 ```bash
 docker compose up
@@ -45,7 +45,7 @@ Once the containers are running:
 
 To customize the setup (ports, domains, security, feature flags, production deployment), you can create a `.env` file next to `docker-compose.yml`.
 
-The `.env` file template can be found here: [https://github.com/Smaug6739/Alexandrie/blob/main/.env.example](https://github.com/Smaug6739/Alexandrie/blob/main/.env.example)
+The `.env` file template can be found here: [https://github.com/kamasylvia/Pergame/blob/main/.env.example](https://github.com/kamasylvia/Pergame/blob/main/.env.example)
 
 Only the variables defined in `.env.example` are officially supported.
 
@@ -56,7 +56,7 @@ FRONTEND_URL=http://localhost:8200
 API_URL=http://localhost:8201
 CDN_URL=http://localhost:9000
 
-CDN_ENDPOINT=/collectanea/
+CDN_ENDPOINT=/pergame/
 ```
 
 These variables define how clients (browsers) reach your services.
@@ -64,7 +64,7 @@ These variables define how clients (browsers) reach your services.
 - `FRONTEND_URL`: The public URL for the frontend service.
 - `API_URL`: The public URL for the backend API service.
 - `CDN_URL`: The public URL for the object storage service (RustFS).
-- `CDN_ENDPOINT`: The path prefix under which files are exposed. You probably want to keep this as /collectanea/ to match the bucket name, change it only if you changed the bucket name or if you have configured a reverse proxy path.  
+- `CDN_ENDPOINT`: The path prefix under which files are exposed. You probably want to keep this as /pergame/ to match the bucket name, change it only if you changed the bucket name or if you have configured a reverse proxy path.  
   Final URL are constructed as: `<CDN_URL><CDN_ENDPOINT><object-path>`  
   If you have a problem with files URL just open devtools in your browser and check the actual URL used to load files and then adjust these variables accordingly.
 
@@ -114,27 +114,27 @@ These variables configure the backend API service.
 
 ```env
 POSTGRES_EXTERNAL_PORT=5432
-POSTGRES_DB=collectanea
-POSTGRES_USER=collectanea
+POSTGRES_DB=pergame
+POSTGRES_USER=pergame
 POSTGRES_PASSWORD=password
 ```
 
 These variables configure the PostgreSQL database service.
 
 - `POSTGRES_EXTERNAL_PORT`: The port exposed on your host machine for the PostgreSQL service.
-- `POSTGRES_DB`: The name of the default database created for Collectanea.
-- `POSTGRES_USER`: The username for the default Collectanea database user.
-- `POSTGRES_PASSWORD`: The password for the default Collectanea database user.
+- `POSTGRES_DB`: The name of the default database created for Pergame.
+- `POSTGRES_USER`: The username for the default Pergame database user.
+- `POSTGRES_PASSWORD`: The password for the default Pergame database user.
 
 ### 5. Object Storage — S3 (RustFS / MinIO-compatible) (optional, leave empty to disable)
 
 ```env
 RUSTFS_EXTERNAL_PORT=9000
 
-RUSTFS_ACCESS_KEY=collectanea-key
-RUSTFS_SECRET_KEY=collectanea-secret
+RUSTFS_ACCESS_KEY=pergame-key
+RUSTFS_SECRET_KEY=pergame-secret
 
-S3_BUCKET=collectanea
+S3_BUCKET=pergame
 ```
 
 These variables configure the RustFS object storage service.
@@ -142,7 +142,7 @@ These variables configure the RustFS object storage service.
 - `RUSTFS_EXTERNAL_PORT`: The port exposed on your host machine for the RustFS service.
 - `RUSTFS_ACCESS_KEY`: The access key for the RustFS S3-compatible API.
 - `RUSTFS_SECRET_KEY`: The secret key for the RustFS S3-compatible API.
-- `S3_BUCKET`: The name of the default bucket created for Collectanea. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `collectanea` and the backend will create `collectanea` and `collectanea-backups` buckets.
+- `S3_BUCKET`: The name of the default bucket created for Pergame. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `pergame` and the backend will create `pergame` and `pergame-backups` buckets.
 
 ### 6. Email — SMTP (optional)
 
@@ -196,7 +196,7 @@ Open ID Connect (OIDC) is supported since version 8.5.0. You can setup up to 10 
 
 First you have to generate client ID and client secret from your provider (refer to their doc or ask questions in discussions / discord)
 
-Then you have to configure the redirect URI (in the provider interface with this value): `https://your-collectanea-frontend/login/oidc/callback`
+Then you have to configure the redirect URI (in the provider interface with this value): `https://your-pergame-frontend/login/oidc/callback`
 
 To config a provider you have to fill 4 variables:
 
@@ -220,7 +220,7 @@ OIDC_1_PROVIDER_NAME: ${OIDC_1_PROVIDER_NAME}
 
 ### S3 / Minio — TLS, HTTPS and Custom Certificate Authorities
 
-Collectanea connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client.
+Pergame connects to the S3-compatible storage (RustFS / MinIO...) using an internal backend client.
 This client supports HTTPS, custom certificate authorities (CA), and explicit TLS configuration.
 
 This section explains how TLS is handled and how to configure it correctly.

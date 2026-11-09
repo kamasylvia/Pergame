@@ -12,10 +12,10 @@ export default defineAppConfig({
     },
   },
   seo: {
-    siteName: "Collectanea Documentation",
+    siteName: "Pergame Documentation",
   },
   header: {
-    title: "Collectanea",
+    title: "Pergame",
     to: "/",
     logo: {
       alt: "",
@@ -27,14 +27,14 @@ export default defineAppConfig({
     links: [
       {
         icon: "i-simple-icons-github",
-        to: "https://github.com/Smaug6739/Alexandrie",
+        to: "https://github.com/kamasylvia/Pergame",
         target: "_blank",
         "aria-label": "GitHub",
       },
     ],
   },
   footer: {
-    credits: `Collectanea • © ${new Date().getFullYear()}`,
+    credits: `Pergame • © ${new Date().getFullYear()}`,
     colorMode: false,
     links: [
       {
@@ -45,22 +45,22 @@ export default defineAppConfig({
       },
       {
         icon: "i-simple-icons-github",
-        to: "https://github.com/Smaug6739/Alexandrie",
+        to: "https://github.com/kamasylvia/Pergame",
         target: "_blank",
-        "aria-label": "Collectanea on GitHub",
+        "aria-label": "Pergame on GitHub",
       },
     ],
   },
   toc: {
     title: "On this page",
     bottom: {
-      title: "Collectanea",
-      edit: "https://github.com/Smaug6739/Alexandrie/edit/main/docs/content",
+      title: "Pergame",
+      edit: "https://github.com/kamasylvia/Pergame/edit/main/docs/content",
       links: [
         {
           icon: "i-lucide-star",
           label: "Star on GitHub",
-          to: "https://github.com/Smaug6739/Alexandrie",
+          to: "https://github.com/kamasylvia/Pergame",
           target: "_blank",
         },
         {

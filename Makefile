@@ -20,11 +20,11 @@ update:
 	cargo fmt && cargo clippy --fix --allow-dirty
 
 minio:
-	MINIO_ROOT_USER=collectanea-access MINIO_ROOT_PASSWORD=collectanea-secret \
+	MINIO_ROOT_USER=pergame-access MINIO_ROOT_PASSWORD=pergame-secret \
 	minio server ./minio --console-address :9001 --address "localhost:9000"
 
 minioh:
-	MINIO_ROOT_USER=collectanea-access MINIO_ROOT_PASSWORD=collectanea-secret \
+	MINIO_ROOT_USER=pergame-access MINIO_ROOT_PASSWORD=pergame-secret \
 	minio server ./minio --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
 
 migrate:

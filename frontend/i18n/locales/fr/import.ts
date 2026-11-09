@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: "Restaurez une sauvegarde complète d'Collectanea avec les documents et les paramètres.",
+      description: "Restaurez une sauvegarde complète d'Pergame avec les documents et les paramètres.",
       title: 'Importer depuis une sauvegarde',
     },
     files: {

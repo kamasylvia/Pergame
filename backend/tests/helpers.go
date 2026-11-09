@@ -1,13 +1,13 @@
 package tests
 
 import (
-	"collectanea/types"
 	"bytes"
 	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
+	"pergame/types"
 	"strconv"
 	"strings"
 	"testing"

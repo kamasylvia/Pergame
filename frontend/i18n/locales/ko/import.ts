@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: '문서와 설정이 포함된 전체 Collectanea 백업을 복원합니다.',
+      description: '문서와 설정이 포함된 전체 Pergame 백업을 복원합니다.',
       title: '백업에서 가져오기',
     },
     files: {

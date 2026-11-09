@@ -1,10 +1,10 @@
 package routes
 
 import (
-	"collectanea/app"
-	"collectanea/controllers"
-	"collectanea/middlewares"
-	"collectanea/utils"
+	"pergame/app"
+	"pergame/controllers"
+	"pergame/middlewares"
+	"pergame/utils"
 
 	"github.com/gin-gonic/gin"
 )

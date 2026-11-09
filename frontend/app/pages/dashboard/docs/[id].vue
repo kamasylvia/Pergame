@@ -46,7 +46,7 @@ const docSize = preferencesStore.get('docSize');
 const elementComponent = ref<InstanceType<typeof NodeDocumentContentCompiled>>();
 const element = computed(() => elementComponent.value?.rootElement as HTMLElement | undefined);
 
-const error = ref<null | CollectaneaError>(null);
+const error = ref<null | PergameError>(null);
 
 const documentId = computed(() => route.params.id as string);
 

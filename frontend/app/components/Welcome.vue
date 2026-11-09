@@ -31,7 +31,7 @@ function handleClose() {
               <Icon name="sparkle" display="md" />
             </div>
             <div>
-              <h2>What's new in Collectanea?</h2>
+              <h2>What's new in Pergame?</h2>
               <p class="version-tag">Version 8.14.0</p>
             </div>
           </div>
@@ -65,7 +65,7 @@ function handleClose() {
 
         <p class="description">
           And many more improvements, fixes and features!
-          <NuxtLink to="https://github.com/Smaug6739/Alexandrie/discussions" target="_blank">Give feedback</NuxtLink>
+          <NuxtLink to="https://github.com/kamasylvia/Pergame/discussions" target="_blank">Give feedback</NuxtLink>
         </p>
         <div class="banner-actions">
           <AppButton type="primary" size="sm" @click="handleClose">I understand, thank you!</AppButton>

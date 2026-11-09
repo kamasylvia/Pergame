@@ -1,9 +1,9 @@
 package repositories
 
 import (
-	"collectanea/models"
-	"collectanea/types"
 	"fmt"
+	"pergame/models"
+	"pergame/types"
 
 	"github.com/jmoiron/sqlx"
 )

@@ -12,7 +12,7 @@ export default {
 
   categories: {
     backup: {
-      description: 'Restore a complete Collectanea backup with documents and settings.',
+      description: 'Restore a complete Pergame backup with documents and settings.',
       title: 'Import from backup',
     },
     files: {

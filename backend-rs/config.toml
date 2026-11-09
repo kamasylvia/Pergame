@@ -1,11 +1,11 @@
-# Collectanea (Rust) default configuration. Override with CONFIG_PATH or env.
+# Pergame (Rust) default configuration. Override with CONFIG_PATH or env.
 
 [Database]
 Driver = "pgx"
 Host = "localhost"
-Name = "collectanea"
+Name = "pergame"
 Port = 5432
-User = "collectanea"
+User = "pergame"
 Password = ""
 
 [Cdn]

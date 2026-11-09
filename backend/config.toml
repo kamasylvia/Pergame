@@ -1,7 +1,7 @@
 [Database]
 Driver = "mysql"
 Host = "localhost"
-Name = "collectanea"
+Name = "pergame"
 Port = 3306
 
 [Cdn]

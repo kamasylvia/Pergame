@@ -74,8 +74,8 @@
 <script setup lang="ts">
 const { t } = useI18n();
 
-const owner = 'Smaug6739';
-const repo = 'Collectanea';
+const owner = 'kamasylvia';
+const repo = 'Pergame';
 
 const stars = ref<number | null>(null);
 const contributors = ref<number | null>(null);

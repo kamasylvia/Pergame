@@ -1,12 +1,12 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/types"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"pergame/models"
+	"pergame/types"
 
 	"github.com/minio/minio-go/v7"
 )

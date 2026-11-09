@@ -13,7 +13,7 @@ export default {
       description:
         'Пишіть із підсвічуванням синтаксису, живим попереднім переглядом і гарячими клавішами. Підтримуються таблиці, блоки коду, математичні формули та інше.',
       heading: 'Потужний Markdown-редактор',
-      sampleHeading: 'Ласкаво просимо до Collectanea',
+      sampleHeading: 'Ласкаво просимо до Pergame',
       sampleList: 'Списки прості',
       sampleMarkdown: 'Пишіть нотатки у Markdown',
       sampleText: ' та ',
@@ -61,7 +61,7 @@ export default {
   contributors: {
     commitLabel: 'комітів',
     cta: 'Стати учасником',
-    subtitle: 'Познайомтеся з чудовими людьми, які роблять Collectanea можливим',
+    subtitle: 'Познайомтеся з чудовими людьми, які роблять Pergame можливим',
     title: 'Створено спільнотою',
   },
   cta: {
@@ -73,27 +73,27 @@ export default {
   },
   faq: {
     answer1:
-      'Так, Collectanea на 100 % open source під ліцензією MIT. Ви можете вільно використовувати, змінювати й поширювати його. Жодних прихованих витрат, жодних преміум-рівнів.',
-    answer2: 'Безумовно! Ви можете запускати Collectanea на власній інфраструктурі з Docker. Повна документація допоможе почати за кілька хвилин.',
-    answer3: 'Так, Collectanea створено за принципами offline-first. Ваші нотатки доступні локально і синхронізуються після повторного підключення.',
+      'Так, Pergame на 100 % open source під ліцензією MIT. Ви можете вільно використовувати, змінювати й поширювати його. Жодних прихованих витрат, жодних преміум-рівнів.',
+    answer2: 'Безумовно! Ви можете запускати Pergame на власній інфраструктурі з Docker. Повна документація допоможе почати за кілька хвилин.',
+    answer3: 'Так, Pergame створено за принципами offline-first. Ваші нотатки доступні локально і синхронізуються після повторного підключення.',
     answer4: 'Під час self-hosting ваші дані залишаються на вашому сервері. Ми використовуємо стандартні практики безпеки, а передача даних зашифрована.',
     answer5:
       'Так! Ви можете імпортувати Markdown-файли з інших застосунків, як-от Notion, Obsidian або будь-якого Markdown-редактора. Експорт у PDF також підтримується.',
     answer6: 'Звичайно! Ми підтримуємо підсвічування синтаксису для понад 100 мов програмування та рендеринг LaTeX-формул.',
-    answer7: 'Collectanea — це адаптивний вебзастосунок, який чудово працює на мобільних браузерах. Нативні застосунки є в дорожній карті.',
+    answer7: 'Pergame — це адаптивний вебзастосунок, який чудово працює на мобільних браузерах. Нативні застосунки є в дорожній карті.',
     ctaDescription: 'Не можете знайти те, що шукаєте? Приєднуйтесь до нашої спільноти!',
     ctaTitle: 'Ще є запитання?',
     discord: 'Приєднатися до Discord',
     questions: [
-      'Collectanea справді безкоштовний і open source?',
-      'Чи можу я self-host Collectanea на власному сервері?',
-      'Чи працює Collectanea офлайн?',
+      'Pergame справді безкоштовний і open source?',
+      'Чи можу я self-host Pergame на власному сервері?',
+      'Чи працює Pergame офлайн?',
       'Як зберігаються та захищаються мої дані?',
       'Чи можу я імпортувати нотатки з інших застосунків?',
       'Чи підтримує він блоки коду та математичні формули?',
       'Чи є мобільний застосунок?',
     ],
-    subtitle: 'Усе, що потрібно знати про Collectanea',
+    subtitle: 'Усе, що потрібно знати про Pergame',
     title: 'Часті запитання',
   },
   footer: {
@@ -131,7 +131,7 @@ export default {
     },
     ctaPrimary: 'Почати',
     ctaSecondary: 'GitHub',
-    previewAlt: 'Попередній перегляд застосунку Collectanea',
+    previewAlt: 'Попередній перегляд застосунку Pergame',
     tagline: 'Потужний Markdown-робочий простір, створений для швидкості, ясності та творчості.',
     titleHighlight: 'Ваші нотатки',
     titleSuffix: ', красиво впорядковані',
@@ -141,7 +141,7 @@ export default {
     steps: [
       {
         description:
-          'Завантажте файли конфігурації з GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/docker-compose.yml">Завантажити docker-compose.yml</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/Smaug6739/Alexandrie/blob/main/.env.example">Завантажити .env.example</a> ',
+          'Завантажте файли конфігурації з GitHub <br /> <a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/docker-compose.yml">Завантажити docker-compose.yml</a> <br /><a target="_blank" style="color: var(--primary);text-decoration: underline;font-weight: 500;" href="https://github.com/kamasylvia/Pergame/blob/main/.env.example">Завантажити .env.example</a> ',
         title: 'Клонувати репозиторій',
       },
       {
@@ -157,16 +157,16 @@ export default {
     ],
     subtitle: 'Повністю контролюйте свої дані за допомогою простого розгортання',
     terminal: {
-      lines: ['[+] Running 3/3', '✓ Container collectanea-db Started', '✓ Container collectanea-minio Started', '✓ Container collectanea-app Started'],
+      lines: ['[+] Running 3/3', '✓ Container pergame-db Started', '✓ Container pergame-minio Started', '✓ Container pergame-app Started'],
       title: 'Термінал',
     },
     title: 'Self-host за кілька хвилин',
   },
   seo: {
     description:
-      'Collectanea — це швидкий Markdown-робочий простір, який можна самостійно хостити, для нотаток, баз знань, співпраці та публічної документації.',
+      'Pergame — це швидкий Markdown-робочий простір, який можна самостійно хостити, для нотаток, баз знань, співпраці та публічної документації.',
     keywords: 'Markdown нотатки, база знань, self-hosted нотатки, публічна документація, співпраця, застосунок для нотаток',
-    title: 'Collectanea | Сучасний Markdown-робочий простір',
+    title: 'Pergame | Сучасний Markdown-робочий простір',
   },
   showcase: {
     features: [
@@ -195,7 +195,7 @@ export default {
         title: 'Публікуйте та діліться',
       },
     ],
-    subtitle: 'Подивіться, як Collectanea спрощує весь ваш робочий процес',
+    subtitle: 'Подивіться, як Pergame спрощує весь ваш робочий процес',
     title: 'Від ідеї до опублікованої документації',
   },
   stats: {
@@ -217,17 +217,17 @@ export default {
   support: {
     badge: 'Слово від творця',
     cards: {
-      sponsorDesc: 'Допоможіть покрити хостинг, резервні копії та витрати на розробку, щоб Collectanea залишався онлайн і незалежним.',
+      sponsorDesc: 'Допоможіть покрити хостинг, резервні копії та витрати на розробку, щоб Pergame залишався онлайн і незалежним.',
       sponsorTitle: 'Підтримати фінансово',
       starDesc: 'Покажіть свою підтримку й допоможіть іншим розробникам відкрити проєкт. Це нічого не коштує, але означає дуже багато.',
       starTitle: 'Поставити зірку на GitHub',
     },
     confirm: 'Розумію, дякую!',
     paragraph1:
-      'Collectanea не починався як бізнес. Спочатку це був інструмент, який я хотів для себе. Через роки я все ще підтримую та покращую його у вільний час і радий ділитися ним з усіма, кому він корисний.',
+      'Pergame не починався як бізнес. Спочатку це був інструмент, який я хотів для себе. Через роки я все ще підтримую та покращую його у вільний час і радий ділитися ним з усіма, кому він корисний.',
     paragraph2:
-      'Застосунок не відстежує вас, не показує рекламу і є повністю open source. Проте підтримка живої платформи потребує витрат на хостинг та інфраструктуру. Якщо Collectanea додає цінності вашому робочому процесу, подумайте про підтримку його незалежності. Навіть невеликий донат допомагає покривати сервери на місяці.',
+      'Застосунок не відстежує вас, не показує рекламу і є повністю open source. Проте підтримка живої платформи потребує витрат на хостинг та інфраструктуру. Якщо Pergame додає цінності вашому робочому процесу, подумайте про підтримку його незалежності. Навіть невеликий донат допомагає покривати сервери на місяці.',
     signature: '— Smaug',
-    title: 'Collectanea безкоштовний і таким залишиться.',
+    title: 'Pergame безкоштовний і таким залишиться.',
   },
 };

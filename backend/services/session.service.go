@@ -1,10 +1,10 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/pkg/logger"
-	"collectanea/repositories"
-	"collectanea/types"
+	"pergame/models"
+	"pergame/pkg/logger"
+	"pergame/repositories"
+	"pergame/types"
 	"time"
 )
 

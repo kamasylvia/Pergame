@@ -18,7 +18,7 @@
     </div>
 
     <div class="contributors-cta">
-      <a href="https://github.com/Smaug6739/Alexandrie/contribute" target="_blank" class="cta-btn">
+      <a href="https://github.com/kamasylvia/Pergame/contribute" target="_blank" class="cta-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14" />
         </svg>
@@ -45,7 +45,7 @@ const commitLabel = computed(() => t('landing.contributors.commitLabel'));
 
 async function fetchContributors() {
   try {
-    const res = await fetch(`https://api.github.com/repos/Smaug6739/Collectanea/contributors?per_page=50`);
+    const res = await fetch(`https://api.github.com/repos/kamasylvia/Pergame/contributors?per_page=50`);
     if (!res.ok) return;
     const data = await res.json();
     avatars.value = Array.isArray(data) ? (data as Contributor[]) : [];

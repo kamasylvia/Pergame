@@ -1,11 +1,11 @@
 package middlewares
 
 import (
-	"collectanea/permissions"
-	"collectanea/types"
-	"collectanea/utils"
 	"net/http"
 	"os"
+	"pergame/permissions"
+	"pergame/types"
+	"pergame/utils"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

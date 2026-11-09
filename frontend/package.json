@@ -1,5 +1,5 @@
 {
-  "name": "collectanea",
+  "name": "pergame",
   "version": "8.14.3",
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

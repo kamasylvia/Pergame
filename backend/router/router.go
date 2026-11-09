@@ -1,9 +1,9 @@
 package router
 
 import (
-	"collectanea/app"
-	"collectanea/router/routes"
 	"os"
+	"pergame/app"
+	"pergame/router/routes"
 	"strings"
 
 	"github.com/gin-contrib/cors"

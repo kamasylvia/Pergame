@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"collectanea/pkg/logger"
+	"pergame/pkg/logger"
 
 	"github.com/jmoiron/sqlx"
 )

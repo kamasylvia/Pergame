@@ -1,8 +1,8 @@
 package services
 
 import (
-	"collectanea/permissions"
 	"context"
+	"pergame/permissions"
 )
 
 func actorFromContext(ctx context.Context) (permissions.Actor, error) {

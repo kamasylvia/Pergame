@@ -1,11 +1,11 @@
 <template>
   <article class="markdown-preview modern-theme document-content" style="font-family: Poppins; font-size: 16px; line-height: 1.5">
-    <h1 id="privacy-policy---collectanea" tabindex="-1">
-      <a class="header-anchor" href="#privacy-policy---collectanea" aria-hidden="true">#</a> Privacy Policy - Collectanea
+    <h1 id="privacy-policy---pergame" tabindex="-1">
+      <a class="header-anchor" href="#privacy-policy---pergame" aria-hidden="true">#</a> Privacy Policy - Pergame
     </h1>
     <h2 id="introduction" tabindex="-1"><a class="header-anchor" href="#introduction" aria-hidden="true">#</a> Introduction</h2>
     <p>
-      Collectanea is an open-source project. We care about your privacy and only collect the data necessary to make the platform work. This policy explains what
+      Pergame is an open-source project. We care about your privacy and only collect the data necessary to make the platform work. This policy explains what
       information we collect, how we use it, and your rights as a user.
     </p>
     <h2 id="data-we-collect" tabindex="-1"><a class="header-anchor" href="#data-we-collect" aria-hidden="true">#</a> Data We Collect</h2>
@@ -40,12 +40,12 @@
     <h2 id="security" tabindex="-1"><a class="header-anchor" href="#security" aria-hidden="true">#</a> Security</h2>
     <p>We take reasonable measures to protect your data. Passwords are stored securely, and session data is handled with standard security practices.</p>
     <h2 id="changes-to-this-policy" tabindex="-1"><a class="header-anchor" href="#changes-to-this-policy" aria-hidden="true">#</a> Changes to This Policy</h2>
-    <p>Since Collectanea is an open-source project, this policy may be updated occasionally. We recommend checking this page periodically for updates.</p>
+    <p>Since Pergame is an open-source project, this policy may be updated occasionally. We recommend checking this page periodically for updates.</p>
     <h2 id="contact-%26-code-source" tabindex="-1">
       <a class="header-anchor" href="#contact-%26-code-source" aria-hidden="true">#</a> Contact &amp; Code source
     </h2>
     <p>If you have questions about the application you can contact us by email: <a href="mailto:contact@alexandrie-hub.fr">contact@alexandrie-hub.fr</a></p>
-    <p>Code source of the application is available here: <a href="https://github.com/Smaug6739/Alexandrie">https://github.com/Smaug6739/Alexandrie</a>.</p>
+    <p>Code source of the application is available here: <a href="https://github.com/kamasylvia/Pergame">https://github.com/kamasylvia/Pergame</a>.</p>
   </article>
 </template>
 

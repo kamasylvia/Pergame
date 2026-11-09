@@ -1,8 +1,8 @@
 [package]
-name = "collectanea-rs"
+name = "pergame-rs"
 version = "0.1.0"
 edition = "2024"
-description = "Collectanea backend (Rust rewrite)"
+description = "Pergame backend (Rust rewrite)"
 
 [dependencies]
 ammonia = "4.2.4"

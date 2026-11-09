@@ -3,9 +3,9 @@ package utils
 // Utility functions to extract information from the Gin context
 
 import (
-	"collectanea/permissions"
-	"collectanea/types"
 	"errors"
+	"pergame/permissions"
+	"pergame/types"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

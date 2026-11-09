@@ -19,20 +19,17 @@
 
 - [ ] **笔记软连接/克隆**(Trilium 对位):同笔记多目录出现;克隆表 node_links + 环校验 + 三端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`(已含模型决策:克隆表方案,否决 content 分离重构)。
 
+- [ ] **Go tests 包 build 修复**(上游遗传,2026-11-09 发现):`backend/tests/helpers.go:227` 引用 `LoginAs` 但定义在 `auth_test.go`(测试编译单元才可见)→ `go build ./...` 在 tests 包失败;`go vet ./...`/`go test` 不受影响。修法:LoginAs 挪入 helpers.go 或文件改名 `_test.go`。验证:`go build ./...` 全绿。
+
 ## 待人工验证
 
-- [ ] 自托管 smoke(本机无 docker):`docker compose up --build` 后端正常启动(`S3_*` 链路)、注册/登录可用。
+- [ ] 自托管 smoke(本机无 docker):`docker compose up --build` 后端正常启动(`S3_*` 链路)、注册/登录可用。改名后默认值已切 `pergame`(DB/桶/CDN 路径),首次起库即新名。
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
-- [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。
-
-- [ ] **笔记软连接/克隆**(Trilium 对位):同笔记多目录出现;克隆表 node_links + 环校验 + 三端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`(已含模型决策:克隆表方案,否决 content 分离重构)。
-
-## 待人工验证
-
-- [ ] push 51+ commits 到 origin(kamasylvia/Collectanea)——遵令未 push,待拍板(公开仓 push 前可按全局规则压缩重组)。
+- [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。conf 里库名/桶前缀已随改名切 `pergame-*`。
+- [ ] push 51+ commits 到 origin(kamasylvia/Pergame)——遵令未 push,待拍板(公开仓 push 前可按全局规则压缩重组)。
 
 ## 维护说明
 
 - 项目约定与决策记录 → 根 `AGENTS.md`。
-- 批次/续接点 → `collectanea-infra/GOAL-STATE.md`;教训 → `LESSONS.md`;spec → `features/`、`plugin-system/`、`rust-migration/`、`obsidian-compat/`。
+- 批次/续接点 → `pergame-infra/GOAL-STATE.md`;教训 → `LESSONS.md`;spec → `features/`、`plugin-system/`、`rust-migration/`、`obsidian-compat/`。
 - issue 索引:#1 pg · #2 S3 改名(已实施) · #3 MCP · #4 索引 · #5 dataview · #6/#7 批次 A · #8 插件系统。

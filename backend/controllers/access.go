@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"collectanea/permissions"
 	"errors"
 	"net/http"
+	"pergame/permissions"
 
 	"github.com/gin-gonic/gin"
 )

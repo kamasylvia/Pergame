@@ -1,7 +1,7 @@
 ---
 seo:
-  title: Collectanea — Documentation
-  description: Official documentation for Collectanea, the free and self-hosted knowledge base.
+  title: Pergame — Documentation
+  description: Official documentation for Pergame, the free and self-hosted knowledge base.
 ---
 
 ::u-page-hero{class="dark:bg-gradient-to-b from-neutral-900 to-neutral-950"}
@@ -15,16 +15,16 @@ orientation: horizontal
 Your knowledge, [at home]{.text-primary}.
 
 #description
-Collectanea is an open-source, self-hosted knowledge base for writing, organising, searching, and sharing documents, with extended Markdown and offline support.
+Pergame is an open-source, self-hosted knowledge base for writing, organising, searching, and sharing documents, with extended Markdown and offline support.
 
 #links
   :::u-button
   ---
-  to: /discover/collectanea
+  to: /discover/pergame
   size: xl
   trailing-icon: i-lucide-arrow-right
   ---
-  Discover Collectanea
+  Discover Pergame
   :::
 
   :::u-button
@@ -33,7 +33,7 @@ Collectanea is an open-source, self-hosted knowledge base for writing, organisin
   color: neutral
   variant: outline
   size: xl
-  to: https://github.com/Smaug6739/Alexandrie
+  to: https://github.com/kamasylvia/Pergame
   target: _blank
   ---
   See on GitHub
@@ -41,8 +41,8 @@ Collectanea is an open-source, self-hosted knowledge base for writing, organisin
 
 #default
   ```bash [Terminal]
-  curl -O https://raw.githubusercontent.com/Smaug6739/Collectanea/main/docker-compose.yml
-  curl -o .env https://raw.githubusercontent.com/Smaug6739/Collectanea/main/.env.example
+  curl -O https://raw.githubusercontent.com/kamasylvia/Pergame/main/docker-compose.yml
+  curl -o .env https://raw.githubusercontent.com/kamasylvia/Pergame/main/.env.example
   docker compose up -d
   ```
 ::
@@ -71,7 +71,7 @@ Documentation for every step
   Write and organise
 
   #description
-  Master documents, permissions, media, and Collectanea's extended Markdown.
+  Master documents, permissions, media, and Pergame's extended Markdown.
   :::
 
   :::u-page-feature

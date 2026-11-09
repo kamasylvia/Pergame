@@ -1,13 +1,6 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/permissions"
-	"collectanea/pkg/logger"
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
-	"collectanea/types"
-	"collectanea/utils"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -15,6 +8,13 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"pergame/models"
+	"pergame/permissions"
+	"pergame/pkg/logger"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
+	"pergame/types"
+	"pergame/utils"
 	"regexp"
 	"slices"
 	"strconv"
@@ -181,9 +181,9 @@ func sendPasswordCreatedEmail(mailClient *mail.Client, user *models.User, resetT
 	}
 
 	message := mail.NewMsg()
-	message.FromFormat("Collectanea Team", mailFrom)
+	message.FromFormat("Pergame Team", mailFrom)
 	message.To(*user.Email)
-	message.Subject("Collectanea: Set your password")
+	message.Subject("Pergame: Set your password")
 
 	message.SetBodyString(
 		mail.TypeTextPlain,

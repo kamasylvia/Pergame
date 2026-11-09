@@ -52,7 +52,7 @@
 
         <div class="error-actions">
           <NuxtLink to="/dashboard" class="primary-button">
-            <span>Back to Collectanea</span>
+            <span>Back to Pergame</span>
             <span class="button-arrow">→</span>
           </NuxtLink>
 

@@ -17,7 +17,7 @@
 
 ## 1. 归档格式 v2(解决"能不能完全还原")
 
-`collectanea-backup-v2.zip`:
+`pergame-backup-v2.zip`:
 
 | 文件 | 内容 | 还原什么 |
 |---|---|---|
@@ -60,7 +60,7 @@
 Destinations = [
   { Name = "primary-s3",  Type = "s3",     Endpoint = "...", Bucket = "...", AccessKey = "...", Secret = "...", Secure = true, PathStyle = false, Prefix = "backups/", RetainDays = 7 },
   { Name = "offsite-s3",  Type = "s3",     ... },
-  { Name = "nas-webdav",  Type = "webdav", Url = "https://nas/dav/collectanea/", Username = "...", Password = "...", RetainDays = 30 },
+  { Name = "nas-webdav",  Type = "webdav", Url = "https://nas/dav/pergame/", Username = "...", Password = "...", RetainDays = 30 },
 ]
 ```
 

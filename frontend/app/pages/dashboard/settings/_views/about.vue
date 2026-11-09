@@ -13,7 +13,7 @@
       {{ t('settings.about.description') }} <br />
       {{ t('settings.about.features') }} <br />
       {{ t('settings.about.contact') }}
-      <NuxtLink to="https://github.com/Smaug6739/Alexandrie" target="_blank" style="font-weight: bold; color: var(--primary)">{{
+      <NuxtLink to="https://github.com/kamasylvia/Pergame" target="_blank" style="font-weight: bold; color: var(--primary)">{{
         t('settings.about.githubRepo')
       }}</NuxtLink
       >.
@@ -28,7 +28,7 @@
     <p style="display: flex; gap: 5px">
       {{ t('settings.about.seeFullChangelog') }}
       <span style="display: flex; align-items: center">
-        <NuxtLink to="https://github.com/Smaug6739/Alexandrie/releases/tag/v8.11.0" target="_blank" style="font-weight: bold; color: var(--primary)"
+        <NuxtLink to="https://github.com/kamasylvia/Pergame/releases/tag/v8.11.0" target="_blank" style="font-weight: bold; color: var(--primary)"
           >GitHub</NuxtLink
         >
         <Icon name="new_tab" display="sm" /></span

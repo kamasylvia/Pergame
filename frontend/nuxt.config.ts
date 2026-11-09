@@ -36,7 +36,7 @@ export default defineNuxtConfig({
         // SEO (url meta tags are defined in App.vue for dynamic URLs)
         {
           content:
-            'Collectanea is a modern note-taking and knowledge base application built for students & creators. Write, organize and render beautiful notes using extended Markdown in a fast, clean and distraction-free interface. Self-hostable with Docker.',
+            'Pergame is a modern note-taking and knowledge base application built for students & creators. Write, organize and render beautiful notes using extended Markdown in a fast, clean and distraction-free interface. Self-hostable with Docker.',
           name: 'description',
         },
         {
@@ -44,21 +44,21 @@ export default defineNuxtConfig({
             'markdown notes, note taking app, knowledge base, developer notes, markdown editor, personal wiki, technical documentation, pwa notes, docker, self-hosted',
           name: 'keywords',
         },
-        { content: 'Collectanea Team', name: 'author' },
+        { content: 'Pergame Team', name: 'author' },
         { content: 'index, follow', name: 'robots' },
         { content: 'strict-origin-when-cross-origin', name: 'referrer' },
 
         // PWA / Mobile
-        { content: 'Collectanea', name: 'application-name' },
-        { content: 'Collectanea', name: 'apple-mobile-web-app-title' },
+        { content: 'Pergame', name: 'application-name' },
+        { content: 'Pergame', name: 'apple-mobile-web-app-title' },
         { content: 'yes', name: 'apple-mobile-web-app-capable' },
         { content: 'yes', name: 'mobile-web-app-capable' },
         { content: '#3956e7', name: 'theme-color' },
 
         // Open Graph
         { content: 'website', property: 'og:type' },
-        { content: 'Collectanea', property: 'og:site_name' },
-        { content: 'Collectanea – Modern Markdown Note-Taking & Knowledge Base App', property: 'og:title' },
+        { content: 'Pergame', property: 'og:site_name' },
+        { content: 'Pergame – Modern Markdown Note-Taking & Knowledge Base App', property: 'og:title' },
         {
           content: 'A modern note-taking and knowledge base app for students and creators, built around extended Markdown and self-hostable with Docker.',
           property: 'og:description',
@@ -66,16 +66,16 @@ export default defineNuxtConfig({
         { content: '/icons/icon-192.png', property: 'og:image' },
 
         // Twitter Card
-        { content: 'Collectanea – Modern Markdown Note-Taking & Knowledge Base App', name: 'twitter:title' },
+        { content: 'Pergame – Modern Markdown Note-Taking & Knowledge Base App', name: 'twitter:title' },
         {
           content: 'Write and organize beautiful notes with extended Markdown. Fast, clean and developer-friendly. Self-hostable with Docker.',
           name: 'twitter:description',
         },
         { content: 'summary', name: 'twitter:card' },
         { content: '/icons/icon-192.png', name: 'twitter:image' },
-        { content: 'Collectanea', name: 'twitter:image:alt' },
+        { content: 'Pergame', name: 'twitter:image:alt' },
       ],
-      title: 'Collectanea | Modern Markdown Note-Taking & Knowledge Base App',
+      title: 'Pergame | Modern Markdown Note-Taking & Knowledge Base App',
       viewport: 'width=device-width, initial-scale=1',
 
       style: [
@@ -180,7 +180,7 @@ export default defineNuxtConfig({
       baseApi: '',
       baseCdn: '',
       baseUrl: '',
-      cdnEndpoint: '/collectanea/',
+      cdnEndpoint: '/pergame/',
       configDisableLandingPage: '',
       configDisableNativeLogin: false,
       configHideNativeLogin: false,
@@ -252,7 +252,7 @@ export default defineNuxtConfig({
           type: 'image/png',
         },
       ],
-      name: 'Collectanea',
+      name: 'Pergame',
       screenshots: [
         {
           form_factor: 'wide',
@@ -299,7 +299,7 @@ export default defineNuxtConfig({
           url: 'url',
         },
       },
-      short_name: 'Collectanea',
+      short_name: 'Pergame',
       start_url: '/dashboard',
       scope: '/',
       theme_color: '#3956e7',

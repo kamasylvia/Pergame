@@ -1,13 +1,13 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/permissions"
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
-	"collectanea/types"
-	"collectanea/utils"
 	"context"
+	"pergame/models"
+	"pergame/permissions"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
+	"pergame/types"
+	"pergame/utils"
 	"time"
 )
 

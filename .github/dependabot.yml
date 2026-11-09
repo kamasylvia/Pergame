@@ -7,15 +7,15 @@ updates:
   schedule:
     interval: "daily"
   reviewers:
-    - Smaug6739
+    - kamasylvia
   assignees:
-    - Smaug6739
+    - kamasylvia
 - package-ecosystem: gomod
   directory: '/backend'
   target-branch: "main"
   schedule:
     interval: "daily"
   reviewers:
-    - Smaug6739
+    - kamasylvia
   assignees:
-    - Smaug6739
+    - kamasylvia

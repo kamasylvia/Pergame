@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: collectanea-frontend
+    container_name: pergame-frontend
     restart: unless-stopped
     volumes:
       - ./frontend:/app
@@ -20,7 +20,7 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: collectanea-backend
+    container_name: pergame-backend
     restart: unless-stopped
 volumes:
   nuxt_build:

@@ -1,10 +1,10 @@
 package app
 
 import (
-	"collectanea/pkg/snowflake"
-	"collectanea/repositories"
-	"collectanea/services"
 	"log"
+	"pergame/pkg/snowflake"
+	"pergame/repositories"
+	"pergame/services"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"

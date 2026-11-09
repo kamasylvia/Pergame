@@ -6,7 +6,7 @@
 ## 1. 模型决策(Trilium 对位)
 
 Trilium:noteId(内容)+ branchId(树位置)分离,clone = 同一 noteId 多个 branch。
-Collectanea 现状:nodes 行 = 树位置 + 内容一体(id 即内容键,S3 路径、备份、搜索全挂 node.id)。
+Pergame 现状:nodes 行 = 树位置 + 内容一体(id 即内容键,S3 路径、备份、搜索全挂 node.id)。
 
 **选型:克隆表方案(轻量、不动内容存储)**
 - 新表 `node_links`:`(id, parent_id, node_id, order, created_timestamp)`,UNIQUE(parent_id, node_id)。

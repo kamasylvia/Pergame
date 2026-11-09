@@ -16,7 +16,7 @@
 #   -h        this help
 #
 # Requires: pg_dump, rclone. Cron example (daily 03:30):
-#   30 3 * * * /opt/collectanea/scripts/dr-backup.sh >> /var/log/dr-backup.log 2>&1
+#   30 3 * * * /opt/pergame/scripts/dr-backup.sh >> /var/log/dr-backup.log 2>&1
 #
 # Restore:
 #   rclone copy "<remote>:<prefix>/<source>/<timestamp>/" <local-dir>

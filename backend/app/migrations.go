@@ -1,9 +1,9 @@
 package app
 
 import (
-	"collectanea/pkg/logger"
 	"embed"
 	"fmt"
+	"pergame/pkg/logger"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/mysql"

@@ -21,7 +21,7 @@
         <p class="tagline">{{ t('landing.hero.tagline') }}</p>
         <div class="cta-buttons">
           <NuxtLink :prefetch="false" to="/dashboard" class="btn primary glow">{{ t('landing.hero.ctaPrimary') }}</NuxtLink>
-          <NuxtLink to="https://github.com/Smaug6739/Alexandrie" target="_blank" class="btn secondary"> {{ t('landing.hero.ctaSecondary') }} </NuxtLink>
+          <NuxtLink to="https://github.com/kamasylvia/Pergame" target="_blank" class="btn secondary"> {{ t('landing.hero.ctaSecondary') }} </NuxtLink>
         </div>
       </div>
       <img src="/screenshots/mock/0.png" class="hero-image" :alt="t('landing.hero.previewAlt')" />

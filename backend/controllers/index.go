@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"collectanea/app"
+	"pergame/app"
 )
 
 type Controller struct {

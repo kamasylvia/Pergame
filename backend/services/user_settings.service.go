@@ -1,9 +1,9 @@
 package services
 
 import (
-	"collectanea/models"
-	"collectanea/repositories"
-	"collectanea/types"
+	"pergame/models"
+	"pergame/repositories"
+	"pergame/types"
 )
 
 type UserSettingsService interface {

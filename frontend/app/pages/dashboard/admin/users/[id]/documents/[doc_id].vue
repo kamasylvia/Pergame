@@ -78,7 +78,7 @@
       <div class="content">
         <textarea v-model="document.content" class="side"></textarea>
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="side collectanea-theme" v-html="document.content_compiled" />
+        <div class="side pergame-theme" v-html="document.content_compiled" />
       </div>
     </div>
 

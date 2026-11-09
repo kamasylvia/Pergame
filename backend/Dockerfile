@@ -1,4 +1,4 @@
-# Backend Dockerfile for Collectanea
+# Backend Dockerfile for Pergame
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
