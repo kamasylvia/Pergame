@@ -115,6 +115,29 @@ pub struct NodeRow {
     pub updated_timestamp: i64,
 }
 
+/// Trash entry: a trashed subtree root plus its batch metadata
+/// (spec .work/features/trash.md §3.1).
+#[derive(Debug, FromRow, Serialize)]
+pub struct TrashRow {
+    #[serde(with = "sf")]
+    pub id: i64,
+    #[serde(with = "sf")]
+    pub user_id: i64,
+    #[serde(with = "sf_opt")]
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub role: i32,
+    pub icon: Option<String>,
+    pub size: Option<i64>,
+    pub deleted_at: i64,
+    /// Number of nodes restored/purged together with this root.
+    pub batch_size: i64,
+    pub created_timestamp: i64,
+    pub updated_timestamp: i64,
+}
+
 /// Permission row (reads only; permission CRUD is the P3.5 domain).
 #[derive(Debug, FromRow, Serialize)]
 pub struct PermissionRow {

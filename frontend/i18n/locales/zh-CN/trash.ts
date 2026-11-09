@@ -1,0 +1,18 @@
+export default {
+  children: '含 {count} 个子项',
+  deletedAt: '删除于 {date}',
+  deleteForever: '彻底删除',
+  deleteForeverConfirm: '彻底删除「{name}」？此操作无法撤销。',
+  emptied: '已彻底删除 {count} 个条目。',
+  empty: '回收站是空的。',
+  emptyConfirm: '彻底删除回收站中的全部内容？此操作无法撤销。',
+  emptyTrash: '清空回收站',
+  purged: '已彻底删除「{name}」。',
+  refresh: '刷新',
+  reparented: '原父目录仍在回收站中，该条目已移至根级。',
+  restore: '恢复',
+  restored: '已恢复「{name}」。',
+  restoreFailed: '恢复失败。',
+  subtitle: '删除的内容会保留 {days} 天，之后才会被永久清除。',
+  title: '回收站',
+};

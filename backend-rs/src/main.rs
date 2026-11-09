@@ -112,6 +112,9 @@ async fn main() {
         backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage);
     }
 
+    // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).
+    spawn_trash_sweeper(state.clone());
+
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/api/auth", post(routes::auth::login))
@@ -274,6 +277,13 @@ async fn main() {
         .route("/api/nodes/{nodeId}", get(routes::nodes::get_node))
         .route("/api/nodes/{nodeId}", put(routes::nodes::update_node))
         .route("/api/nodes/{nodeId}", delete(routes::nodes::delete_node))
+        .route("/api/trash", get(routes::trash::list_trash))
+        .route("/api/trash", delete(routes::trash::empty_trash))
+        .route(
+            "/api/trash/{nodeId}/restore",
+            post(routes::trash::restore_node),
+        )
+        .route("/api/trash/{nodeId}", delete(routes::trash::purge_node))
         .route("/api/users", post(routes::users::create_user))
         .route("/api/users/@me", get(routes::users::get_me))
         .route("/api/users/{id}", get(routes::users::get_user))
@@ -332,6 +342,38 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("server error");
+}
+
+/// Trash retention sweeper (spec .work/features/trash.md §2.2). Reads
+/// TRASH_RETENTION_DAYS (0/absent = never auto-purge) and
+/// TRASH_SWEEP_INTERVAL_HOURS (default 24) from the environment.
+fn spawn_trash_sweeper(state: AppState) {
+    let days: u64 = std::env::var("TRASH_RETENTION_DAYS")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(30);
+    if days == 0 {
+        tracing::info!("TRASH_RETENTION_DAYS=0: trash auto-purge disabled");
+        return;
+    }
+    let hours: u64 = std::env::var("TRASH_SWEEP_INTERVAL_HOURS")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .filter(|h| *h > 0)
+        .unwrap_or(24);
+    tracing::info!(days, hours, "trash retention sweeper enabled");
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(hours * 3600));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            match routes::trash::sweep_expired(&state, days).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(purged = n, "trash sweep purged expired nodes"),
+                Err(e) => tracing::error!(error = %e, "trash sweep failed"),
+            }
+        }
+    });
 }
 
 async fn shutdown_signal() {

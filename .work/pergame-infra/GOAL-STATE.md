@@ -51,12 +51,12 @@
 | 用户级快照(应用内) | v2 manifest + 内容寻址 blobs(`{uid}/manifests/`+`blobs[-e2e]/`),keep-10 + GC | 误删/误改恢复、可下载、可上传还原 | ✅ 全部实现 |
 | 定时自动快照 | `SNAPSHOT_INTERVAL_HOURS` ticker,复用 run_backup | 无人值守的用户级保护 | ✅ 实现(默认关) |
 | 实例级 3-2-1 异地 | dr-backup sidecar(pg_dump → 多 S3/WebDAV 目的地) | **主力备份目标** | ✅ 实现,待容器内实机验证 |
-| 本地误删恢复 | 回收站 | 用户明确要求,替代 git 级版本历史 | ⬜ **未做(下一个开发项)** |
+| 本地误删恢复 | 回收站 | 用户明确要求,替代 git 级版本历史 | ✅ 实现(2026-11-09) |
 | git 级版本控制 | — | 用户明确否决,不再评估 | ❌ 不做 |
 
 ### 下一步动作(按序)
 
-1. **回收站机制**(用户 2026-11-09 裁决,已进 TODO):删除节点 → trash(软删标记 + 保留期)→ 恢复/彻底删/清空;tree 查询过滤;前端回收站视图。**先落 spec 再实施**。
+1. ~~**回收站机制**~~ ✅ **已完成(2026-11-09)**:`migration 0005` + repo 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + 前端 `/dashboard/trash` + 保留期 sweeper(`TRASH_RETENTION_DAYS` 默认 30)。spec = `features/trash.md`。**待活环境验证**:集成用例 `trash_lifecycle`(`cargo test --test integration -- --ignored`)。
 2. 容器内实机验证备份全链(本机无 docker):`docker compose up` → 设置 Instance DR 配 conf → 立即备份 / `-l` / `-R` 还原;同时验证应用内快照创建/还原/下载。
 3. 部署 smoke(思源笔记 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南` 有 9 步清单,含新增的快照与 DR 步骤)。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。

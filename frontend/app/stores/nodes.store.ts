@@ -2,7 +2,7 @@ import { IndexedCollection } from '~/helpers/IndexedCollection';
 import { parseTags, mergeNode } from '~/helpers/node';
 import { LocalDbService } from '~/services/localDB';
 import { skipHydrate } from 'pinia';
-import type { DB_Node, DB_NodeLink, Node, NodeSearchResult, Permission } from './db_structures';
+import type { DB_Node, DB_NodeLink, Node, NodeSearchResult, Permission, TrashEntry } from './db_structures';
 import type { KanbanMetadata } from '~/components/Kanban/Board.vue';
 
 export type TeamRole = 0;
@@ -435,6 +435,39 @@ export const useNodesStore = defineStore('nodes', () => {
     isFetching.value = false;
   }
 
+  // ------------------------------------------------------------- trash
+  // Soft delete (spec .work/features/trash.md): DELETE /nodes/:id only moves
+  // the subtree to the trash; these actions list, restore and purge it.
+
+  async function fetchTrash(): Promise<TrashEntry[]> {
+    const request = await makeRequest<TrashEntry[]>('trash', 'GET', {});
+    return request.status === 'success' ? (request.result ?? []) : [];
+  }
+
+  async function restoreFromTrash(id: string): Promise<{ restored: number; reparented: boolean }> {
+    const request = await makeRequest<{ restored: number; reparented: boolean }>(
+      `trash/${id}/restore`,
+      'POST',
+      {},
+    );
+    if (request.status === 'success' && request.result) {
+      // Re-fetch the tree so the restored subtree reappears with fresh state.
+      await fetch();
+      return request.result;
+    }
+    return { restored: 0, reparented: false };
+  }
+
+  async function purgeFromTrash(id: string): Promise<number> {
+    const request = await makeRequest<{ purged: number }>(`trash/${id}`, 'DELETE', {});
+    return request.status === 'success' ? (request.result?.purged ?? 0) : 0;
+  }
+
+  async function emptyTrash(): Promise<number> {
+    const request = await makeRequest<{ purged: number }>('trash', 'DELETE', {});
+    return request.status === 'success' ? (request.result?.purged ?? 0) : 0;
+  }
+
   return {
     nodes: skipHydrate(nodes),
     allTags,
@@ -467,5 +500,9 @@ export const useNodesStore = defineStore('nodes', () => {
     remove,
     bulkDelete,
     clear,
+    fetchTrash,
+    restoreFromTrash,
+    purgeFromTrash,
+    emptyTrash,
   };
 });

@@ -22,10 +22,11 @@ pub async fn get_by_node_recursive(
     sqlx::query_as::<_, PermissionRow>(
         r#"
         WITH RECURSIVE descendants AS (
-            SELECT id FROM nodes WHERE id = $1
+            SELECT id FROM nodes WHERE id = $1 AND deleted_at IS NULL
             UNION ALL
             SELECT n.id FROM nodes n
             INNER JOIN descendants d ON n.parent_id = d.id
+            WHERE n.deleted_at IS NULL
         )
         SELECT p.id, p.node_id, p.user_id, p.permission, p.created_timestamp
         FROM permissions p

@@ -307,6 +307,92 @@ async fn nodes_lifecycle() {
     let _ = r;
 }
 
+// ---------------------------------------------------------------- trash
+
+/// Soft delete → trash listing → restore → purge (spec
+/// .work/features/trash.md). Deletion must be reversible, and the tree must
+/// hide trashed rows until they come back.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn trash_lifecycle() {
+    let client = Client::new();
+    let (user_id, suffix) = signup_and_login_tagged(&client, "trash").await;
+
+    // Workspace with one document inside.
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("tws-{suffix}"), "role": 1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let ws_id = result_id_string(&r);
+
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("tdoc-{suffix}"), "role": 3, "parent_id": ws_id, "content": "# trash"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let doc_id = result_id_string(&r);
+
+    // Trash starts empty for this user.
+    let (status, r) = get(&client, "/trash").await;
+    assert_eq!(status, 200);
+    assert!(r.result.as_array().expect("array").is_empty());
+
+    // Delete the workspace: soft delete takes the subtree but the node stays
+    // reachable from the trash and disappears from the tree.
+    let (status, r) = del(&client, &format!("/nodes/{ws_id}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["nodes"].as_u64().unwrap_or(0), 2);
+
+    let (status, r) = get(&client, &format!("/nodes/user/{user_id}")).await;
+    assert_eq!(status, 200);
+    let arr = r.result.as_array().expect("array");
+    assert!(
+        arr.iter().all(|n| n["id"] != json!(ws_id)),
+        "trashed node must not appear in the tree"
+    );
+
+    // Trash lists only the subtree root, with its batch size.
+    let (status, r) = get(&client, "/trash").await;
+    assert_eq!(status, 200);
+    let arr = r.result.as_array().expect("array");
+    assert_eq!(arr.len(), 1, "only the subtree root is listed");
+    assert_eq!(arr[0]["id"], json!(ws_id));
+    assert_eq!(arr[0]["batch_size"].as_u64().unwrap_or(0), 2);
+
+    // Restore brings both nodes back into the tree.
+    let (status, r) = post_json(&client, &format!("/trash/{ws_id}/restore"), &json!({})).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["restored"].as_u64().unwrap_or(0), 2);
+
+    let (status, r) = get(&client, &format!("/nodes/user/{user_id}")).await;
+    assert_eq!(status, 200);
+    let arr = r.result.as_array().expect("array");
+    assert!(
+        arr.iter().any(|n| n["id"] == json!(ws_id)),
+        "restored node is back in the tree"
+    );
+
+    // Purge: delete again, then remove permanently.
+    let (status, _) = del(&client, &format!("/nodes/{ws_id}")).await;
+    assert_eq!(status, 200);
+    let (status, r) = del(&client, &format!("/trash/{ws_id}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["purged"].as_u64().unwrap_or(0), 2);
+
+    let (status, _) = get(&client, &format!("/nodes/{doc_id}")).await;
+    assert_eq!(status, 404);
+
+    // Empty trash on an already empty trash is a no-op.
+    let (status, _) = del(&client, "/trash").await;
+    assert_eq!(status, 200);
+    let _ = user_id;
+}
+
 // ---------------------------------------------------------------- permissions
 
 #[tokio::test]

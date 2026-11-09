@@ -1,0 +1,18 @@
+export default {
+  children: '내부 항목 {count}개',
+  deletedAt: '{date} 삭제됨',
+  deleteForever: '영구 삭제',
+  deleteForeverConfirm: '"{name}"을(를) 영구 삭제하시겠습니까? 되돌릴 수 없습니다.',
+  emptied: '항목 {count}개가 영구 삭제되었습니다.',
+  empty: '휴지통이 비어 있습니다.',
+  emptyConfirm: '휴지통의 모든 항목을 영구 삭제하시겠습니까? 되돌릴 수 없습니다.',
+  emptyTrash: '휴지통 비우기',
+  purged: '"{name}"이(가) 영구 삭제되었습니다.',
+  refresh: '새로고침',
+  reparented: '원래 상위 항목이 아직 휴지통에 있어 최상위로 이동되었습니다.',
+  restore: '복원',
+  restored: '"{name}"이(가) 복원되었습니다.',
+  restoreFailed: '복원에 실패했습니다.',
+  subtitle: '삭제된 항목은 영구 삭제 전까지 {days}일 동안 보관됩니다.',
+  title: '휴지통',
+};

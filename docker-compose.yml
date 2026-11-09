@@ -91,6 +91,11 @@ services:
       # Optional end-to-end encryption passphrase for snapshot blobs.
       PERGAME_SNAPSHOT_PASSPHRASE: "${PERGAME_SNAPSHOT_PASSPHRASE:-}"
 
+      # Trash retention (days; 0 = keep deleted nodes forever).
+      TRASH_RETENTION_DAYS: "${TRASH_RETENTION_DAYS:-30}"
+      # How often the retention sweeper runs (hours).
+      TRASH_SWEEP_INTERVAL_HOURS: "${TRASH_SWEEP_INTERVAL_HOURS:-24}"
+
       # SMTP Configuration (only for password reset emails)
       # OPTIONAL: If you don't want to use email features, you can leave these variables empty
       SMTP_HOST: ${SMTP_HOST:-}

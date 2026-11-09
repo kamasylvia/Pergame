@@ -1,0 +1,18 @@
+export default {
+  children: 'und {count} enthaltene(s) Element(e)',
+  deletedAt: 'gelöscht am {date}',
+  deleteForever: 'Endgültig löschen',
+  deleteForeverConfirm: '"{name}" endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+  emptied: '{count} Element(e) endgültig gelöscht.',
+  empty: 'Der Papierkorb ist leer.',
+  emptyConfirm: 'Alles im Papierkorb endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+  emptyTrash: 'Papierkorb leeren',
+  purged: '"{name}" endgültig gelöscht.',
+  refresh: 'Aktualisieren',
+  reparented: 'Das ursprüngliche übergeordnete Element ist noch im Papierkorb — das Element wurde in das Stammverzeichnis verschoben.',
+  restore: 'Wiederherstellen',
+  restored: '"{name}" wiederhergestellt.',
+  restoreFailed: 'Wiederherstellung fehlgeschlagen.',
+  subtitle: 'Gelöschte Elemente werden {days} Tage aufbewahrt, bevor sie endgültig entfernt werden.',
+  title: 'Papierkorb',
+};

@@ -360,9 +360,10 @@ pub async fn update_node(
     Ok(ApiOk::ok(updated))
 }
 
-/// DELETE /nodes/:nodeId — delete-level guard; descendant role=4 files are
-/// collected for storage cleanup (S3 client lands with P3.5; deletion itself
-/// matches the Go DB cascade).
+/// DELETE /nodes/:nodeId — delete-level guard; the subtree is moved to the
+/// trash (soft delete, spec .work/features/trash.md). Storage objects are NOT
+/// touched here: purge/empty is the only place resource files are removed, so
+/// a restore always finds its files intact.
 pub async fn delete_node(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -372,20 +373,10 @@ pub async fn delete_node(
     let id = resolve_id(&node_id)?.as_i64();
     let node = guard::require_node_action(&state.db, &actor, id, NodeAction::Delete).await?;
 
-    // Storage cleanup: descendant role=4 files are removed before the DB
-    // cascade (Go parity: failures logged and ignored).
-    if let Some(storage) = &state.storage
-        && let Ok(resources) = node_repo::descendant_resources(&state.db, node.id).await
-    {
-        for (res_id, res_user, metadata) in resources {
-            storage
-                .delete_resource_files(res_user, res_id, metadata.as_ref())
-                .await;
-        }
-    }
-
-    node_repo::delete(&state.db, node.id)
-        .await
-        .map_err(ApiError::from)?;
-    Ok(ApiOk::ok(json!("OK")))
+    let (deleted_at, affected) =
+        node_repo::soft_delete_subtree(&state.db, node.id, node_repo::now_ms()).await?;
+    Ok(ApiOk::ok(json!({
+        "deleted_at": deleted_at,
+        "nodes": affected,
+    })))
 }

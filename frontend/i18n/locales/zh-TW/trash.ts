@@ -1,0 +1,18 @@
+export default {
+  children: '含 {count} 個子項',
+  deletedAt: '刪除於 {date}',
+  deleteForever: '永久刪除',
+  deleteForeverConfirm: '永久刪除「{name}」？此操作無法復原。',
+  emptied: '已永久刪除 {count} 個項目。',
+  empty: '回收站是空的。',
+  emptyConfirm: '永久刪除回收站中的全部內容？此操作無法復原。',
+  emptyTrash: '清空回收站',
+  purged: '已永久刪除「{name}」。',
+  refresh: '重新整理',
+  reparented: '原父目錄仍在回收站中，該項目已移至根層。',
+  restore: '還原',
+  restored: '已還原「{name}」。',
+  restoreFailed: '還原失敗。',
+  subtitle: '刪除的內容會保留 {days} 天，之後才會被永久清除。',
+  title: '回收站',
+};

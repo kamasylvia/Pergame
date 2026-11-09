@@ -15,6 +15,7 @@ import settings from './settings';
 import time from './time';
 import user from './user';
 import teams from './teams';
+import trash from './trash';
 
 export default {
   admin,
@@ -31,5 +32,6 @@ export default {
   settings,
   teams,
   time,
+  trash,
   user,
 } satisfies MessageSchema;

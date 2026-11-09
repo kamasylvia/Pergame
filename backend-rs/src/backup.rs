@@ -306,7 +306,8 @@ pub async fn run_backup(
         let rows: Vec<crate::models::NodeRow> = match sqlx::query_as::<_, crate::models::NodeRow>(
             "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail, \
              theme, accessibility, access, display, \"order\" AS node_order, content, content_compiled, size, \
-             metadata, created_timestamp, updated_timestamp FROM nodes WHERE user_id = $1",
+             metadata, created_timestamp, updated_timestamp FROM nodes WHERE user_id = $1 \
+             AND deleted_at IS NULL",
         )
         .bind(user_id)
         .fetch_all(&sql)
@@ -335,7 +336,7 @@ pub async fn run_backup(
         let links: Vec<NodeLinkBackup> = match sqlx::query_as::<_, NodeLinkBackup>(
             "SELECT nl.id::text, nl.parent_id::text, nl.node_id::text, nl.created_timestamp, nl.\"order\" \
              FROM node_links nl JOIN nodes n ON n.id = nl.node_id \
-             WHERE n.user_id = $1 ORDER BY nl.id",
+             WHERE n.user_id = $1 AND n.deleted_at IS NULL ORDER BY nl.id",
         )
         .bind(user_id)
         .fetch_all(&sql)
@@ -363,7 +364,7 @@ pub async fn run_backup(
     if options.include_files {
         let resources: Vec<ResourceRow> = sqlx::query_as(
             r#"SELECT id, metadata, content, size FROM nodes
-                   WHERE user_id = $1 AND role = 4"#,
+                   WHERE user_id = $1 AND role = 4 AND deleted_at IS NULL"#,
         )
         .bind(user_id)
         .fetch_all(&sql)

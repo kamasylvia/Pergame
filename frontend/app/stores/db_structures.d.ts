@@ -67,6 +67,23 @@ export interface Node extends DB_Node {
   _children?: Node[];
 }
 
+/** Trashed subtree root (spec .work/features/trash.md §3.1). */
+export interface TrashEntry {
+  id: string;
+  user_id: string;
+  parent_id: string | null;
+  name: string;
+  description?: string;
+  tags?: string;
+  role: number;
+  icon?: string;
+  size?: number;
+  deleted_at: number;
+  batch_size: number;
+  created_timestamp: number;
+  updated_timestamp: number;
+}
+
 export interface User {
   id: string;
   type: number; // 0: Normal; 1 Supervised

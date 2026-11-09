@@ -1,0 +1,18 @@
+export default {
+  children: 'et {count} élément(s) à l\'intérieur',
+  deletedAt: 'supprimé le {date}',
+  deleteForever: 'Supprimer définitivement',
+  deleteForeverConfirm: 'Supprimer définitivement « {name} » ? Cette action est irréversible.',
+  emptied: '{count} élément(s) supprimé(s) définitivement.',
+  empty: 'La corbeille est vide.',
+  emptyConfirm: 'Supprimer définitivement tout le contenu de la corbeille ? Cette action est irréversible.',
+  emptyTrash: 'Vider la corbeille',
+  purged: '« {name} » supprimé définitivement.',
+  refresh: 'Actualiser',
+  reparented: 'Le parent d\'origine est toujours dans la corbeille — l\'élément a été déplacé à la racine.',
+  restore: 'Restaurer',
+  restored: '« {name} » restauré.',
+  restoreFailed: 'La restauration a échoué.',
+  subtitle: 'Les éléments supprimés sont conservés {days} jours avant leur suppression définitive.',
+  title: 'Corbeille',
+};

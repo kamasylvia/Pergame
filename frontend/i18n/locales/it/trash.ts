@@ -1,0 +1,18 @@
+export default {
+  children: 'e {count} elemento/i all\'interno',
+  deletedAt: 'eliminato il {date}',
+  deleteForever: 'Elimina definitivamente',
+  deleteForeverConfirm: 'Eliminare definitivamente "{name}"? L\'operazione è irreversibile.',
+  emptied: '{count} elemento/i eliminato/i definitivamente.',
+  empty: 'Il cestino è vuoto.',
+  emptyConfirm: 'Eliminare definitivamente tutto il contenuto del cestino? L\'operazione è irreversibile.',
+  emptyTrash: 'Svuota cestino',
+  purged: '"{name}" eliminato definitivamente.',
+  refresh: 'Aggiorna',
+  reparented: 'Il genitore originale è ancora nel cestino — l\'elemento è stato spostato nella radice.',
+  restore: 'Ripristina',
+  restored: '"{name}" ripristinato.',
+  restoreFailed: 'Ripristino non riuscito.',
+  subtitle: 'Gli elementi eliminati vengono conservati per {days} giorni prima della rimozione definitiva.',
+  title: 'Cestino',
+};

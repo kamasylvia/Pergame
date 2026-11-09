@@ -26,3 +26,13 @@
 - **掩码写入的经典陷阱**:读时掩码 `***`、写时回填旧值——字符串重组的切片边界(`&line[q2..]` vs `[q2+1..]`)错了会每次 round-trip 多一个引号,而宽容的解析器不报错。**掩码往返必须有 assert 等值测试**(`unmask_content(masked) == original`)。
 - **DR/备份类权限面**:全库还原能力只给 role=2 admin,且要在前端做二次确认;conf 里目的地密钥经 admin API 可写但读永远掩码。
 - **本机无 pg_dump/rclone**:DR sidecar 端到端只能验到「job 协议 + 脚本被调用 + 错误回传」,真实 dump 必须在有 docker 的机器上验;`postgres:17-alpine` 做 sidecar 基础镜像可保证 pg_dump 与库版本匹配。
+
+## 2026-11-09 回收站批次
+
+- **软删必须切断「删除即清 S3」的耦合**:上游 `DeleteNode` 是「捞 role=4 资源 → 删 MinIO 对象 → DB 级联物理删」一条龙。改软删时若保留 S3 清理段,恢复回来的节点资源全指向已删对象。**规则:资源清理只允许存在于 purge/empty 路径**。
+- **级联软删要用同一个时间戳做批次键**:`soft_delete_subtree` 给整棵子树写同一个 `deleted_at`,恢复时按该值取子集;否则父子批次无法区分,会出现「恢复了子节点但父节点还在回收站」的悬挂。恢复时若父节点仍在删除态(`deleted_at <> 本批`)须上提为根级。
+- **回收站列表只列子树根**:条件 = 已删且「父节点不存在或父 `deleted_at` 不同」。少这一步会让删掉一个目录后列表出现整棵子树几十行。
+- **配额统计故意不排除已删节点**:`uploads_size` 保留已删行(文件仍占 S3),否则用户可以「删除 → 绕过总量配额」。这是有意的例外,别在后续清理时"顺手"加上 `deleted_at IS NULL`。
+- **i18n 8 个 locale 都被 `satisfies MessageSchema` 强约束**:新增翻译 key 必须同时补齐 en/de/fr/it/ko/uk/zh-CN/zh-TW 全部 8 份,漏一个就 typecheck 挂。生成脚本批量写 + 逐个接 index.ts 是可行路径(改后 `grep -c trash` 验)。
+- **perfectionist/sort-objects 会拦 locale 文件**:`.ts` 语言包也在 eslint 管辖内,手写对象字面量天然不满足字母序 → 写完后必须跑 `bun run lint --fix`,否则 CI 红。
+- **`definePageMeta({layout})` 只能引用真实 layout**:本仓 `frontend/app/layouts/` 只有 `public.vue`,dashboard 页走默认布局;写 `layout: 'dashboard'` 直接 typecheck 报错。

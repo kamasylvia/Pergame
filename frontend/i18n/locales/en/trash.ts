@@ -1,0 +1,18 @@
+export default {
+  children: 'and {count} item(s) inside',
+  deletedAt: 'deleted {date}',
+  deleteForever: 'Delete forever',
+  deleteForeverConfirm: 'Permanently delete "{name}"? This cannot be undone.',
+  emptied: '{count} item(s) permanently deleted.',
+  empty: 'The trash is empty.',
+  emptyConfirm: 'Permanently delete everything in the trash? This cannot be undone.',
+  emptyTrash: 'Empty trash',
+  purged: '"{name}" permanently deleted.',
+  refresh: 'Refresh',
+  reparented: 'The original parent is still in the trash — the item was moved to the root.',
+  restore: 'Restore',
+  restored: '"{name}" restored.',
+  restoreFailed: 'Restore failed.',
+  subtitle: 'Deleted items are kept for {days} days before permanent removal.',
+  title: 'Trash',
+};
