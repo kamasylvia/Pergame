@@ -24,7 +24,7 @@
 
 - [ ] 自托管 smoke(本机无 docker):`docker compose up --build` 后端正常启动(`S3_*` 链路)、注册/登录可用。改名后默认值已切 `pergame`(DB/桶/CDN 路径),首次起库即新名。
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
-- [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。conf 里库名/桶前缀已随改名切 `pergame-*`。
+- [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。conf 里库名/桶前缀已随改名切 `pergame-*`。还原用 `-R <source> [-t <stamp>]`(非交互加 `-y`;`-l` 列快照)。
 - [ ] push 51+ commits 到 origin(kamasylvia/Pergame)——待拍板(公开仓 push 前可按全局规则压缩重组)。(2026-11-09:首 15 个已压缩为 5 主题 commits 并推上 origin/main `6e0abd8a`;此后增量照常。)
 
 ## 维护说明
