@@ -86,6 +86,11 @@ services:
       S3_SECRETKEY: ${RUSTFS_SECRET_KEY:-pergame-secret}
       S3_BUCKET: ${S3_BUCKET:-pergame}
 
+      # Scheduled user-level snapshots (hours; 0/unset = disabled).
+      SNAPSHOT_INTERVAL_HOURS: "${SNAPSHOT_INTERVAL_HOURS:-0}"
+      # Optional end-to-end encryption passphrase for snapshot blobs.
+      PERGAME_SNAPSHOT_PASSPHRASE: "${PERGAME_SNAPSHOT_PASSPHRASE:-}"
+
       # SMTP Configuration (only for password reset emails)
       # OPTIONAL: If you don't want to use email features, you can leave these variables empty
       SMTP_HOST: ${SMTP_HOST:-}
