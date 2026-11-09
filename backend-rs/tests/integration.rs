@@ -559,7 +559,7 @@ async fn soft_links_lifecycle() {
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
 async fn backup_zip_contains_links() {
     let client = Client::new();
-    let (owner_id, suffix) = signup_and_login_tagged(&client, "bklinks").await;
+    let (_owner_id, suffix) = signup_and_login_tagged(&client, "bklinks").await;
 
     let mk = |name: String| json!({"name": name, "role": 1});
     let (status, r) = post_json(&client, "/nodes", &mk(format!("ws1-{suffix}"))).await;
@@ -606,7 +606,7 @@ async fn backup_zip_contains_links() {
         if let Some(err) = job.get("error").and_then(|v| v.as_str()) {
             panic!("backup job failed: {err}");
         }
-        if job.get("download_url").is_some() {
+        if job.get("progress").and_then(|v| v.as_i64()) == Some(100) {
             finished = true;
             break;
         }
@@ -626,37 +626,16 @@ async fn backup_zip_contains_links() {
         .expect("snapshot id")
         .to_string();
 
-    // Pull the zip straight from the backups bucket (env contract mirrors the
-    // backend's S3_* variables).
-    let endpoint = std::env::var("S3_ENDPOINT").expect("S3_ENDPOINT");
-    let access = std::env::var("S3_ACCESSKEY").expect("S3_ACCESSKEY");
-    let secret = std::env::var("S3_SECRETKEY").expect("S3_SECRETKEY");
-    let bucket = format!(
-        "{}-backups",
-        std::env::var("S3_BUCKET").unwrap_or_else(|_| "pergame".into())
-    );
-    let s3cfg = aws_sdk_s3::config::Builder::new()
-        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
-        .endpoint_url(endpoint)
-        .region(aws_sdk_s3::config::Region::new("us-east-1"))
-        .credentials_provider(aws_sdk_s3::config::Credentials::new(
-            access,
-            secret,
-            None,
-            None,
-            "integration-test",
-        ))
-        .force_path_style(true)
-        .build();
-    let s3 = aws_sdk_s3::Client::from_conf(s3cfg);
-    let obj = s3
-        .get_object()
-        .bucket(&bucket)
-        .key(format!("{owner_id}/snapshots/{snap_id}.zip"))
+    // Pull the assembled zip through the authenticated download endpoint
+    // (v2 snapshots are assembled from blobs server-side).
+    let resp = client
+        .http
+        .get(format!("{BASE_URL}/backup/snapshots/{snap_id}/download"))
         .send()
         .await
-        .expect("backup zip in S3");
-    let bytes = obj.body.collect().await.expect("read body").into_bytes();
+        .expect("backup zip download");
+    assert_eq!(resp.status(), 200, "snapshot download failed");
+    let bytes = resp.bytes().await.expect("read body").to_vec();
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("valid zip");
     let mut doc_file = archive
@@ -753,7 +732,7 @@ async fn snapshot_restore_roundtrip() {
         if r.result.get("error").is_some() {
             panic!("backup failed: {:?}", r.result.get("error"));
         }
-        if r.result.get("download_url").is_some() {
+        if r.result.get("progress").and_then(|v| v.as_i64()) == Some(100) {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -842,19 +821,23 @@ async fn snapshot_restore_roundtrip() {
         "link restored"
     );
 
-    // Download URL signing works for snapshots too.
-    let (status, r) = get(
-        &client,
-        &format!("/backup/snapshots/{snapshot_id}/download"),
-    )
-    .await;
-    assert_eq!(status, 200);
+    // Download streams the (assembled) snapshot zip directly.
+    let resp = client
+        .http
+        .get(format!(
+            "{BASE_URL}/backup/snapshots/{snapshot_id}/download"
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "snapshot download failed");
     assert!(
-        r.result
-            .get("download_url")
-            .and_then(|v| v.as_str())
-            .is_some(),
-        "presigned snapshot URL present"
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .contains("zip"),
+        "download must be application/zip"
     );
     let _ = owner_id;
 }

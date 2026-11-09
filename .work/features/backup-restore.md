@@ -66,3 +66,35 @@ zip 解析复用 zip crate;内存上限:zip 字节 ≤256MB(axum DefaultBodyLimi
 - **还原预检**:POST /backup/snapshots/:id/preview、POST /backup/restore/upload/preview → RestorePlan(format、incoming/current/replaced/added/removed nodes、孤儿 parent、不可解析 links、files 碰撞[按 transformed_path 集合比对]、settings、warnings)。前端 arm 还原时异步调取并在警示区展示统计。
 
 实施 commits:后端 `8ed0d261`、前端 `2d0d9d55`。
+
+## 8 批次 B:快照存储 v2 — 内容寻址去重 + 可选端到端加密(思源 kernel/backup 对位)
+
+**动机**:zip 全量快照重复打包附件、无去重、明文落桶。v2 采用思源 backup 包模式(manifest + content-addressed blobs),非 chunk 级(避免重造 dejavu)。
+
+**布局**(桶 `pergame-backups`,用户前缀下):
+- `{uid}/manifests/{ts}.json` — 快照清单:id/version/created_at/memo/options/statistics/encryption/entries[]/files[]
+- `{uid}/blobs/{sha256}`(明文)或 `{uid}/blobs-e2e/{sha256}`(密文)— 内容寻址对象,**跨快照去重**(PUT 前 head 存在即跳过)
+- legacy `snapshots/*.zip`(v1)继续可读可还原(列表合并标注 legacy)
+
+**成员**:documents.json、user_settings.json、files/(逐附件,manifest.files[] 记 id/transformed_path/sha256/size)。manifest 自身不进 blobs。
+
+**加密**(可选):env `PERGAME_SNAPSHOT_PASSPHRASE` 非空即启用。AES-256-GCM,key = scrypt(passphrase, salt, N=2^15,r=8,p=1);salt 随机存于 manifest.encryption;blob key 用**明文** sha256(去重语义保持,首写版本为准)。manifest 本身不加密(无敏感内容,不含 passphrase)。还原/下载时按 manifest.encryption 解密 blobs。
+
+**组装兼容**:还原/下载/预检对 v2 = 先按 manifest 拉 blobs(解密)组装成 v1 形态 zip **内存流**,再喂既有 `restore_from_zip`/`plan_from_zip` 引擎(引擎零改动,已测路径全复用)。旧 zip 快照原样支持。
+
+**prune/GC**:keep-10 manifests;GC 删除不被任何保留 manifest 引用的 blobs(引用集 = 保留 manifests 的 entries∪files sha 并集)。
+
+**下载**:统一端点直出 bytes(Content-Disposition attachment;legacy 读 zip 对象,v2 组装),前端改 `window.location = API 下载地址`(cookie 鉴权,弃 presign 路径;job 完成的 presign 保留不变)。
+
+**新增依赖**:scrypt、aes-gcm、rand、hex(小而标准)。
+
+## 9 批次 B 实施(2026-11-09 已落地)
+
+- v2 快照 = `{uid}/manifests/{ts}.json` + `{uid}/blobs[-e2e]/{sha256}`;新快照一律 v2,legacy v1 zip 继续可读可还原可下载(列表合并,`format` 字段区分)。
+- 加密:env `PERGAME_SNAPSHOT_PASSPHRASE` 启用;blob 名 `blobs-e2e/`,key 仍为明文 sha256(去重保持);AES-256-GCM + scrypt(N=2^15),nonce 前缀,manifest.encryption 存 salt/KDF 参数;manifest 明文。加密快照解密需同 env。
+- 组装:还原/下载/预检对 v2 = 按 manifest 拉 blobs(解密)→ 内存组装 v1 形态 zip → 喂既有引擎(引擎零改动);组装含 manifest.json 成员自身(引擎格式门 MAX_FORMAT=2.0)。
+- 下载统一直出(`GET /backup/snapshots/:id/download` → zip bytes + Content-Disposition;cookie 鉴权),前端 `window.location` 到端点;job 完成的 presign 字段退役(前端不再依赖)。
+- 删除:v2 删 manifest(blobs 由备份时的 GC 按「保留集引用」清理);v1 删 zip + sidecar。
+- 集成测试改走组装下载端点;8/8 绿;24/24 单测(含 snapcrypto 加解密/错密码/salt 唯一)。
+
+实施 commits:后端(本批)、前端(本批)。

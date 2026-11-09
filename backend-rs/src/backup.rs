@@ -13,15 +13,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::Mutex;
 
-pub const BACKUP_VERSION: &str = "1.2.0";
+pub const BACKUP_VERSION: &str = "2.0.0";
 
+/// Snapshot storage format: v2 = manifest + content-addressed blobs
+/// (`{uid}/manifests/<ts>.json` + `{uid}/blobs[-e2e]/<sha256>`), deduped
+/// across snapshots; v1 = single zip (`{uid}/snapshots/<ts>.zip`), still
+/// restorable/downloadable. New snapshots are always v2.
 /// Snapshots kept per user; older ones are pruned after a successful backup
 /// (app-side retention replacing the removed bucket lifecycle rule).
 pub const SNAPSHOT_KEEP: usize = 10;
 
 /// Resource projection used while archiving file nodes.
 pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
-const BACKUP_EXPIRY_HOURS: i64 = 24;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackupOptions {
@@ -39,33 +42,58 @@ pub struct BackupOptions {
     pub memo: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkippedFile {
     pub id: String,
     pub name: String,
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BackupStats {
     pub total_nodes: i64,
     pub total_documents: i64,
     pub total_links: i64,
     pub total_files: i64,
     pub total_size_bytes: i64,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skipped_files: Vec<SkippedFile>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct BackupManifest {
     pub version: String,
+    pub id: String,
     pub created_at: String,
     pub user_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<crate::snapcrypto::EncryptionParams>,
     pub options: BackupOptions,
     pub statistics: BackupStats,
+    /// Logical members (documents.json / user_settings.json): path -> blob sha.
+    pub entries: Vec<ManifestEntry>,
+    /// Restored file attachments: original storage key + blob sha.
+    pub files: Vec<ManifestFile>,
+    /// Sum of member + file byte sizes (logical snapshot size).
+    pub logical_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct ManifestEntry {
+    pub path: String,
+    pub sha256: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct ManifestFile {
+    pub id: String,
+    pub key: String, // user-object storage key (transformed_path)
+    pub original_path: Option<String>,
+    pub sha256: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -265,11 +293,15 @@ pub async fn run_backup(
     }
     progress!(5, "Preparing backup...");
 
-    let mut stats = BackupStats::default();
-    let mut file_index: Vec<serde_json::Value> = vec![];
-    let mut archive = SimpleArchive::new();
+    let encryption =
+        crate::snapcrypto::passphrase_from_env().map(|_| crate::snapcrypto::new_params());
+    let passphrase = crate::snapcrypto::passphrase_from_env();
 
-    // ---------------- documents.json ----------------
+    // ---------------- v2: collect members, then content-addressed blobs ----
+    let mut members: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut files_meta: Vec<ManifestFile> = Vec::new();
+    let mut stats = BackupStats::default();
+
     if options.include_documents {
         let rows: Vec<crate::models::NodeRow> = match sqlx::query_as::<_, crate::models::NodeRow>(
             "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail, \
@@ -314,20 +346,20 @@ pub async fn run_backup(
         };
         stats.total_links = links.len() as i64;
         progress!(40, "Packaging documents...");
-        archive.add(
-            "documents.json",
-            &serde_json::to_vec_pretty(&json!({
+        members.push((
+            "documents.json".into(),
+            serde_json::to_vec_pretty(&json!({
                 "nodes": documents,
                 "links": links,
             }))
             .unwrap_or_default(),
-        );
+        ));
     }
     if store.is_cancelled(&job_id) {
         return;
     }
 
-    // ---------------- files/ + files_index.json ----------------
+    // ---------------- files (each attachment becomes a blob) ----------------
     if options.include_files {
         let resources: Vec<ResourceRow> = sqlx::query_as(
             r#"SELECT id, metadata, content, size FROM nodes
@@ -364,13 +396,34 @@ pub async fn run_backup(
                     continue;
                 }
             };
-            file_index.push(json!({
-                "id": res_id.to_string(),
-                "path": format!("files/{res_id}{ext}"),
-                "original_path": original,
-                "size": size,
-            }));
-            archive.add_stored(format!("files/{res_id}{ext}"), &bytes);
+            let sha = hex_sha(&bytes);
+            let (e2e, payload) = match (&encryption, &passphrase) {
+                (Some(params), Some(pass)) => {
+                    match crate::snapcrypto::encrypt(params, pass, &bytes) {
+                        Ok(b) => (true, b),
+                        Err(e) => {
+                            fail!(format!("Failed to encrypt blob: {e}"));
+                        }
+                    }
+                }
+                _ => (false, bytes.clone()),
+            };
+            // Content-addressed dedup: same bytes are stored once per user.
+            if !storage
+                .blob_exists(user_id, e2e, &sha)
+                .await
+                .unwrap_or(false)
+                && let Err(e) = storage.put_blob(user_id, e2e, &sha, payload).await
+            {
+                fail!(format!("Failed to store blob {sha}: {e}"));
+            }
+            files_meta.push(ManifestFile {
+                id: res_id.to_string(),
+                key: transformed,
+                original_path: original.clone(),
+                sha256: sha,
+                size: (*size).unwrap_or(bytes.len() as i64) as u64,
+            });
         }
     }
 
@@ -390,138 +443,158 @@ pub async fn run_backup(
             "user_id": user_id.to_string(),
             "general": g, "editor": e, "advanced": a,
         });
-        archive.add(
-            "user_settings.json",
-            &serde_json::to_vec_pretty(&settings).unwrap_or_default(),
-        );
+        members.push((
+            "user_settings.json".into(),
+            serde_json::to_vec_pretty(&settings).unwrap_or_default(),
+        ));
     }
 
-    // ---------------- manifest.json + files_index.json ----------------
+    // ---------------- manifest + blobs upload ----------------
+    let snapshot_id = crate::auth::service::now_ms();
+    let encryption =
+        crate::snapcrypto::passphrase_from_env().map(|_| crate::snapcrypto::new_params());
+    let passphrase = crate::snapcrypto::passphrase_from_env();
     let manifest = BackupManifest {
         version: BACKUP_VERSION.into(),
+        id: snapshot_id.to_string(),
         created_at: rfc3339_now(),
         user_id: user_id.to_string(),
         memo: options.memo.clone(),
+        encryption: encryption.clone(),
         options: options.clone(),
         statistics: stats.clone(),
+        entries: members
+            .iter()
+            .map(|(path, bytes)| ManifestEntry {
+                path: path.clone(),
+                sha256: hex_sha(bytes),
+                size: bytes.len() as u64,
+            })
+            .collect(),
+        files: files_meta.clone(),
+        logical_bytes: members.iter().map(|(_, b)| b.len() as u64).sum::<u64>()
+            + files_meta.iter().map(|f| f.size).sum::<u64>(),
     };
-    progress!(85, "Creating manifest...");
-    archive.add(
-        "manifest.json",
-        &serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
-    );
-    if options.include_files {
-        archive.add(
-            "files_index.json",
-            &serde_json::to_vec_pretty(&file_index).unwrap_or_default(),
-        );
+    progress!(85, "Writing blobs...");
+
+    for (_path, bytes) in &members {
+        let sha = hex_sha(bytes);
+        let (e2e, payload) = match (&encryption, &passphrase) {
+            (Some(params), Some(pass)) => match crate::snapcrypto::encrypt(params, pass, bytes) {
+                Ok(b) => (true, b),
+                Err(e) => {
+                    fail!(format!("Failed to encrypt blob: {e}"));
+                }
+            },
+            _ => (false, bytes.clone()),
+        };
+        if !storage
+            .blob_exists(user_id, e2e, &sha)
+            .await
+            .unwrap_or(false)
+            && let Err(e) = storage.put_blob(user_id, e2e, &sha, payload).await
+        {
+            fail!(format!("Failed to store blob {sha}: {e}"));
+        }
     }
 
-    if store.is_cancelled(&job_id) {
-        return;
-    }
-
-    // ---------------- upload + presign ----------------
-    progress!(90, "Uploading backup...");
-    let bytes = match archive.finish() {
-        Ok(b) => b,
-        Err(_) => fail!("Failed to finalize backup archive"),
-    };
-    let snapshot_id = crate::auth::service::now_ms();
-    let object_name = format!("{user_id}/snapshots/{snapshot_id}.zip");
-    let now_parts = time::OffsetDateTime::now_utc();
-    let filename = format!(
-        "pergame-backup-{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
-        now_parts.year(),
-        u8::from(now_parts.month()),
-        now_parts.day(),
-        now_parts.hour(),
-        now_parts.minute(),
-        now_parts.second(),
-    );
-    if let Err(e) = storage.put_backup_object(&object_name, bytes).await {
-        fail!(format!("Failed to upload backup: {e}"));
-    }
-    // Sidecar metadata (memo etc.) so listings can show it without reading
-    // the zip. Removed together with the snapshot by retention prune.
-    let sidecar = json!({
-        "id": snapshot_id,
-        "memo": options.memo,
-        "version": BACKUP_VERSION,
-        "created_at": rfc3339_now(),
-    });
-    let sidecar_name = format!("{user_id}/snapshots/{snapshot_id}.json");
+    let manifest_name = format!("{user_id}/manifests/{snapshot_id}.json");
     if let Err(e) = storage
         .put_backup_object(
-            &sidecar_name,
-            serde_json::to_vec(&sidecar).unwrap_or_default(),
+            &manifest_name,
+            serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
         )
         .await
     {
-        tracing::warn!(error = %e, "snapshot sidecar upload failed (non-fatal)");
+        fail!(format!("Failed to upload manifest: {e}"));
     }
-    let download_url = match storage.presign_backup_get(&object_name, &filename).await {
-        Ok(url) => url,
-        Err(e) => fail!(format!("Failed to generate download URL: {e}")),
-    };
 
-    // Retention: keep only the newest SNAPSHOT_KEEP snapshots (best-effort).
-    match storage.list_backup_snapshots(user_id).await {
-        Ok(mut snaps) => {
-            // keys sort by epoch-ms filename, so chronological == lexical.
-            snaps.sort_by(|a, b| a.0.cmp(&b.0));
-            let excess = snaps.len().saturating_sub(SNAPSHOT_KEEP);
-            for (key, _, _) in snaps.into_iter().take(excess) {
-                if let Err(e) = storage.delete_backup_object(&key).await {
-                    tracing::warn!(%key, error = %e, "snapshot prune failed (non-fatal)");
-                }
-                if let Some(sidecar) = key.strip_suffix(".zip") {
-                    storage
-                        .delete_backup_object(&format!("{sidecar}.json"))
-                        .await
-                        .ok();
-                }
+    // ---------------- retention (manifests + legacy zips) + blob GC --------
+    progress!(95, "Pruning old snapshots...");
+    let mut all: Vec<(String, &str)> = Vec::new();
+    for (key, _, _) in storage.list_manifests(user_id).await.unwrap_or_default() {
+        all.push((key.clone(), "manifest"));
+    }
+    for (key, _, _) in storage
+        .list_backup_snapshots(user_id)
+        .await
+        .unwrap_or_default()
+    {
+        all.push((key.clone(), "zip"));
+    }
+    all.sort();
+    let excess = all.len().saturating_sub(SNAPSHOT_KEEP);
+    let mut keep_keys: Vec<String> = Vec::new();
+    for (idx, (key, kind)) in all.iter().enumerate() {
+        if idx < excess {
+            storage.delete_backup_object(key).await.ok();
+            if *kind == "zip"
+                && let Some(sidecar) = key.strip_suffix(".zip")
+            {
+                storage
+                    .delete_backup_object(&format!("{sidecar}.json"))
+                    .await
+                    .ok();
             }
-            if excess > 0 {
-                tracing::info!(pruned = excess, "snapshot retention applied");
+        } else {
+            keep_keys.push(key.clone());
+        }
+    }
+    // GC: drop blobs no longer referenced by any retained manifest.
+    let mut referenced = std::collections::HashSet::new();
+    for key in &keep_keys {
+        if !key.contains("/manifests/") {
+            continue;
+        }
+        if let Ok(bytes) = storage.get_backup_object(key).await
+            && let Ok(m) = serde_json::from_slice::<BackupManifest>(&bytes)
+        {
+            for e in m.entries {
+                referenced.insert(e.sha256);
+            }
+            for f in m.files {
+                referenced.insert(f.sha256);
             }
         }
-        Err(e) => tracing::warn!(error = %e, "snapshot prune listing failed (non-fatal)"),
+    }
+    if let Ok(blob_keys) = storage.list_blob_keys(user_id).await {
+        for bk in blob_keys {
+            let sha = bk.rsplit('/').next().unwrap_or("");
+            if !referenced.contains(sha)
+                && let Err(e) = storage.delete_backup_object(&bk).await
+            {
+                tracing::warn!(%bk, error = %e, "blob GC failed (non-fatal)");
+            }
+        }
     }
 
-    let expires_at = time::OffsetDateTime::now_utc()
-        .checked_add(time::Duration::hours(BACKUP_EXPIRY_HOURS))
-        .map(|t| {
-            t.format(&time::format_description::well_known::Rfc3339)
-                .unwrap_or_default()
-        });
     store
         .update(&job_id, |j| {
             j.progress = 100;
-            j.message = "Backup completed successfully.".into();
-            j.download_url = Some(download_url);
-            j.expires_at = expires_at;
+            j.message = "Snapshot completed successfully.".into();
+            // download_url intentionally unset: snapshots download through
+            // the authenticated /backup/snapshots/:id/download endpoint.
         })
         .await;
 }
 
 /// Minimal in-memory zip assembler (stored/deflated entries).
-struct SimpleArchive {
+pub(crate) struct SimpleArchive {
     writer: Option<zip::ZipWriter<std::io::Cursor<Vec<u8>>>>,
 }
 
 impl SimpleArchive {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             writer: Some(zip::ZipWriter::new(std::io::Cursor::new(Vec::new()))),
         }
     }
 
-    fn add(&mut self, name: &str, bytes: &[u8]) {
+    pub(crate) fn add(&mut self, name: &str, bytes: &[u8]) {
         self.add_with(name, bytes, zip::CompressionMethod::Deflated);
     }
 
-    fn add_stored(&mut self, name: String, bytes: &[u8]) {
+    pub(crate) fn add_stored(&mut self, name: String, bytes: &[u8]) {
         self.add_with(name, bytes, zip::CompressionMethod::Stored);
     }
 
@@ -540,9 +613,17 @@ impl SimpleArchive {
         }
     }
 
-    fn finish(mut self) -> Result<Vec<u8>, zip::result::ZipError> {
+    pub(crate) fn finish(mut self) -> Result<Vec<u8>, zip::result::ZipError> {
         let writer = self.writer.take().expect("archive writer");
         let cursor = writer.finish()?;
         Ok(cursor.into_inner())
     }
+}
+
+/// SHA-256 hex of raw bytes (blob identity for v2 snapshots).
+pub(crate) fn hex_sha(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
 }

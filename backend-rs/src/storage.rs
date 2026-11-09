@@ -205,6 +205,138 @@ impl S3Storage {
         })
     }
 
+    /// Head-checks a blob; true when it already exists (content-addressed
+    /// dedup: skip the PUT).
+    pub async fn blob_exists(
+        &self,
+        user_id: i64,
+        e2e: bool,
+        sha256_hex: &str,
+    ) -> Result<bool, ApiError> {
+        let dir = if e2e { "blobs-e2e" } else { "blobs" };
+        let key = format!("{user_id}/{dir}/{sha256_hex}");
+        match self
+            .client
+            .head_object()
+            .bucket(&self.backup_bucket)
+            .key(&key)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("404") || msg.contains("NotFound") || msg.contains("NoSuchKey") {
+                    Ok(false)
+                } else {
+                    Err(ApiError::Internal(Box::new(std::io::Error::other(
+                        format!("blob head failed: {msg}"),
+                    ))))
+                }
+            }
+        }
+    }
+
+    /// PUTs a blob under `{uid}/blobs[-e2e]/{sha256}` (caller deduped).
+    pub async fn put_blob(
+        &self,
+        user_id: i64,
+        e2e: bool,
+        sha256_hex: &str,
+        content: Vec<u8>,
+    ) -> Result<(), ApiError> {
+        let dir = if e2e { "blobs-e2e" } else { "blobs" };
+        let key = format!("{user_id}/{dir}/{sha256_hex}");
+        self.client
+            .put_object()
+            .bucket(&self.backup_bucket)
+            .key(&key)
+            .body(content.into())
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                tracing::error!(error = %e, %key, "put blob failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to store blob")))
+            })
+    }
+
+    /// GETs a blob by hex sha (decryption is the caller's concern).
+    pub async fn get_blob(
+        &self,
+        user_id: i64,
+        e2e: bool,
+        sha256_hex: &str,
+    ) -> Result<Vec<u8>, ApiError> {
+        let dir = if e2e { "blobs-e2e" } else { "blobs" };
+        let key = format!("{user_id}/{dir}/{sha256_hex}");
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.backup_bucket)
+            .key(&key)
+            .send()
+            .await
+            .map_err(|_| ApiError::NotFound("blob not found".into()))?;
+        let bytes = resp.body.collect().await.map_err(|e| {
+            tracing::error!(error = %e, %key, "read blob failed");
+            ApiError::Internal(Box::new(std::io::Error::other("failed to read blob")))
+        })?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Lists manifest objects under `{uid}/manifests/` as (key, size, mtime_ms).
+    pub async fn list_manifests(&self, user_id: i64) -> Result<Vec<(String, i64, i64)>, ApiError> {
+        let prefix = format!("{user_id}/manifests/");
+        let mut out = Vec::new();
+        let resp = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.backup_bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "list manifests failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to list snapshots")))
+            })?;
+        for obj in resp.contents() {
+            let Some(key) = obj.key() else { continue };
+            let size = obj.size().unwrap_or(0);
+            let mtime = obj
+                .last_modified()
+                .and_then(|t| t.to_millis().ok())
+                .unwrap_or(0);
+            out.push((key.to_string(), size, mtime));
+        }
+        Ok(out)
+    }
+
+    /// Lists all blob keys under both blob dirs (for GC reachability checks).
+    pub async fn list_blob_keys(&self, user_id: i64) -> Result<Vec<String>, ApiError> {
+        let mut out = Vec::new();
+        for dir in ["blobs", "blobs-e2e"] {
+            let prefix = format!("{user_id}/{dir}/");
+            let resp = self
+                .client
+                .list_objects_v2()
+                .bucket(&self.backup_bucket)
+                .prefix(&prefix)
+                .send()
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "list blobs failed");
+                    ApiError::Internal(Box::new(std::io::Error::other("failed to list blobs")))
+                })?;
+            for obj in resp.contents() {
+                if let Some(key) = obj.key() {
+                    out.push(key.to_string());
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// Lists backup-snapshot objects under `{uid}/snapshots/` as
     /// (key, size_bytes, last_modified_epoch_ms), oldest first.
     pub async fn list_backup_snapshots(

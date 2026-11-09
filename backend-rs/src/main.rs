@@ -13,6 +13,7 @@ mod repo;
 mod response;
 mod restore;
 mod routes;
+mod snapcrypto;
 mod state;
 mod storage;
 mod types;

@@ -8,6 +8,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use serde_json::json;
 use sqlx::PgPool;
 use zip::ZipArchive;
 
@@ -30,7 +31,7 @@ pub struct RestoreReport {
 }
 
 /// Highest accepted archive format (semver-ish major.minor pair).
-const MAX_FORMAT: (u32, u32) = (1, 2);
+const MAX_FORMAT: (u32, u32) = (2, 0); // v2 archives (manifest+blobs assembled) and legacy 1.x
 
 fn as_i64(v: Option<&Value>) -> Option<i64> {
     v.and_then(|v| {
@@ -568,4 +569,78 @@ pub async fn plan_from_zip(
     }
 
     Ok(plan)
+}
+
+/// Assembles a v2 snapshot (manifest + deduped blobs) back into the v1 zip
+/// shape the restore/preview engine consumes, decrypting blobs when the
+/// manifest says the snapshot is encrypted.
+pub async fn assemble_snapshot_zip(
+    storage: &S3Storage,
+    user_id: i64,
+    manifest: crate::backup::BackupManifest,
+) -> Result<Vec<u8>, ApiError> {
+    let passphrase = crate::snapcrypto::passphrase_from_env();
+    if manifest.encryption.is_some() && passphrase.is_none() {
+        return Err(ApiError::BadRequest(
+            "snapshot is encrypted but PERGAME_SNAPSHOT_PASSPHRASE is not configured".into(),
+        ));
+    }
+    let mut archive = crate::backup::SimpleArchive::new();
+    // The manifest itself is an archive member (the engine gates on it).
+    archive.add(
+        "manifest.json",
+        &serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
+    );
+    for e in &manifest.entries {
+        let blob = storage
+            .get_blob(user_id, manifest.encryption.is_some(), &e.sha256)
+            .await?;
+        let plain = match (&manifest.encryption, &passphrase) {
+            (Some(params), Some(pass)) => crate::snapcrypto::decrypt(params, pass, &blob)
+                .map_err(|e| ApiError::BadRequest(format!("snapshot decrypt: {e}")))?,
+            _ => blob,
+        };
+        archive.add(&e.path, &plain);
+    }
+    // files_index.json rebuilt from manifest.files; zip member paths follow the
+    // v1 layout (files/<id><ext>).
+    let mut idx = Vec::with_capacity(manifest.files.len());
+    for f in &manifest.files {
+        let ext = f
+            .key
+            .rsplit_once('.')
+            .map(|(_, e)| format!(".{e}"))
+            .unwrap_or_default();
+        let path = format!("files/{}{}", f.id, ext);
+        idx.push(json!({
+            "id": f.id,
+            "path": path,
+            "original_path": f.original_path,
+            "size": f.size,
+        }));
+    }
+    archive.add(
+        "files_index.json",
+        &serde_json::to_vec_pretty(&idx).unwrap_or_default(),
+    );
+    for f in &manifest.files {
+        let ext = f
+            .key
+            .rsplit_once('.')
+            .map(|(_, e)| format!(".{e}"))
+            .unwrap_or_default();
+        let path = format!("files/{}{}", f.id, ext);
+        let blob = storage
+            .get_blob(user_id, manifest.encryption.is_some(), &f.sha256)
+            .await?;
+        let plain = match (&manifest.encryption, &passphrase) {
+            (Some(params), Some(pass)) => crate::snapcrypto::decrypt(params, pass, &blob)
+                .map_err(|e| ApiError::BadRequest(format!("snapshot decrypt: {e}")))?,
+            _ => blob,
+        };
+        archive.add_stored(path, &plain);
+    }
+    archive
+        .finish()
+        .map_err(|e| ApiError::BadRequest(format!("snapshot assembly failed: {e}")))
 }

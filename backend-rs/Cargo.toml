@@ -36,6 +36,9 @@ url = "2.5.8"
 aws-smithy-http-client = { version = "1.5", features = ["rustls-ring"] }
 aws-smithy-runtime-api = { version = "1.9", default-features = false, features = ["client"] }
 zip = { version = "9.4.2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+aes-gcm = "0.10"
+scrypt = { version = "0.11", default-features = false, features = ["std", "simple"] }
 
 [profile.release]
 lto = "thin"

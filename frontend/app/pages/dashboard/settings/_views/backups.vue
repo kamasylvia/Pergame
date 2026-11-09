@@ -250,12 +250,10 @@ async function loadSnapshots() {
 }
 
 async function downloadSnapshot(id: string) {
-  const result = await makeRequest<{ download_url: string }>(`backup/snapshots/${id}/download`, 'GET', {});
-  if (result.status === 'success' && result.result?.download_url) {
-    window.open(result.result.download_url, '_blank');
-  } else {
-    notifications.add({ type: 'error', title: t('common.errors.generic'), message: result.message });
-  }
+  // The endpoint streams the snapshot zip directly (cookie-authenticated);
+  // v2 snapshots are assembled server-side from their blobs.
+  const baseUrl = useRuntimeConfig().public.baseApi;
+  window.location.href = `${baseUrl}/api/backup/snapshots/${id}/download`;
 }
 
 async function deleteSnapshot(id: string) {
