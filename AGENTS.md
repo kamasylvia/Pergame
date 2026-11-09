@@ -6,7 +6,7 @@
 
 Pergame = 自托管知识库 + 扩展 Markdown 编辑器(Notion/Obsidian 替代品;名取帕加蒙,古代第二图书馆)。
 
-- **本仓为 fork**:origin = `kamasylvia/Pergame`(公开),upstream = `Smaug6739/Collectanea`。fork 自定义改动尽量保持可合并上游的形态(migration 编号不重排、不无谓重构上游文件);2026-11-09 全量改名后 Go 层(module `pergame`)与品牌字符串已不可与上游直接合并,结构性约定(migration 编号顺延等)仍保留。
+- **本仓为 fork**:origin = `kamasylvia/Pergame`(公开),upstream = `Smaug6739/Alexandrie`(2026-11-09 实测上游已由 `Collectanea` 改回 `Alexandrie`)。fork 自定义改动尽量保持可合并上游的形态(migration 编号不重排、不无谓重构上游文件);2026-11-09 全量改名后 Go 层(module `pergame`)与品牌字符串已不可与上游直接合并,结构性约定(migration 编号顺延等)仍保留。
 - 架构:`frontend/` Nuxt 3(PWA)+ `backend/` Go(gin + sqlx)+ `docs/` Nuxt 文档站 + docker compose 全家桶。
 - 存储:MySQL 8(应用数据)+ S3 兼容对象存储(compose 默认 RustFS,兼容 MinIO/Garage 等)。
 
@@ -48,4 +48,4 @@ docker compose -f docker-compose.dev.yml up   # 前后端 dev 容器(带挂载)
 ## 上游同步与提交
 
 - commit:英文 Conventional Commits;公开仓,不 push 前先压缩(全局 §2.2)。
-- 同步上游:`git fetch upstream` 后 rebase/merge;上游增量 migration 编号顺延,fork 侧不重排既有编号。
+- 同步上游:`git fetch upstream` 后 rebase/merge;上游增量 migration 编号顺延,fork 侧不重排既有编号。上游增量追踪 = `.work/upstream-sync/TRACKING.md`(Go→Rust 重写后无法直接合并,逐 commit 分类:前端 cherry-pick 适配、Go 修复评估 Rust 对应实现、deps bump 不搬运)。

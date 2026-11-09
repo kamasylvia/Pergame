@@ -63,9 +63,11 @@
 
 ## 6. 环境备忘
 
-- origin = `git@github.com:kamasylvia/Pergame.git`(公开 fork);upstream = Smaug6739。
+- origin = `git@github.com:kamasylvia/Pergame.git`(公开 fork);upstream = Smaug6739/Alexandrie(2026-11-09 实测改名回 Alexandrie);上游增量追踪 = `.work/upstream-sync/TRACKING.md`。
 - compose backend = 本地构建(`build: ./backend`);上游预构建镜像不认 `S3_*`/pg。
 - 本地开发对象存储:`make minio`(minio 二进制,9000/9001);compose 默认 rustfs。
+- 活 dev 环境 = NAS:pg18(5432)+ QuObjects(8010)+ Keycloak(10002,master realm;admin client 凭证在 Infisical DEVOPS 项目 KEYCLOAK_*)。
+- S3 桶改名(2026-11-09 完成,QuObjects):建 `pergame` / `pergame-backups`,删空桶 `Collectanea` / `Collectanea-backups`(均 0 对象,无数据迁移);pg 库改名用户同日完成。
 - 本机(macOS M2)无可用 docker runtime(`/usr/local/bin/docker` 死链)。
 
 ## 7. 教训索引
