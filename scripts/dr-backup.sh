@@ -9,30 +9,42 @@
 # retention age.
 #
 # Usage:
-#   dr-backup.sh [options]
+#   dr-backup.sh [options]        backup every source to every destination
+#   dr-backup.sh -l               list snapshots per source/destination
+#   dr-backup.sh -R <source> ...  restore a snapshot into its source database
 # Options:
-#   -c FILE   config file (default: ./dr-backup.conf next to this script)
-#   -n        dry run: print actions, dump nothing
-#   -h        this help
+#   -c FILE      config file (default: ./dr-backup.conf next to this script)
+#   -n           dry run: print actions, change nothing
+#   -l           list snapshots (per source per destination, newest first)
+#   -R <source>  restore mode: pull <source>'s snapshot and pg_restore it
+#   -t <STAMP>   snapshot timestamp dir for -R (default: newest)
+#   -y           non-interactive confirm for -R (--clean drops existing objects)
+#   -h           this help
 #
 # Requires: pg_dump, rclone. Cron example (daily 03:30):
 #   30 3 * * * /opt/pergame/scripts/dr-backup.sh >> /var/log/dr-backup.log 2>&1
 #
-# Restore:
-#   rclone copy "<remote>:<prefix>/<source>/<timestamp>/" <local-dir>
-#   pg_restore --clean --if-exists -h <host> -U <user> -d <db> <dump.dump>
+# Restore: dr-backup.sh -R <source> [-t <timestamp>] [-y] (see Options)
 # ==============================================================================
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF="${SCRIPT_DIR}/dr-backup.conf"
 DRY_RUN=0
+LIST_ONLY=0
+RESTORE_SRC=""
+RESTORE_TS=""
+ASSUME_YES=0
 
 usage() { grep '^#   ' "$0" | sed 's/^#   //'; exit 0; }
-while getopts ":c:nh" opt; do
+while getopts ":c:lnt:R:yh" opt; do
   case "$opt" in
     c) CONF="$OPTARG" ;;
+    l) LIST_ONLY=1 ;;
     n) DRY_RUN=1 ;;
+    t) RESTORE_TS="$OPTARG" ;;
+    R) RESTORE_SRC="$OPTARG" ;;
+    y) ASSUME_YES=1 ;;
     h) usage ;;
     \?) echo "Unknown option: -$OPTARG" >&2; exit 2 ;;
   esac
@@ -169,6 +181,125 @@ for i in "${!DEST_WINNER[@]}"; do
   rec="${DEST_WINNER[$i]}"
   case "$rec" in s3\|*) ACTIVE_S3+=("$rec");; *) ACTIVE_DAV+=("$rec");; esac
 done
+
+# ---------------- list snapshots -------------------------------------------
+list_snapshots() {
+  if ! command -v rclone >/dev/null; then
+    fail "rclone not found (required for -l)"; exit 1
+  fi
+  for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
+    IFS='|' read -r kind name _host _port _user _pass _db <<<"$src"
+    [ "$kind" = "pg" ] || continue
+    for dest in ${ACTIVE_S3[@]+"${ACTIVE_S3[@]}"}; do
+      IFS='|' read -r _ destName bucket prefix _r <<<"$dest"
+      remote="$(define_s3_remote "$dest")"
+      log "snapshots source='${name}' dest=s3/${destName}:"
+      rclone lsf --dirs-only "${remote}:${bucket}/${prefix:+$prefix/}${name}" 2>/dev/null | sort -r | sed 's/^/  /'
+    done
+    for dest in ${ACTIVE_DAV[@]+"${ACTIVE_DAV[@]}"}; do
+      IFS='|' read -r _ destName _url _user _pass prefix <<<"$dest"
+      remote="$(define_webdav_remote "$dest")"
+      log "snapshots source='${name}' dest=webdav/${destName}:"
+      rclone lsf --dirs-only "${remote}:${prefix:+$prefix/}${name}" 2>/dev/null | sort -r | sed 's/^/  /'
+    done
+  done
+}
+
+# ---------------- restore one source snapshot -------------------------------
+restore_snapshot() {
+  if [ -z "$RESTORE_SRC" ]; then fail "-R requires a source name"; exit 2; fi
+  src_record=""
+  for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
+    IFS='|' read -r kind name _h _p _u _p2 _d <<<"$src"
+    [ "$name" = "$RESTORE_SRC" ] && { src_record="$src"; break; }
+  done
+  [ -n "$src_record" ] || { fail "source '${RESTORE_SRC}' not found in SOURCES"; exit 2; }
+  IFS='|' read -r kind name host port user pass db <<<"$src_record"
+
+  dest_count=$(( ${#ACTIVE_S3[@]} + ${#ACTIVE_DAV[@]} ))
+  [ "$dest_count" -gt 0 ] || { fail "no destinations configured"; exit 1; }
+  if ! command -v rclone >/dev/null; then
+    if [ "$DRY_RUN" = 1 ] && [ -n "$RESTORE_TS" ]; then
+      log "WARN: rclone not found (dry-run with explicit -t: printing plan only)"
+      log "DRY-RUN: rclone copy <dest>:<prefix>/${RESTORE_SRC}/${RESTORE_TS}/${RESTORE_SRC}.dump $WORKDIR/"
+      log "DRY-RUN: PGPASSWORD=*** pg_restore --clean --if-exists -h $host -p $port -U $user -d $db $WORKDIR/${RESTORE_SRC}.dump"
+      return 0
+    fi
+    fail "rclone not found (required for -R)"; exit 1
+  fi
+
+  # First destination that holds the wanted timestamp dir (fan-out keeps all
+  # destinations identical; the first hit wins).
+  found=""
+  for dest in ${ACTIVE_S3[@]+"${ACTIVE_S3[@]}"}; do
+    IFS='|' read -r _ destName bucket prefix _r <<<"$dest"
+    remote="$(define_s3_remote "$dest")"
+    base="${remote}:${bucket}/${prefix:+$prefix/}${name}"
+    ts="$RESTORE_TS"
+    if [ -z "$ts" ]; then
+      ts="$(rclone lsf --dirs-only "$base" 2>/dev/null | sort -r | head -1 | tr -d '/')"
+    fi
+    if [ -n "$ts" ] && rclone lsf "$base/$ts/" >/dev/null 2>&1; then
+      found="s3/${destName}"; remoteFile="${base}/${ts}/${name}.dump"; break
+    fi
+  done
+  if [ -z "$found" ]; then
+    for dest in ${ACTIVE_DAV[@]+"${ACTIVE_DAV[@]}"}; do
+      IFS='|' read -r _ destName _url _user _pass prefix <<<"$dest"
+      remote="$(define_webdav_remote "$dest")"
+      base="${remote}:${prefix:+$prefix/}${name}"
+      ts="$RESTORE_TS"
+      if [ -z "$ts" ]; then
+        ts="$(rclone lsf --dirs-only "$base" 2>/dev/null | sort -r | head -1 | tr -d '/')"
+      fi
+      if [ -n "$ts" ] && rclone lsf "$base/$ts/" >/dev/null 2>&1; then
+        found="webdav/${destName}"; remoteFile="${base}/${ts}/${name}.dump"; break
+      fi
+    done
+  fi
+  [ -n "$found" ] || { fail "no snapshot found for source '${RESTORE_SRC}'${RESTORE_TS:+ at $RESTORE_TS}"; exit 1; }
+  log "Restore plan: $found -> $found snapshot ${ts}/${RESTORE_SRC}.dump"
+  log "Restore target: ${db}@${host}:${port} (pg_restore --clean --if-exists)"
+  if [ "$DRY_RUN" = 1 ]; then
+    log "DRY-RUN: rclone copy $remoteFile $WORKDIR/"
+    log "DRY-RUN: PGPASSWORD=*** pg_restore --clean --if-exists -h $host -p $port -U $user -d $db $WORKDIR/${RESTORE_SRC}.dump"
+    return 0
+  fi
+
+  if [ "$ASSUME_YES" != 1 ]; then
+    if [ -t 0 ]; then
+      printf 'pg_restore --clean will DROP existing objects in %s@%s. Type YES to continue: ' "$db" "$host"
+      read -r answer
+      [ "$answer" = "YES" ] || { fail "aborted"; exit 1; }
+    else
+      fail "refusing non-interactive restore without -y (--clean drops existing objects)"
+      exit 1
+    fi
+  fi
+
+  log "Pulling snapshot from $found ..."
+  if ! run rclone copy "$remoteFile" "$WORKDIR/" --log-level NOTICE; then
+    fail "snapshot copy failed"; exit 1
+  fi
+  dumpFile="${WORKDIR}/${RESTORE_SRC}.dump"
+  [ -s "$dumpFile" ] || { fail "downloaded dump is missing/empty"; exit 1; }
+  log "Running pg_restore into ${db}@${host}:${port} ..."
+  if PGPASSWORD="$pass" pg_restore --clean --if-exists -h "$host" -p "$port" -U "$user" -d "$db" "$dumpFile"; then
+    log "Restore of '${RESTORE_SRC}' from ${ts} completed."
+  else
+    fail "pg_restore reported errors (check above; --clean restores are all-or-nothing per object)"
+    exit 1
+  fi
+}
+
+if [ "$LIST_ONLY" = 1 ]; then
+  list_snapshots
+  exit 0
+fi
+if [ -n "$RESTORE_SRC" ]; then
+  restore_snapshot
+  exit $?
+fi
 
 for src in ${SOURCES[@]+"${SOURCES[@]}"}; do
   IFS='|' read -r kind name host port user pass db <<<"$src"
