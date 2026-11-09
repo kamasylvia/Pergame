@@ -8,6 +8,13 @@
       <div class="options-section">
         <h3>{{ t('settings.backups.options') }}</h3>
         <div class="options-grid">
+          <input
+            v-model="options.memo"
+            class="memo-input"
+            type="text"
+            :placeholder="t('settings.backups.memoPlaceholder')"
+            maxlength="200"
+          />
           <AppCheck v-model="options.includeDocuments">
             <span class="option-label">
               <Icon name="folder" display="sm" />
@@ -106,7 +113,10 @@
         <ul v-else class="snapshot-list">
           <li v-for="snap in snapshots" :key="snap.id" class="snapshot-row">
             <Icon name="backup" display="sm" />
-            <span class="snapshot-date">{{ numericDate(snap.last_modified) }}</span>
+            <span class="snapshot-date">
+              {{ numericDate(snap.last_modified) }}
+              <small v-if="snap.memo" class="snapshot-memo">{{ snap.memo }}</small>
+            </span>
             <span class="snapshot-size">{{ fmtSize(snap.size) }}</span>
             <span class="snapshot-actions">
               <button class="snapshot-btn" :title="t('settings.backups.snapshotDownload')" @click="downloadSnapshot(snap.id)">
@@ -126,9 +136,21 @@
             </span>
           </li>
         </ul>
-        <p v-if="pendingRestore" class="restore-warning">
-          {{ t('settings.backups.confirmRestore') }}
-        </p>
+        <div v-if="pendingRestore" class="restore-warning">
+          <p>{{ t('settings.backups.confirmRestore') }}</p>
+          <p v-if="pendingPlan" class="restore-plan">
+            {{ t('settings.backups.planDetail', {
+              incoming: pendingPlan.incoming_nodes,
+              current: pendingPlan.current_nodes,
+              replaced: pendingPlan.nodes_replaced,
+              added: pendingPlan.nodes_added,
+              removed: pendingPlan.nodes_removed,
+            }) }}
+          </p>
+          <p v-if="pendingPlan && pendingPlan.files_colliding > 0" class="restore-plan">
+            {{ t('settings.backups.planFiles', { count: pendingPlan.files_colliding }) }}
+          </p>
+        </div>
 
         <!-- Upload restore -->
         <div class="upload-restore">
@@ -172,6 +194,7 @@ const options = reactive({
   includeFiles: true,
   includeSettings: true,
   includeMetadata: true,
+  memo: '',
 });
 
 const { t } = useI18nT();
@@ -185,7 +208,20 @@ interface BackupSnapshot {
   id: string;
   size: number;
   last_modified: number;
+  memo?: string;
 }
+
+interface RestorePlan {
+  incoming_nodes: number;
+  current_nodes: number;
+  nodes_replaced: number;
+  nodes_added: number;
+  nodes_removed: number;
+  files_colliding: number;
+  warnings?: string[];
+}
+
+const pendingPlan = ref<RestorePlan | null>(null);
 
 const snapshots = ref<BackupSnapshot[]>([]);
 const loadingSnapshots = ref(false);
@@ -236,9 +272,19 @@ async function restoreSnapshot(snap: BackupSnapshot) {
   // Inline two-step confirm: the first click arms it, the second executes.
   if (pendingRestore.value !== snap.id) {
     pendingRestore.value = snap.id;
-    restoreConfirmTimer = setTimeout(() => (pendingRestore.value = null), 5000);
+    pendingPlan.value = null;
+    restoreConfirmTimer = setTimeout(() => {
+      pendingRestore.value = null;
+      pendingPlan.value = null;
+    }, 8000);
+    // Dry-run plan while the user reads the warning (best-effort).
+    const plan = await makeRequest<RestorePlan>(`backup/snapshots/${snap.id}/preview`, 'POST', {});
+    if (pendingRestore.value === snap.id && plan.status === 'success') {
+      pendingPlan.value = plan.result;
+    }
     return;
   }
+  pendingPlan.value = null;
   if (restoreConfirmTimer) clearTimeout(restoreConfirmTimer);
   pendingRestore.value = null;
   isRestoring.value = true;
@@ -324,6 +370,7 @@ async function startBackup() {
     include_files: options.includeFiles,
     include_settings: options.includeSettings,
     include_metadata: options.includeMetadata,
+    memo: options.memo.trim() || undefined,
   });
 
   if (result.status !== 'success' || !result.result?.job_id) {
@@ -443,6 +490,26 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.memo-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.snapshot-memo {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.restore-warning p {
+  margin: 0.25rem 0;
+}
+
+.restore-plan {
+  font-size: 0.75rem;
+  opacity: 0.9;
 }
 
 .option-label {

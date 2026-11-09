@@ -83,6 +83,7 @@ export default {
     includeFiles: 'Hochgeladene Dateien (Bilder, PDFs usw.)',
     includeMetadata: 'Metadaten',
     includeSettings: 'Einstellungen & Voreinstellungen',
+    memoPlaceholder: 'Notiz (optional)…',
     notifications: {
       canceled: 'Backup abgebrochen',
       completed: 'Backup erfolgreich erstellt',
@@ -93,6 +94,8 @@ export default {
       startedTitle: 'Gestartet',
     },
     options: 'Backup-Optionen',
+    planDetail: 'Eingehend: {incoming} · Aktuell: {current} · Ersetzt: {replaced} · Neu: {added} · Entfernt: {removed}',
+    planFiles: '{count} Datei(en) würden vorhandene Objekte überschreiben.',
     restored: 'Wiederherstellung abgeschlossen',
     restoredDetail: 'Knoten: {nodes} · Links: {links} · Dateien: {files}',
     restoreFailed: 'Wiederherstellung fehlgeschlagen',

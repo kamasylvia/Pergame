@@ -82,6 +82,7 @@ export default {
     includeFiles: '已上传的文件（图片、PDF 等）',
     includeMetadata: '元数据',
     includeSettings: '设置与偏好设置',
+    memoPlaceholder: '备注(可选)…',
     notifications: {
       canceled: '已取消备份',
       completed: '已成功创建备份',
@@ -92,6 +93,8 @@ export default {
       startedTitle: '已开始',
     },
     options: '备份选项',
+    planDetail: '传入 {incoming} · 当前 {current} · 替换 {replaced} · 新增 {added} · 移除 {removed}',
+    planFiles: '{count} 个文件将覆盖现有对象。',
     restored: '还原完成',
     restoredDetail: '节点:{nodes} · 链接:{links} · 文件:{files}',
     restoreFailed: '还原失败',

@@ -83,6 +83,7 @@ export default {
     includeFiles: 'Fichiers téléchargés (images, PDFs, etc.)',
     includeMetadata: 'Métadonnées',
     includeSettings: 'Paramètres & Préférences',
+    memoPlaceholder: 'Mémo (facultatif)…',
     notifications: {
       canceled: 'Sauvegarde annulée',
       completed: 'Sauvegarde créée avec succès',
@@ -93,6 +94,8 @@ export default {
       startedTitle: 'Commencé',
     },
     options: 'Options de sauvegarde',
+    planDetail: 'Entrants : {incoming} · Actuels : {current} · Remplacés : {replaced} · Ajoutés : {added} · Supprimés : {removed}',
+    planFiles: '{count} fichier(s) écraseraient des objets existants.',
     restored: 'Restauration terminée',
     restoredDetail: 'Nœuds : {nodes} · Liens : {links} · Fichiers : {files}',
     restoreFailed: 'Échec de la restauration',

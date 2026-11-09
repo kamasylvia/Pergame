@@ -82,6 +82,7 @@ export default {
     includeFiles: '업로드된 파일 (이미지, PDF 등)',
     includeMetadata: '메타데이터',
     includeSettings: '설정 및 환경설정',
+    memoPlaceholder: '메모(선택)…',
     notifications: {
       canceled: '백업이 취소되었습니다',
       completed: '백업이 성공적으로 생성되었습니다',
@@ -92,6 +93,8 @@ export default {
       startedTitle: '시작됨',
     },
     options: '백업 옵션',
+    planDetail: '수신 {incoming} · 현재 {current} · 대체 {replaced} · 추가 {added} · 삭제 {removed}',
+    planFiles: '{count}개 파일이 기존 객체를 덮어씁니다.',
     restored: '복원 완료',
     restoredDetail: '노드: {nodes} · 링크: {links} · 파일: {files}',
     restoreFailed: '복원 실패',

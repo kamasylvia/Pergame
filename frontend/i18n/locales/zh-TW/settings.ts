@@ -82,6 +82,7 @@ export default {
     includeFiles: '已上傳的檔案（圖片、PDF 等）',
     includeMetadata: '中繼資料',
     includeSettings: '設定與偏好設定',
+    memoPlaceholder: '備註(可選)…',
     notifications: {
       canceled: '已取消備份',
       completed: '已成功建立備份',
@@ -92,6 +93,8 @@ export default {
       startedTitle: '已開始',
     },
     options: '備份選項',
+    planDetail: '傳入 {incoming} · 目前 {current} · 取代 {replaced} · 新增 {added} · 移除 {removed}',
+    planFiles: '{count} 個檔案將覆蓋現有物件。',
     restored: '還原完成',
     restoredDetail: '節點:{nodes} · 連結:{links} · 檔案:{files}',
     restoreFailed: '還原失敗',

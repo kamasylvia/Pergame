@@ -82,6 +82,7 @@ export default {
     includeFiles: 'Завантажені файли (зображення, PDF тощо)',
     includeMetadata: 'Метадані',
     includeSettings: 'Налаштування та параметри',
+    memoPlaceholder: 'Нотатка (необов’язково)…',
     notifications: {
       canceled: 'Резервне копіювання скасовано',
       completed: 'Резервну копію успішно створено',
@@ -92,6 +93,8 @@ export default {
       startedTitle: 'Розпочато',
     },
     options: 'Параметри резервного копіювання',
+    planDetail: 'Вхідних: {incoming} · Поточних: {current} · Замінено: {replaced} · Додано: {added} · Вилучено: {removed}',
+    planFiles: '{count} файл(ів) перезапишуть наявні об’єкти.',
     restored: 'Відновлення завершено',
     restoredDetail: 'Вузли: {nodes} · Посилання: {links} · Файли: {files}',
     restoreFailed: 'Помилка відновлення',

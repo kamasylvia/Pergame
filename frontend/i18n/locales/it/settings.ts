@@ -84,6 +84,7 @@ export default {
     includeFiles: 'File caricati (immagini, PDF, ecc.)',
     includeMetadata: 'Metadati',
     includeSettings: 'Impostazioni e Preferenze',
+    memoPlaceholder: 'Memo (opzionale)…',
     notifications: {
       canceled: 'Backup annullato',
       completed: 'Backup creato con successo',
@@ -94,6 +95,8 @@ export default {
       startedTitle: 'Avviato',
     },
     options: 'Opzioni di backup',
+    planDetail: 'In entrata: {incoming} · Attuali: {current} · Sostituiti: {replaced} · Aggiunti: {added} · Rimossi: {removed}',
+    planFiles: '{count} file sovrascriverebbero oggetti esistenti.',
     restored: 'Ripristino completato',
     restoredDetail: 'Nodi: {nodes} · Link: {links} · File: {files}',
     restoreFailed: 'Ripristino non riuscito',

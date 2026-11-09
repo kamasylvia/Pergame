@@ -82,6 +82,7 @@ export default {
     includeFiles: 'Uploaded files (images, PDFs, etc.)',
     includeMetadata: 'Metadata',
     includeSettings: 'Settings & Preferences',
+    memoPlaceholder: 'Memo (optional)…',
     notifications: {
       canceled: 'Backup canceled',
       completed: 'Backup created successfully',
@@ -92,6 +93,8 @@ export default {
       startedTitle: 'Started',
     },
     options: 'Backup options',
+    planDetail: 'Incoming {incoming} nodes · Current {current} · Replaced {replaced} · Added {added} · Removed {removed}',
+    planFiles: '{count} file(s) would overwrite existing objects.',
     restored: 'Restore complete',
     restoredDetail: 'Nodes: {nodes} · Links: {links} · Files: {files}',
     restoreFailed: 'Restore failed',
