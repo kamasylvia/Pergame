@@ -2,7 +2,7 @@
 //! status, cancel.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -105,4 +105,131 @@ impl BackupStore {
         })
         .await;
     }
+}
+
+// ---------------- snapshots + restore (spec backup-restore.md) ----------------
+
+fn snapshot_key(user_id: i64, id: &str) -> Result<String, ApiError> {
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ApiError::BadRequest("invalid snapshot id".into()));
+    }
+    Ok(format!("{user_id}/snapshots/{id}.zip"))
+}
+
+/// GET /backup/snapshots — caller's snapshots, newest first.
+pub async fn list_snapshots(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let mut snaps = storage.list_backup_snapshots(auth.user_id()).await?;
+    snaps.sort_by(|a, b| b.0.cmp(&a.0));
+    let rows: Vec<serde_json::Value> = snaps
+        .into_iter()
+        .map(|(key, size, mtime)| {
+            let id = key
+                .rsplit('/')
+                .next()
+                .and_then(|f| f.strip_suffix(".zip"))
+                .unwrap_or("")
+                .to_string();
+            json!({ "id": id, "size": size, "last_modified": mtime })
+        })
+        .collect();
+    Ok(ApiOk::ok(json!(rows)))
+}
+
+/// GET /backup/snapshots/:id/download — presigned URL (24h).
+pub async fn download_snapshot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let key = snapshot_key(auth.user_id(), &id)?;
+    let filename = format!("pergame-snapshot-{id}.zip");
+    let url = storage
+        .presign_backup_get(&key, &filename)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "presign snapshot failed");
+            ApiError::Internal(Box::new(std::io::Error::other(
+                "failed to sign snapshot URL",
+            )))
+        })?;
+    Ok(ApiOk::ok(json!({ "download_url": url })))
+}
+
+/// DELETE /backup/snapshots/:id
+pub async fn delete_snapshot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let key = snapshot_key(auth.user_id(), &id)?;
+    storage.delete_backup_object(&key).await?;
+    Ok(ApiOk::ok(json!("Snapshot deleted successfully.")))
+}
+
+/// POST /backup/snapshots/:id/restore — replace current data with the snapshot.
+pub async fn restore_snapshot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<crate::restore::RestoreReport>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let key = snapshot_key(auth.user_id(), &id)?;
+    let bytes = storage.get_backup_object(&key).await?;
+    let report =
+        crate::restore::restore_from_zip(state.db.clone(), Some(storage), auth.user_id(), bytes)
+            .await?;
+    Ok(ApiOk::ok(report))
+}
+
+/// POST /backup/restore/upload — restore from an uploaded backup zip
+/// (multipart field "file"; ≤256MB body limit on this route).
+pub async fn restore_upload(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    mut multipart: Multipart,
+) -> Result<ApiOk<crate::restore::RestoreReport>, ApiError> {
+    let mut bytes: Option<Vec<u8>> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("multipart: {e}")))?
+    {
+        if field.name() == Some("file") {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::BadRequest(format!("file read: {e}")))?;
+            bytes = Some(data.to_vec());
+            break;
+        }
+    }
+    let bytes = bytes.ok_or(ApiError::BadRequest(
+        "multipart field \"file\" is required".into(),
+    ))?;
+    let report = crate::restore::restore_from_zip(
+        state.db.clone(),
+        state.storage.clone(),
+        auth.user_id(),
+        bytes,
+    )
+    .await?;
+    Ok(ApiOk::ok(report))
 }

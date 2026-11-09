@@ -614,6 +614,18 @@ async fn backup_zip_contains_links() {
     }
     assert!(finished, "backup job did not finish in time");
 
+    // Snapshots are multi-version: pull the newest one from the feed.
+    let (status, r) = get(&client, "/backup/snapshots").await;
+    assert_eq!(status, 200, "snapshots list failed: {:?}", r.message);
+    let snaps = r.result.as_array().expect("snapshots array");
+    let snap_id = snaps
+        .first()
+        .expect("snapshot present")
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("snapshot id")
+        .to_string();
+
     // Pull the zip straight from the backups bucket (env contract mirrors the
     // backend's S3_* variables).
     let endpoint = std::env::var("S3_ENDPOINT").expect("S3_ENDPOINT");
@@ -640,7 +652,7 @@ async fn backup_zip_contains_links() {
     let obj = s3
         .get_object()
         .bucket(&bucket)
-        .key(format!("{owner_id}/backup.zip"))
+        .key(format!("{owner_id}/snapshots/{snap_id}.zip"))
         .send()
         .await
         .expect("backup zip in S3");
@@ -691,4 +703,144 @@ async fn backup_zip_contains_links() {
             .is_some(),
         "created_timestamp must stay numeric"
     );
+}
+
+// ---------------------------------------------------------- snapshot restore
+
+/// Snapshots are multi-version ({uid}/snapshots/<ts>.zip); restoring one
+/// replaces the caller's nodes/links with the archived state.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn snapshot_restore_roundtrip() {
+    let client = Client::new();
+    let (owner_id, suffix) = signup_and_login_tagged(&client, "rtrestore").await;
+
+    let mk = |name: String| json!({"name": name, "role": 1});
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws1-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws1 = result_id_string(&r);
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("doc-{suffix}"), "role": 3, "parent_id": ws1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let doc = result_id_string(&r);
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws2-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws2 = result_id_string(&r);
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{doc}/links"),
+        &json!({"parent_id": ws2}),
+    )
+    .await;
+    assert_eq!(status, 201);
+
+    // Snapshot the current state.
+    let (status, r) = post_json(&client, "/backup", &json!({"include_documents": true})).await;
+    assert_eq!(status, 202);
+    let job_id = r
+        .result
+        .get("job_id")
+        .and_then(|v| v.as_str())
+        .expect("job_id present")
+        .to_string();
+    for _ in 0..120 {
+        let (status, r) = get(&client, &format!("/backup/{job_id}")).await;
+        assert_eq!(status, 200);
+        if r.result.get("error").is_some() {
+            panic!("backup failed: {:?}", r.result.get("error"));
+        }
+        if r.result.get("download_url").is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    let (status, r) = get(&client, "/backup/snapshots").await;
+    assert_eq!(status, 200, "snapshots list failed: {:?}", r.message);
+    let snaps = r.result.as_array().expect("snapshots array");
+    assert!(!snaps.is_empty(), "snapshot list must not be empty");
+    let snap = snaps
+        .iter()
+        .find(|s| s.get("id").and_then(|v| v.as_str()).is_some())
+        .expect("snapshot id present");
+    let snapshot_id = snap.get("id").and_then(|v| v.as_str()).unwrap().to_string();
+    assert!(snap.get("size").and_then(|v| v.as_i64()).unwrap_or(0) > 0);
+
+    // Damage: delete the document (tree loses doc + its link row via cascade).
+    let (status, _) = del(&client, &format!("/nodes/{doc}")).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, "/nodes/user/@me").await;
+    assert_eq!(status, 200);
+    let names = r
+        .result
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|n| n.get("name").and_then(|v| v.as_str()))
+        .count();
+    assert_eq!(names, 2, "expected only ws1+ws2 after delete");
+
+    // Restore: the archived state (3 nodes + 1 link) must come back.
+    let (status, r) = post_json(
+        &client,
+        &format!("/backup/snapshots/{snapshot_id}/restore"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "restore failed: {:?}", r.message);
+    let report = &r.result;
+    assert_eq!(report.get("nodes").and_then(|v| v.as_u64()), Some(3));
+    assert_eq!(report.get("links").and_then(|v| v.as_u64()), Some(1));
+    assert!(
+        report
+            .get("links_skipped")
+            .and_then(|v| v.as_array())
+            .map(|a| a.is_empty())
+            .unwrap_or(true),
+        "no links should be skipped"
+    );
+
+    let (status, r) = get(&client, "/nodes/user/@me").await;
+    assert_eq!(status, 200);
+    let names: Vec<String> = r
+        .result
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|n| {
+            n.get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .collect();
+    assert!(
+        names.contains(&format!("doc-{suffix}")),
+        "document restored"
+    );
+    let (status, r) = get(&client, &format!("/nodes/{doc}/links")).await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        r.result.as_array().map(|a| a.len()),
+        Some(1),
+        "link restored"
+    );
+
+    // Download URL signing works for snapshots too.
+    let (status, r) = get(
+        &client,
+        &format!("/backup/snapshots/{snapshot_id}/download"),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(
+        r.result
+            .get("download_url")
+            .and_then(|v| v.as_str())
+            .is_some(),
+        "presigned snapshot URL present"
+    );
+    let _ = owner_id;
 }

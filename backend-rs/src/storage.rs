@@ -112,13 +112,14 @@ fn load_custom_ca_client(ca_path: &str) -> Result<SharedHttpClient, String> {
 
 impl S3Storage {
     /// Creates both buckets idempotently; sets the public-read policy (warn +
-    /// continue on providers without PutBucketPolicy, Go parity) and the
-    /// 24h backup expiry lifecycle.
+    /// continue on providers without PutBucketPolicy, Go parity). The backups
+    /// bucket has no lifecycle rule: snapshot retention is managed by the app
+    /// (keep-last-N prune, see backup.rs) instead of a blanket expiry.
     pub async fn ensure_buckets(&self) -> Result<(), ApiError> {
         self.ensure_bucket(&self.bucket).await?;
         self.set_public_policy(&self.bucket).await;
         self.ensure_bucket(&self.backup_bucket).await?;
-        self.set_backup_lifecycle(&self.backup_bucket).await;
+        self.clear_backup_lifecycle(&self.backup_bucket).await;
         Ok(())
     }
 
@@ -167,36 +168,17 @@ impl S3Storage {
         }
     }
 
-    async fn set_backup_lifecycle(&self, bucket: &str) {
-        use aws_sdk_s3::types::{ExpirationStatus, LifecycleRule, LifecycleRuleFilter};
-        let rule = LifecycleRule::builder()
-            .id("auto-delete-backups")
-            .status(ExpirationStatus::Enabled)
-            .filter(LifecycleRuleFilter::builder().prefix("").build())
-            .expiration(
-                aws_sdk_s3::types::LifecycleExpiration::builder()
-                    .days(1)
-                    .build(),
-            )
-            .build()
-            .expect("valid lifecycle rule");
-        let cfg = aws_sdk_s3::types::BucketLifecycleConfiguration::builder()
-            .rules(rule)
-            .build()
-            .expect("valid lifecycle configuration");
-        match self
+    /// Previously a 24h blanket lifecycle rule deleted backups a day after
+    /// upload; snapshots are now multi-version and app-pruned, so no lifecycle
+    /// rule is installed. Best-effort removal for buckets that still carry the
+    /// old rule from earlier bootstraps.
+    async fn clear_backup_lifecycle(&self, bucket: &str) {
+        let _ = self
             .client
-            .put_bucket_lifecycle_configuration()
+            .delete_bucket_lifecycle()
             .bucket(bucket)
-            .lifecycle_configuration(cfg)
             .send()
-            .await
-        {
-            Ok(_) => tracing::info!(
-                "Successfully set lifecycle policy for backups (auto-delete after 24h)"
-            ),
-            Err(e) => tracing::warn!("Failed to set lifecycle policy for backups: {}", e),
-        }
+            .await;
     }
 
     /// PUT object under `{user_id}/{key}`.
@@ -221,6 +203,72 @@ impl S3Storage {
             tracing::error!(error = %e, %object_key, "put_object failed");
             ApiError::Internal(Box::new(std::io::Error::other("failed to store file")))
         })
+    }
+
+    /// Lists backup-snapshot objects under `{uid}/snapshots/` as
+    /// (key, size_bytes, last_modified_epoch_ms), oldest first.
+    pub async fn list_backup_snapshots(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<(String, i64, i64)>, ApiError> {
+        let prefix = format!("{user_id}/snapshots/");
+        let mut out = Vec::new();
+        let resp = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.backup_bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "list snapshots failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to list snapshots")))
+            })?;
+        for obj in resp.contents() {
+            let Some(key) = obj.key() else { continue };
+            let size = obj.size().unwrap_or(0);
+            let mtime = obj
+                .last_modified()
+                .and_then(|t| t.to_millis().ok())
+                .unwrap_or(0);
+            out.push((key.to_string(), size, mtime));
+        }
+        Ok(out)
+    }
+
+    /// Reads one backup-snapshot object fully (key without bucket).
+    pub async fn get_backup_object(&self, key: &str) -> Result<Vec<u8>, ApiError> {
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.backup_bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, %key, "get backup object failed");
+                ApiError::NotFound("snapshot not found".into())
+            })?;
+        let bytes = resp.body.collect().await.map_err(|e| {
+            tracing::error!(error = %e, %key, "read backup object failed");
+            ApiError::Internal(Box::new(std::io::Error::other("failed to read snapshot")))
+        })?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Deletes one backup-snapshot object (best-effort logging on failure).
+    pub async fn delete_backup_object(&self, key: &str) -> Result<(), ApiError> {
+        self.client
+            .delete_object()
+            .bucket(&self.backup_bucket)
+            .key(key)
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                tracing::error!(error = %e, %key, "delete backup object failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to delete snapshot")))
+            })
     }
 
     /// Deletes `{user_id}/{key}` (best-effort, Go parity: failures logged).

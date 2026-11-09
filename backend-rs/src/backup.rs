@@ -15,6 +15,10 @@ use tokio::sync::Mutex;
 
 pub const BACKUP_VERSION: &str = "1.2.0";
 
+/// Snapshots kept per user; older ones are pruned after a successful backup
+/// (app-side retention replacing the removed bucket lifecycle rule).
+pub const SNAPSHOT_KEEP: usize = 10;
+
 /// Resource projection used while archiving file nodes.
 pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
 const BACKUP_EXPIRY_HOURS: i64 = 24;
@@ -416,7 +420,8 @@ pub async fn run_backup(
         Ok(b) => b,
         Err(_) => fail!("Failed to finalize backup archive"),
     };
-    let object_name = format!("{user_id}/backup.zip");
+    let snapshot_id = crate::auth::service::now_ms();
+    let object_name = format!("{user_id}/snapshots/{snapshot_id}.zip");
     let now_parts = time::OffsetDateTime::now_utc();
     let filename = format!(
         "pergame-backup-{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
@@ -434,6 +439,24 @@ pub async fn run_backup(
         Ok(url) => url,
         Err(e) => fail!(format!("Failed to generate download URL: {e}")),
     };
+
+    // Retention: keep only the newest SNAPSHOT_KEEP snapshots (best-effort).
+    match storage.list_backup_snapshots(user_id).await {
+        Ok(mut snaps) => {
+            // keys sort by epoch-ms filename, so chronological == lexical.
+            snaps.sort_by(|a, b| a.0.cmp(&b.0));
+            let excess = snaps.len().saturating_sub(SNAPSHOT_KEEP);
+            for (key, _, _) in snaps.into_iter().take(excess) {
+                if let Err(e) = storage.delete_backup_object(&key).await {
+                    tracing::warn!(%key, error = %e, "snapshot prune failed (non-fatal)");
+                }
+            }
+            if excess > 0 {
+                tracing::info!(pruned = excess, "snapshot retention applied");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "snapshot prune listing failed (non-fatal)"),
+    }
 
     let expires_at = time::OffsetDateTime::now_utc()
         .checked_add(time::Duration::hours(BACKUP_EXPIRY_HOURS))

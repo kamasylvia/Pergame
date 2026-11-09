@@ -11,6 +11,7 @@ mod models;
 mod oidc;
 mod repo;
 mod response;
+mod restore;
 mod routes;
 mod state;
 mod storage;
@@ -168,6 +169,24 @@ async fn main() {
             get(routes::backup::get_backup_status),
         )
         .route("/api/backup/{jobId}", delete(routes::backup::cancel_backup))
+        .route("/api/backup/snapshots", get(routes::backup::list_snapshots))
+        .route(
+            "/api/backup/snapshots/{id}/download",
+            get(routes::backup::download_snapshot),
+        )
+        .route(
+            "/api/backup/snapshots/{id}",
+            delete(routes::backup::delete_snapshot),
+        )
+        .route(
+            "/api/backup/snapshots/{id}/restore",
+            post(routes::backup::restore_snapshot),
+        )
+        .route(
+            "/api/backup/restore/upload",
+            post(routes::backup::restore_upload)
+                .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
+        )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))
         .route(
