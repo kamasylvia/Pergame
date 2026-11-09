@@ -106,6 +106,12 @@ async fn main() {
         None
     };
 
+    // Scheduled user-level snapshots (SNAPSHOT_INTERVAL_HOURS; disabled when
+    // unset). Instance-level 3-2-1 backup stays with the dr-backup sidecar.
+    if let Some(storage) = state.storage.clone() {
+        backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage);
+    }
+
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/api/auth", post(routes::auth::login))
@@ -196,6 +202,18 @@ async fn main() {
             "/api/backup/restore/upload/preview",
             post(routes::backup::preview_upload)
                 .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
+        )
+        .route(
+            "/api/admin/dr-backup/config",
+            get(routes::admin_dr::get_config).put(routes::admin_dr::put_config),
+        )
+        .route(
+            "/api/admin/dr-backup/jobs",
+            post(routes::admin_dr::create_job),
+        )
+        .route(
+            "/api/admin/dr-backup/jobs/{id}",
+            get(routes::admin_dr::get_job),
         )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))

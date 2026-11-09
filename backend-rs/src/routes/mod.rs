@@ -1,3 +1,4 @@
+pub mod admin_dr;
 pub mod auth;
 pub mod backup;
 pub mod health;

@@ -627,3 +627,66 @@ pub(crate) fn hex_sha(bytes: &[u8]) -> String {
     h.update(bytes);
     hex::encode(h.finalize())
 }
+
+/// Scheduled snapshot ticker (spec backup-restore.md: automatic user-level
+/// snapshots; instance-level 3-2-1 backup stays in dr-backup). Runs every
+/// SNAPSHOT_INTERVAL_HOURS (env, 0/absent = disabled) and snapshots each user
+/// that has data, memoed "Scheduled snapshot". Retention/GC from the normal
+/// backup path applies, and a user's in-flight manual job is never clobbered.
+pub fn spawn_snapshot_scheduler(
+    store: Arc<BackupStore>,
+    sql: sqlx::PgPool,
+    storage: crate::storage::S3Storage,
+) {
+    let hours: u64 = match std::env::var("SNAPSHOT_INTERVAL_HOURS")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+    {
+        Some(h) if h > 0 => h,
+        _ => {
+            tracing::info!("SNAPSHOT_INTERVAL_HOURS unset/0: scheduled snapshots disabled");
+            return;
+        }
+    };
+    tracing::info!(hours, "scheduled user snapshots enabled");
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(hours * 3600));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        // First tick fires immediately; skip it so boot is not a backup storm.
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            let users: Vec<(i64,)> = sqlx::query_as("SELECT DISTINCT user_id FROM nodes")
+                .fetch_all(&sql)
+                .await
+                .unwrap_or_default();
+            tracing::info!(users = users.len(), "scheduled snapshots starting");
+            for (user_id,) in users {
+                // Do not clobber a running manual job (single job per user).
+                if let Ok(job) = store.get(user_id, &format!("user-{user_id}-backup")).await
+                    && job.error.is_none()
+                    && job.progress < 100
+                {
+                    tracing::info!(user_id, "scheduled snapshot skipped: job in progress");
+                    continue;
+                }
+                let options = BackupOptions {
+                    include_documents: true,
+                    include_files: true,
+                    include_settings: true,
+                    include_metadata: true,
+                    memo: Some("Scheduled snapshot".into()),
+                };
+                let Ok(job_id) = store.create(user_id, options.clone()).await else {
+                    continue;
+                };
+                let store2 = store.clone();
+                let sql2 = sql.clone();
+                let storage2 = storage.clone();
+                tokio::spawn(async move {
+                    run_backup(store2, sql2, storage2, user_id, job_id, options).await;
+                });
+            }
+        }
+    });
+}

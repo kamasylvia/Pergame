@@ -95,6 +95,9 @@ services:
 
     ports:
       - "${BACKEND_EXTERNAL_PORT:-8201}:8201"
+    volumes:
+      - dr_conf:/conf
+      - dr_jobs:/jobs
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
@@ -133,6 +136,24 @@ services:
     networks:
       - pergame-network
 
+  # Instance DR sidecar (spec backup-restore.md §10): executes dr-backup.sh
+  # jobs handed over by the backend through the shared volumes. Optional -
+  # remove this service (and the backend's /conf,/jobs mounts) to disable.
+  dr-backup:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.sidecar
+    container_name: pergame-dr-backup
+    restart: unless-stopped
+    environment:
+      SCHEDULE_HOURS: "${DR_BACKUP_SCHEDULE_HOURS:-0}"
+      SCAN_INTERVAL_SECONDS: 2
+    volumes:
+      - dr_conf:/conf
+      - dr_jobs:/jobs
+    networks:
+      - pergame-network
+
 networks:
   pergame-network:
     driver: bridge
@@ -141,3 +162,5 @@ volumes:
   postgres_data:
   rustfs_data:
   rustfs_logs:
+  dr_conf:
+  dr_jobs:
