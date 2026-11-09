@@ -98,3 +98,34 @@ zip 解析复用 zip crate;内存上限:zip 字节 ≤256MB(axum DefaultBodyLimi
 - 集成测试改走组装下载端点;8/8 绿;24/24 单测(含 snapcrypto 加解密/错密码/salt 唯一)。
 
 实施 commits:后端(本批)、前端(本批)。
+
+## 10 批次 C:实例 DR 管理面板(方案 B:sidecar + admin API + 前端)
+
+**架构**:dr-backup 执行保持进程外(故障域分离不变),新增 sidecar 容器 `pergame-dr-backup`(postgres:17-alpine + rclone + bash + dr-backup.sh)与 backend 通过**两个共享卷**协作,零新增网络面:
+
+- `dr_conf` 卷 → backend `/conf`(rw)、sidecar `/conf`(rw):dr-backup.conf 唯一事实源,backend admin API 读写
+- `dr_jobs` 卷 → backend `/jobs`、sidecar `/jobs`:job 协议文件
+  - backend 写 `pending/<id>.json` `{id, action: backup|list|restore, source?, ts?}`
+  - sidecar 每 2s 扫 pending → `dr-backup.sh -c /conf/dr-backup.conf [flags]`(restore 附 `-y`,admin API + 前端二次确认前置)→ 捕 stdout tail 64KB + exit → 写 `done/<id>.json` → 删 pending
+- sidecar 定时备份:SCHEDULE_HOURS env(默认 0=仅手动;>0 每 N 小时自动 backup)
+
+**API**(全部 `is_app_admin`,role=2):
+- `GET /api/admin/dr-backup/config` → {exists, content(**敏感字段掩码**:pg 记录第 6 段、s3 第 6/7 段、webdav 第 5 段 → `***`)}
+- `PUT /api/admin/dr-backup/config` {content} → `***` 段回填旧值后写盘(0600);bash 可用时附加 `bash -n` 语法校验
+- `POST /api/admin/dr-backup/jobs` → 创建 pending job
+- `GET /api/admin/dr-backup/jobs/{id}` → done 输出或 pending 状态
+- 未部署(卷不存在)时全部 503,提示「DR sidecar not deployed」
+
+**前端**:settings 新增 admin 段(role=2 可见)「Instance」→ Instance DR 视图:conf 编辑(掩码说明)+ 保存 + 立即备份 / 列出快照 / 还原(source + ts,二次确认)+ job 输出区。
+
+**cron 语义变化**:原宿主 cron 改由 sidecar 内置循环(SCHEDULE_HOURS)或保留宿主 cron(直接 `docker exec pergame-dr-backup /opt/dr/dr-backup.sh -c /conf/dr-backup.conf`),二选一,文档两种都给。
+
+**已知边界**:sidecar 内 conf 的 pg host 用容器服务名 `postgres`(非 localhost);目的地密钥经 admin API 可写(掩码读)——管理员本就是服务器密钥的持有者,风险同级。
+
+## 11 定时自动快照(2026-11-09 已实施)
+
+`SNAPSHOT_INTERVAL_HOURS`(env,整数小时;未设/0 = 关闭)驱动 backend 内 tokio ticker:每 N 小时为**有数据的每个用户**创建一次快照(memo = "Scheduled snapshot"),复用 `run_backup` 全流程(含 v2 blob 去重、加密、keep-10 保留、blob GC)。首 tick 跳过避免启动风暴;用户有进行中作业时跳过该轮(不抢占)。**层次定位**(用户裁决):应用内快照 = 用户级误删恢复;实例级 3-2-1 异地备份 = dr-backup;不做 git 级版本控制。
+
+## 12 定位澄清(用户裁决 2026-11-09)
+
+备份主要目标是**异地 3-2-1**:dr-backup(整库 pg_dump → 多目的地)是主力;应用内快照是辅助(用户级、可还原、可下载);本地误删恢复靠**回收站机制**(待做,进 TODO);**git 级版本控制不做**(明确否决,不再评估内容寻址版本历史)。
