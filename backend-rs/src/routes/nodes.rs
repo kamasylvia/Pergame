@@ -44,14 +44,15 @@ pub async fn search(
     Ok(ApiOk::ok(results))
 }
 
-/// GET /nodes/user/:userId — full tree (self or admin).
+/// GET /nodes/user/:userId — full tree (self or admin); "@me" = caller.
 pub async fn get_user_nodes(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(user_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let caller = auth.user_id();
     let actor: Actor = auth.into();
-    let target = resolve_id(&user_id)?;
+    let target = resolve_user_param(&user_id, caller)?;
     guard::require_user_access(&actor, target.as_i64())?;
     let nodes = node_repo::list_all(&state.db, target.as_i64()).await?;
     Ok(ApiOk::ok(nodes))
@@ -63,8 +64,9 @@ pub async fn get_shared_nodes(
     auth: AuthUser,
     Path(user_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let caller = auth.user_id();
     let actor: Actor = auth.into();
-    let target = resolve_id(&user_id)?;
+    let target = resolve_user_param(&user_id, caller)?;
     guard::require_user_access(&actor, target.as_i64())?;
     let nodes = node_repo::list_shared(&state.db, target.as_i64()).await?;
     let ids: Vec<i64> = nodes.iter().map(|n| n.id).collect();
@@ -220,11 +222,17 @@ fn resolve_id(param: &str) -> Result<crate::types::Snowflake, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    if param == "@me" {
-        return Err(ApiError::BadRequest("invalid parameter".into()));
-    }
     crate::types::Snowflake::parse(param)
         .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+}
+
+/// User-scoped path param: "@me" resolves to the authenticated caller
+/// (frontend contract `nodes/user/@me`, Go controller parity).
+fn resolve_user_param(param: &str, caller: i64) -> Result<crate::types::Snowflake, ApiError> {
+    if param == "@me" {
+        return Ok(crate::types::Snowflake(caller as u64));
+    }
+    resolve_id(param)
 }
 
 /// POST /nodes — create under the actor.

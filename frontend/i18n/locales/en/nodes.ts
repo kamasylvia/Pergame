@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: 'This action will delete {count} nodes.',
+      clonePick: 'Target folder',
+      cloneTitle: 'Clone to folder',
       confirm: 'Are you sure you want to delete this {type}?',
       confirmBulk: 'Are you sure you want to delete the selected nodes?',
       hasChildren: 'This {type} has {count} child documents. They will also be deleted.',
+      hasClones: 'This {type} has {count} clone positions. They will be deleted with it.',
       irreversible: 'This action is irreversible',
       title: 'Delete {type}',
       titleBulk: 'Delete nodes',

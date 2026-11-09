@@ -168,6 +168,7 @@ async fn main() {
             get(routes::backup::get_backup_status),
         )
         .route("/api/backup/{jobId}", delete(routes::backup::cancel_backup))
+        .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))
         .route(
             "/api/nodes/{nodeId}/links",
@@ -241,9 +242,38 @@ async fn main() {
         )
         .route("/api/resources/{id}", put(routes::resources::update_file))
         .with_state(state)
+        .layer(cors_layer())
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
+
+    /// CORS parity with the Go `frontendCORSConfig`: only the configured frontend
+    /// origin may read credentialed API responses; public asset hosts are never
+    /// trusted. An empty FRONTEND_URL denies all cross-origin access.
+    fn cors_layer() -> tower_http::cors::CorsLayer {
+        use axum::http::header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, ORIGIN};
+        use axum::http::{HeaderValue, Method};
+
+        let frontend = std::env::var("FRONTEND_URL").unwrap_or_default();
+        let origin = frontend.trim().trim_end_matches('/').to_string();
+
+        let mut layer = tower_http::cors::CorsLayer::new()
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::PATCH,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([ORIGIN, CONTENT_LENGTH, CONTENT_TYPE, AUTHORIZATION])
+            .expose_headers([CONTENT_LENGTH])
+            .allow_credentials(true);
+        if let Ok(value) = origin.parse::<HeaderValue>() {
+            layer = layer.allow_origin(value);
+        }
+        layer
+    }
     tracing::info!(%addr, "listening");
     let listener = tokio::net::TcpListener::bind(addr)
         .await

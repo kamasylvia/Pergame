@@ -521,17 +521,174 @@ async fn soft_links_lifecycle() {
     // Positions list.
     let (status, r) = get(&client, &format!("/nodes/{doc}/links")).await;
     assert_eq!(status, 200);
-    assert_eq!(r.result.as_array().map(|a| a.len()), Some(1));
+    let positions = r.result.as_array().expect("positions array");
+    assert_eq!(positions.len(), 1);
+    // v1 default sort position, serialized under "order" like DB_Node.
+    assert_eq!(positions[0].get("order").and_then(|v| v.as_i64()), Some(0));
+
+    // User-wide links feed (sidebar clone positions; NL-B).
+    let (status, r) = get(&client, "/nodes/links").await;
+    assert_eq!(status, 200, "user links list failed: {:?}", r.message);
+    let rows = r.result.as_array().expect("links array");
+    assert!(
+        rows.iter().any(
+            |l| l.get("node_id").and_then(|v| v.as_str()) == Some(doc.as_str())
+                && l.get("parent_id").and_then(|v| v.as_str()) == Some(ws2.as_str())
+        ),
+        "user-wide links must contain the created position"
+    );
 
     // Tree listing still 200 with the link present.
     let (status, _) = get(&client, &format!("/nodes/user/{owner_id}")).await;
     assert_eq!(status, 200);
 
     // Remove position.
-    let (status, r) = del(&client, &format!("/nodes/{doc}/links/{link_id}")).await;
+    let (status, _) = del(&client, &format!("/nodes/{doc}/links/{link_id}")).await;
     assert_eq!(status, 200);
     let (status, r) = get(&client, &format!("/nodes/{doc}/links")).await;
     assert_eq!(status, 200);
     assert_eq!(r.result.as_array().map(|a| a.len()), Some(0));
     let _ = owner_id;
+}
+
+// ------------------------------------------------------------- backup links
+
+/// NL-C (spec note-links.md §2): the backup zip must carry the node_links
+/// table alongside nodes — documents.json is `{nodes, links}` since v1.2.0.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn backup_zip_contains_links() {
+    let client = Client::new();
+    let (owner_id, suffix) = signup_and_login_tagged(&client, "bklinks").await;
+
+    let mk = |name: String| json!({"name": name, "role": 1});
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws1-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws1 = result_id_string(&r);
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("doc-{suffix}"), "role": 3, "parent_id": ws1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let doc = result_id_string(&r);
+    let (status, r) = post_json(&client, "/nodes", &mk(format!("ws2-{suffix}"))).await;
+    assert_eq!(status, 200);
+    let ws2 = result_id_string(&r);
+
+    // Link doc into ws2 so exactly one node_links row belongs to this user.
+    let (status, r) = post_json(
+        &client,
+        &format!("/nodes/{doc}/links"),
+        &json!({"parent_id": ws2}),
+    )
+    .await;
+    assert_eq!(status, 201, "link create failed: {:?}", r.message);
+    let link_id = result_id_string(&r);
+
+    // Documents-only backup job.
+    let (status, r) = post_json(&client, "/backup", &json!({"include_documents": true})).await;
+    assert_eq!(status, 202, "backup start failed: {:?}", r.message);
+    let job_id = r
+        .result
+        .get("job_id")
+        .and_then(|v| v.as_str())
+        .expect("job_id present")
+        .to_string();
+
+    // Poll until the job uploads the zip (download_url presigned) or fails.
+    let mut finished = false;
+    for _ in 0..120 {
+        let (status, r) = get(&client, &format!("/backup/{job_id}")).await;
+        assert_eq!(status, 200);
+        let job = &r.result;
+        if let Some(err) = job.get("error").and_then(|v| v.as_str()) {
+            panic!("backup job failed: {err}");
+        }
+        if job.get("download_url").is_some() {
+            finished = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    assert!(finished, "backup job did not finish in time");
+
+    // Pull the zip straight from the backups bucket (env contract mirrors the
+    // backend's S3_* variables).
+    let endpoint = std::env::var("S3_ENDPOINT").expect("S3_ENDPOINT");
+    let access = std::env::var("S3_ACCESSKEY").expect("S3_ACCESSKEY");
+    let secret = std::env::var("S3_SECRETKEY").expect("S3_SECRETKEY");
+    let bucket = format!(
+        "{}-backups",
+        std::env::var("S3_BUCKET").unwrap_or_else(|_| "pergame".into())
+    );
+    let s3cfg = aws_sdk_s3::config::Builder::new()
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+        .endpoint_url(endpoint)
+        .region(aws_sdk_s3::config::Region::new("us-east-1"))
+        .credentials_provider(aws_sdk_s3::config::Credentials::new(
+            access,
+            secret,
+            None,
+            None,
+            "integration-test",
+        ))
+        .force_path_style(true)
+        .build();
+    let s3 = aws_sdk_s3::Client::from_conf(s3cfg);
+    let obj = s3
+        .get_object()
+        .bucket(&bucket)
+        .key(format!("{owner_id}/backup.zip"))
+        .send()
+        .await
+        .expect("backup zip in S3");
+    let bytes = obj.body.collect().await.expect("read body").into_bytes();
+
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("valid zip");
+    let mut doc_file = archive
+        .by_name("documents.json")
+        .expect("documents.json entry");
+    let mut contents = String::new();
+    use std::io::Read as _;
+    doc_file
+        .read_to_string(&mut contents)
+        .expect("read documents.json");
+    let doc_json: Value = serde_json::from_str(&contents).expect("documents.json JSON");
+
+    let nodes = doc_json
+        .get("nodes")
+        .and_then(|v| v.as_array())
+        .expect("nodes array");
+    let links = doc_json
+        .get("links")
+        .and_then(|v| v.as_array())
+        .expect("links array");
+
+    fn id_of(v: &Value) -> Option<&str> {
+        v.get("id").and_then(|v| v.as_str())
+    }
+    assert!(
+        nodes.iter().any(|n| id_of(n) == Some(doc.as_str())),
+        "backed-up document missing from nodes"
+    );
+    let link = links
+        .iter()
+        .find(|l| id_of(l) == Some(link_id.as_str()))
+        .expect("created link present in backup");
+    assert_eq!(
+        link.get("node_id").and_then(|v| v.as_str()),
+        Some(doc.as_str())
+    );
+    assert_eq!(
+        link.get("parent_id").and_then(|v| v.as_str()),
+        Some(ws2.as_str())
+    );
+    assert!(
+        link.get("created_timestamp")
+            .and_then(|v| v.as_i64())
+            .is_some(),
+        "created_timestamp must stay numeric"
+    );
 }

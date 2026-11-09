@@ -14,7 +14,9 @@ function initGlobalTree(sortNodes: (a: TreeItem<Node>, b: TreeItem<Node>) => num
   const nodesStore = useNodesStore();
 
   if (!globalBuilder) {
-    globalBuilder = new TreeBuilder<Node>(toRaw(nodesStore.nodes), transformNode, sortNodes);
+    globalBuilder = new TreeBuilder<Node>(toRaw(nodesStore.nodes), transformNode, sortNodes, parentId =>
+      (nodesStore.linksByParent.get(parentId) ?? []).map(l => ({ nodeId: l.node_id, linkId: l.id })),
+    );
   }
 
   if (!globalTree) {

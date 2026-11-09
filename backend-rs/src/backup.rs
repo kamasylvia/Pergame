@@ -1,7 +1,8 @@
 //! User backup jobs (Go services/backup.service.go + types/backup.go parity):
-//! per-user async job, zip v1.1.0 archive (documents.json / files/ +
-//! files_index.json / user_settings.json / manifest.json), upload to the
-//! private backups bucket, 24h presigned download URL.
+//! per-user async job, zip v1.2.0 archive (documents.json — `{nodes, links}`
+//! since v1.2.0, when soft links shipped — / files/ + files_index.json /
+//! user_settings.json / manifest.json), upload to the private backups bucket,
+//! 24h presigned download URL.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::Mutex;
 
-pub const BACKUP_VERSION: &str = "1.1.0";
+pub const BACKUP_VERSION: &str = "1.2.0";
 
 /// Resource projection used while archiving file nodes.
 pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
@@ -41,6 +42,7 @@ pub struct SkippedFile {
 pub struct BackupStats {
     pub total_nodes: i64,
     pub total_documents: i64,
+    pub total_links: i64,
     pub total_files: i64,
     pub total_size_bytes: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -202,6 +204,19 @@ pub async fn run_backup_no_storage(store: Arc<BackupStore>, user_id: i64, job_id
         .await;
 }
 
+/// Soft-link row projection for documents.json (spec note-links.md §2: the
+/// backup carries the links table; a future restore rebuilds rows and skips +
+/// reports ones pointing at missing nodes). Snowflake ids cast to text to
+/// keep the string-on-the-wire contract.
+#[derive(Debug, sqlx::FromRow, Serialize)]
+struct NodeLinkBackup {
+    id: String,
+    parent_id: String,
+    node_id: String,
+    created_timestamp: i64,
+    order: i32,
+}
+
 /// Job phases (Go run() flow): collect → assemble zip → upload → presign.
 pub async fn run_backup(
     store: Arc<BackupStore>,
@@ -272,10 +287,30 @@ pub async fn run_backup(
                 v
             })
             .collect();
+
+        // Soft links owned via the user's nodes (node ownership anchors the
+        // row; parent must be one of the user's own folders by construction).
+        let links: Vec<NodeLinkBackup> = match sqlx::query_as::<_, NodeLinkBackup>(
+            "SELECT nl.id::text, nl.parent_id::text, nl.node_id::text, nl.created_timestamp, nl.\"order\" \
+             FROM node_links nl JOIN nodes n ON n.id = nl.node_id \
+             WHERE n.user_id = $1 ORDER BY nl.id",
+        )
+        .bind(user_id)
+        .fetch_all(&sql)
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => fail!("Failed to prepare document links"),
+        };
+        stats.total_links = links.len() as i64;
         progress!(40, "Packaging documents...");
         archive.add(
             "documents.json",
-            &serde_json::to_vec_pretty(&documents).unwrap_or_default(),
+            &serde_json::to_vec_pretty(&json!({
+                "nodes": documents,
+                "links": links,
+            }))
+            .unwrap_or_default(),
         );
     }
     if store.is_cancelled(&job_id) {

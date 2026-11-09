@@ -7,6 +7,12 @@ export interface TreeItem<T = unknown, ID = string> {
   icon?: string;
   children?: TreeItem<T>[];
   onClick?: () => void;
+  /**
+   * Soft-link row id when this item is rendered through a clone position
+   * (spec note-links.md): same node, second tree location. Undefined on
+   * canonical positions.
+   */
+  linkId?: string;
 }
 export interface ReadonlyIndexedCollection<T> {
   size: number;
@@ -20,6 +26,11 @@ export class TreeBuilder<T extends { id: string; parent_id?: string | null; role
     private readonly collection: ReadonlyIndexedCollection<T>,
     private readonly transform: (item: T) => Omit<TreeItem<T>, 'children'>,
     private readonly sortNodes: (a: TreeItem<T>, b: TreeItem<T>) => number,
+    /**
+     * Extra tree positions keyed by parent (soft links). Returning a position
+     * whose nodeId already sits under that parent canonically is a no-op.
+     */
+    private readonly getExtraChildIds?: (parentId: string) => Array<{ nodeId: string; linkId: string }>,
   ) {}
 
   /**
@@ -50,7 +61,7 @@ export class TreeBuilder<T extends { id: string; parent_id?: string | null; role
   buildTree(options?: { nodeFilter?: (node: T) => boolean; rootFilter?: (node: T) => boolean }): TreeItem<T>[] {
     const rootIds = this.collection.getChildrenIds(null);
 
-    const buildSubtree = (id: string): TreeItem<T> | undefined => {
+    const buildSubtree = (id: string, viaLinkId?: string): TreeItem<T> | undefined => {
       const rawNode = this.collection.get(id) as T;
       if (!rawNode) return undefined;
 
@@ -58,18 +69,33 @@ export class TreeBuilder<T extends { id: string; parent_id?: string | null; role
         return undefined;
       }
 
-      const item = this.getTransformedItem(id);
-      if (!item) return undefined;
+      const canonical = this.getTransformedItem(id);
+      if (!canonical) return undefined;
+
+      // Link positions share the subtree with the canonical item but carry
+      // their own location marker, so menus can tell positions apart.
+      const item: TreeItem<T> = viaLinkId
+        ? { ...canonical, linkId: viaLinkId, children: [] }
+        : canonical;
 
       const childrenIds = this.collection.getChildrenIds(id);
-      if (childrenIds.length > 0) {
-        const mappedChildren = childrenIds.map(childId => buildSubtree(childId)).filter((c): c is TreeItem<T> => !!c);
+      const extra = this.getExtraChildIds?.(id) ?? [];
+      const mainSet = new Set(childrenIds);
+      const extraIds = extra.filter(e => !mainSet.has(e.nodeId));
 
-        if (mappedChildren.length > 1) {
-          mappedChildren.sort(this.sortNodes);
+      const mappedChildren = childrenIds
+        .map(childId => buildSubtree(childId))
+        .filter((c): c is TreeItem<T> => !!c);
+      const extraChildren = extraIds
+        .map(e => buildSubtree(e.nodeId, e.linkId))
+        .filter((c): c is TreeItem<T> => !!c);
+
+      const all = [...mappedChildren, ...extraChildren];
+      if (all.length > 0) {
+        if (all.length > 1) {
+          all.sort(this.sortNodes);
         }
-
-        item.children = mappedChildren.length > 0 ? mappedChildren : undefined;
+        item.children = all;
       } else {
         item.children = undefined;
       }

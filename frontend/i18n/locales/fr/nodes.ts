@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: 'Cette action supprimera {count} nœuds.',
+      clonePick: 'Dossier cible',
+      cloneTitle: 'Cloner vers un dossier',
       confirm: 'Êtes-vous sûr de vouloir supprimer ce {type} ?',
       confirmBulk: 'Êtes-vous sûr de vouloir supprimer les nœuds sélectionnés ?',
       hasChildren: 'Ce {type} a {count} documents enfants. Ils seront également supprimés.',
+      hasClones: 'Ce {type} possède {count} positions clonées. Elles seront supprimées avec lui.',
       irreversible: 'Cette action est irréversible',
       title: 'Supprimer {type}',
       titleBulk: 'Supprimer les nœuds',

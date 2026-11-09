@@ -5,6 +5,7 @@
       <h3>{{ t('nodes.modals.delete.title', { type: nodeType }) }} • {{ props.node.name }}</h3>
       <p>{{ t('nodes.modals.delete.confirm', { type: nodeType }) }}</p>
       <p v-if="allChildren.length > 0" class="warn">{{ t('nodes.modals.delete.hasChildren', { type: nodeType, count: allChildren.length }) }}</p>
+      <p v-if="cloneCount > 0" class="warn">{{ t('nodes.modals.delete.hasClones', { type: nodeType, count: cloneCount }) }}</p>
     </template>
 
     <!-- Bulk deletion -->
@@ -48,6 +49,8 @@ const router = useRouter();
 const notifications = useNotifications();
 
 const allChildren = computed(() => (props.node ? nodesTree.getSubtreeAsArray(props.node.id) : []));
+
+const cloneCount = computed(() => (props.node ? store.links.filter(l => l.node_id === props.node!.id).length : 0));
 
 const nodeType = computed(() => getRoleName(props.node?.role).toLowerCase());
 

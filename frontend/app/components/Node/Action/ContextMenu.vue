@@ -15,6 +15,8 @@
     </div>
 
     <div class="menu-group">
+      <button class="menu-item" @click="action('cloneTo')"><Icon name="duplicate" />{{ t('common.actions.cloneTo') }}</button>
+      <button v-if="props.linkId" class="menu-item" @click="action('removeLink')"><Icon name="link_off" />{{ t('common.actions.removeLink') }}</button>
       <button class="menu-item" @click="action('duplicate')"><Icon name="duplicate" />{{ t('common.actions.duplicate') }}<kbd>Ctrl+D</kbd></button>
       <button class="menu-item" @click="action('copyLink')"><Icon name="link" />{{ t('common.actions.copyLink') }}<kbd>Ctrl+L</kbd></button>
       <button class="menu-item" @click="action('pin')">
@@ -39,14 +41,16 @@
 <script setup lang="ts">
 import NodePermissions from '../Modals/Permissions.vue';
 import NodeDeleteModal from '../Modals/Delete.vue';
+import NodeCloneModal from '../Modals/CloneTo.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ node: Node; contextMenu?: boolean }>();
+const props = defineProps<{ node: Node; contextMenu?: boolean; linkId?: string }>();
 const emit = defineEmits(['close']);
 
 const nodeStore = useNodesStore();
 const nodesPermissionsStore = useNodesPermissionsStore();
 const userStore = useUserStore();
+const notifications = useNotifications();
 
 const preferences = usePreferencesStore();
 const { t } = useI18nT();
@@ -70,6 +74,16 @@ async function action(name: string) {
       break;
     case 'new':
       router.push(`/dashboard/docs/new?parent_id=${props.node.id}`);
+      break;
+    case 'cloneTo':
+      modals.add(new Modal(shallowRef(NodeCloneModal), { props: { node: props.node }, size: 'small' }));
+      break;
+    case 'removeLink':
+      if (props.linkId) {
+        nodeStore
+          .removeLink(props.node.id, props.linkId)
+          .catch(e => notifications.add({ type: 'error', title: 'Clone', message: String(e) }));
+      }
       break;
     case 'duplicate':
       nodeStore.duplicate(props.node);

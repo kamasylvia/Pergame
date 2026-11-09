@@ -43,7 +43,12 @@
 ## 3. 续接点(2026-11-09 换机落盘)
 
 - **换机续接指引**:backend-rs 可 `cargo run` 直连 NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(PG_*/QUOBJECT_*);集成套件 `cargo test --test integration -- --ignored`(5+1 用例全绿);本仓 main 已推远程(2026-11-09)。
-- **待续**:① 软连接 NL-C(备份 zip 含 links 表)+ 前端树渲染(建议设计稿);② 2FA 全链路自测(可程序化);③ ~~OIDC/邮件实测~~ **OIDC ✅(2026-11-09:Keycloak `pergame-test` 临时 realm 全链授权码流 + sessions 200 + backup order 实测;顺手修 2 个列映射 bug;realm 测后已删;邮件半边仍待 SMTP)**;④ S3 TLS delta;⑤ docs 站 Rust 化。
+- **软连接全链路 ✅(2026-11-09 深夜)**:NL-A/B/C 三阶段全落地(NL-B 后端 `81fee759` = migration 0004 order 列 + `GET /nodes/links` + **@me 解析修复** + **CORS 层补齐**(Go frontendCORSConfig 对位;前端联调暴露的两缺口);NL-B 前端 `ab9dea10` = store links 集合 + TreeBuilder 位置合成 + `*` 角标 + CloneTo/Remove 菜单 + Delete 克隆提示 + i18n×8;**真浏览器走查全过**(克隆→双位置角标→移除→删除提示,nuxt dev + cargo run + IAB 截图存证);NL-C `4da3779e`)。设计稿定稿:`features/note-links-ui.md`(O1-O4 决议 + Trilium Notes 官方实现对位)。集成 7/7、clippy 0、eslint/stylelint 0。
+- **2FA 全链路 ✅**(pyotp 程序化:enroll→confirm→登录拦截 pre_auth→TOTP verify→recovery 一次性→disable 全过,测户已删)。
+- **OIDC ✅**(2026-11-09:Keycloak `pergame-test` 临时 realm 全链授权码流 + sessions 200 + backup order 实测;顺手修 2 个列映射 bug;realm 测后已删)。
+- **邮件链路 ✅(2026-11-09)**:SMTP = zoho(配置源 = Portainer joplin 容器 env,`MAILER_*` → `SMTP_*` 映射);backend-rs 实发 account-create + password-reset 两封(`kamasylvia@zohomail.com`);独立 smtplib relay 对照通;**送达肉眼复核待用户**(收件箱查 "Pergame: Set your password" / "Pergame: Reset your password")。
+- **S3 TLS ✅**(`b58bb38b`:S3_CA_PATH 进 TrustStore;S3_INSECURE_TLS = smithy 生态缺口,告警 + 文档化)。
+- **docs Rust 化 ✅**(S3_INSECURE_TLS 文档对齐实现、selfhost 补 fork 镜像现状);Go tests build 修复(`f8129dc3`)。
 - 旧续接点(2026-11-08/09 夜间):
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。

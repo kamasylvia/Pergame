@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: '이 작업은 {count}개의 노드를 삭제합니다.',
+      clonePick: '대상 폴더',
+      cloneTitle: '폴더로 복제',
       confirm: '이 {type}을(를) 삭제하시겠습니까?',
       confirmBulk: '선택한 노드를 삭제하시겠습니까?',
       hasChildren: '이 {type}에는 {count}개의 하위 문서가 있습니다. 하위 문서도 함께 삭제됩니다.',
+      hasClones: '이 {type}에 복제 위치 {count}개가 있습니다. 함께 삭제됩니다.',
       irreversible: '이 작업은 되돌릴 수 없습니다',
       title: '{type} 삭제',
       titleBulk: '노드 삭제',

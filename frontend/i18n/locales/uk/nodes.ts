@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: 'Ця дія видалить {count} вузлів.',
+      clonePick: 'Цільова тека',
+      cloneTitle: 'Клонувати до теки',
       confirm: 'Ви впевнені, що хочете видалити цей {type}?',
       confirmBulk: 'Ви впевнені, що хочете видалити вибрані вузли?',
       hasChildren: 'Цей {type} має {count} дочірніх документів. Вони також будуть видалені.',
+      hasClones: 'Цей {type} має {count} клонованих позицій. Вони будуть видалені разом із ним.',
       irreversible: 'Ця дія є незворотною',
       title: 'Видалити {type}',
       titleBulk: 'Видалити вузли',

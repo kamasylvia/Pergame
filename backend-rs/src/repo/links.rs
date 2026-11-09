@@ -13,15 +13,17 @@ pub async fn create(
     id: i64,
     parent_id: i64,
     node_id: i64,
+    order: i32,
     now: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO node_links (id, parent_id, node_id, created_timestamp)
-         VALUES ($1, $2, $3, $4)",
+        "INSERT INTO node_links (id, parent_id, node_id, \"order\", created_timestamp)
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(id)
     .bind(parent_id)
     .bind(node_id)
+    .bind(order)
     .bind(now)
     .execute(pool)
     .await
@@ -38,7 +40,7 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
 
 pub async fn get_by_id(pool: &PgPool, id: i64) -> Result<Option<LinkRow>, sqlx::Error> {
     sqlx::query_as::<_, LinkRow>(
-        "SELECT id, parent_id, node_id, created_timestamp FROM node_links WHERE id = $1",
+        "SELECT id, parent_id, node_id, created_timestamp, \"order\" FROM node_links WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -47,9 +49,22 @@ pub async fn get_by_id(pool: &PgPool, id: i64) -> Result<Option<LinkRow>, sqlx::
 
 pub async fn links_of_node(pool: &PgPool, node_id: i64) -> Result<Vec<LinkRow>, sqlx::Error> {
     sqlx::query_as::<_, LinkRow>(
-        "SELECT id, parent_id, node_id, created_timestamp FROM node_links WHERE node_id = $1",
+        "SELECT id, parent_id, node_id, created_timestamp, \"order\" FROM node_links WHERE node_id = $1",
     )
     .bind(node_id)
+    .fetch_all(pool)
+    .await
+}
+
+/// All link rows anchored on the user's own nodes (v1 scope: private tree;
+/// shared/team links join through node ownership like the backup export).
+pub async fn list_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<LinkRow>, sqlx::Error> {
+    sqlx::query_as::<_, LinkRow>(
+        "SELECT nl.id, nl.parent_id, nl.node_id, nl.created_timestamp, nl.\"order\" \
+         FROM node_links nl JOIN nodes n ON n.id = nl.node_id \
+         WHERE n.user_id = $1 ORDER BY nl.\"order\", nl.id",
+    )
+    .bind(user_id)
     .fetch_all(pool)
     .await
 }

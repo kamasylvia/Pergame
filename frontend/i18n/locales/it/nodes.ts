@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: 'Questa azione eliminerà {count} nodi.',
+      clonePick: 'Cartella di destinazione',
+      cloneTitle: 'Clona nella cartella',
       confirm: 'Sei sicuro di voler eliminare questo {type}?',
       confirmBulk: 'Sei sicuro di voler eliminare i nodi selezionati?',
       hasChildren: 'Questo {type} ha {count} documenti figli. Verranno eliminati anche essi.',
+      hasClones: 'Questo {type} ha {count} posizioni clonate. Verranno eliminate insieme.',
       irreversible: 'Questa azione è irreversibile',
       title: 'Elimina {type}',
       titleBulk: 'Elimina nodi',

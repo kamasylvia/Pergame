@@ -18,6 +18,8 @@
     <NuxtLink v-else :to="item.route" class="close content"
       >{{ item.data.role == -1 ? t(item.label) : item.label }} <span v-if="'mark' in item && item.mark && mark.hasMark(item.mark as MarkId)" class="bubble"
     /></NuxtLink>
+    <!-- Trilium-parity clone marker: the note exists in more than one location -->
+    <span v-if="isClone" class="clone-mark" :title="t('common.actions.cloneTo')">*</span>
 
     <!-- Right icons / actions  -->
     <Icon v-if="item.data.shared && level === 0" name="shared" fill="var(--text-secondary)" />
@@ -41,6 +43,7 @@ import type { Node } from '~/stores';
 import NodeContextMenu from '~/components/Node/Action/ContextMenu.vue';
 
 import { type SidebarItem, getItemChildren } from './helpers';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const nodesStore = useNodesStore();
 const nodesPermissionsStore = useNodesPermissionsStore();
@@ -72,6 +75,9 @@ const icon = computed(() => {
 
 const canEdit = computed(() => nodesPermissionsStore.hasPermissions(props.item.data as Node, 2));
 
+/** Trilium parity: every position of a multi-location note shows the marker. */
+const isClone = computed(() => nodesStore.links.some(l => l.node_id === props.item.id));
+
 const onClick = (m: MouseEvent) => {
   // if element does not have the "close" class, don't close the sidebar
   if (!(m.target as HTMLElement).closest('.close')) return;
@@ -83,7 +89,7 @@ const onClick = (m: MouseEvent) => {
 function openContextMenu(event: MouseEvent) {
   if (props.item.data.role === -1) return; // Prevent context menu on nav items
   contextMenu.open(shallowRef(NodeContextMenu), event, {
-    props: { contextMenu: true, node: props.item.data as Node },
+    props: { contextMenu: true, node: props.item.data as Node, linkId: (props.item as TreeItem<Node>).linkId },
   });
 }
 
@@ -136,6 +142,13 @@ const drop = async (event: DragEvent) => {
 </script>
 
 <style scoped lang="scss">
+.clone-mark {
+  margin-left: 2px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
 .item {
   display: flex;
   justify-content: flex-start;

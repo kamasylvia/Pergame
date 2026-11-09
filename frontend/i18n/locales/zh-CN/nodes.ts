@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: '此操作将删除 {count} 个节点。',
+      clonePick: '目标目录',
+      cloneTitle: '克隆到目录',
       confirm: '你确定要删除这个{type}吗？',
       confirmBulk: '你确定要删除所选的节点吗？',
       hasChildren: '此{type}有 {count} 个子文档，这些文档也会一并删除。',
+      hasClones: '此{type}有 {count} 个克隆位置,将一并删除。',
       irreversible: '此操作无法撤销',
       title: '删除{type}',
       titleBulk: '删除节点',

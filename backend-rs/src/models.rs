@@ -77,6 +77,7 @@ pub struct LinkRow {
     #[serde(with = "sf")]
     pub node_id: i64,
     pub created_timestamp: i64,
+    pub order: i32,
 }
 
 /// Node row for reads (sqlx escape hatch). Mirrors `models.Node` JSON tags:

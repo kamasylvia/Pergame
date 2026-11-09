@@ -2,7 +2,7 @@ import { IndexedCollection } from '~/helpers/IndexedCollection';
 import { parseTags, mergeNode } from '~/helpers/node';
 import { LocalDbService } from '~/services/localDB';
 import { skipHydrate } from 'pinia';
-import type { DB_Node, Node, NodeSearchResult, Permission } from './db_structures';
+import type { DB_Node, DB_NodeLink, Node, NodeSearchResult, Permission } from './db_structures';
 import type { KanbanMetadata } from '~/components/Kanban/Board.vue';
 
 export type TeamRole = 0;
@@ -32,6 +32,8 @@ export const useNodesStore = defineStore('nodes', () => {
   const nodes = shallowRef(new IndexedCollection());
   const allTags = ref<string[]>([]);
   const isFetching = ref(false);
+  /** Soft-link positions (note-links spec): same note, extra tree locations. */
+  const links = ref<DB_NodeLink[]>([]);
 
   const getAll = computed(() => nodes.value);
   const getAllTags = computed(() => allTags.value);
@@ -44,6 +46,16 @@ export const useNodesStore = defineStore('nodes', () => {
   const workspaces = computed(() => nodes.value.getIdsByRole(1).map(id => nodes.value.get(id)!));
   const documents = computed(() => nodes.value.getIdsByRole(3).map(id => nodes.value.get(id)!));
   const resources = computed(() => nodes.value.getIdsByRole(4).map(id => nodes.value.get(id)!));
+  /** Clone positions grouped by the folder they appear under (tree synthesis). */
+  const linksByParent = computed(() => {
+    const map = new Map<string, DB_NodeLink[]>();
+    for (const l of links.value) {
+      const arr = map.get(l.parent_id) ?? [];
+      arr.push(l);
+      map.set(l.parent_id, arr);
+    }
+    return map;
+  });
 
   async function init() {
     console.debug('[store/nodes] Initializing store');
@@ -51,7 +63,7 @@ export const useNodesStore = defineStore('nodes', () => {
 
     isFetching.value = true;
     nodes.value.startBulk();
-    await Promise.all([syncLocalDeltas(), fetch(), fetchShared()]);
+    await Promise.all([syncLocalDeltas(), fetch(), fetchShared(), fetchLinks()]);
     nodes.value.endBulk();
     isFetching.value = false;
     if (import.meta.client) {
@@ -230,6 +242,43 @@ export const useNodesStore = defineStore('nodes', () => {
     } else throw request.message;
   }
 
+  /** Fetch every soft-link position anchored on the caller's own nodes. */
+  async function fetchLinks(): Promise<void> {
+    if (import.meta.server) return;
+    try {
+      const request = await makeRequest('nodes/links', 'GET', {});
+      if (request.status === 'success') {
+        links.value = (request.result as DB_NodeLink[]) ?? [];
+      } else {
+        links.value = [];
+      }
+    } catch (e) {
+      console.warn('[store/nodes] fetchLinks failed; clone positions hidden', e);
+      links.value = [];
+    }
+  }
+
+  /** Clone a note into another folder (soft link). Rejects with server error. */
+  async function cloneTo(nodeId: string, parentId: string): Promise<void> {
+    const request = await makeRequest(`nodes/${nodeId}/links`, 'POST', { parent_id: parentId });
+    if (request.status !== 'success') {
+      throw new Error(request.message || 'clone failed');
+    }
+    const row = request.result as DB_NodeLink;
+    if (row && !links.value.some(l => l.id === row.id)) {
+      links.value = [...links.value, row];
+    }
+  }
+
+  /** Remove one clone position (the note itself and its other positions stay). */
+  async function removeLink(nodeId: string, linkId: string): Promise<void> {
+    const request = await makeRequest(`nodes/${nodeId}/links/${linkId}`, 'DELETE', {});
+    if (request.status !== 'success') {
+      throw new Error(request.message || 'remove link failed');
+    }
+    links.value = links.value.filter(l => l.id !== linkId);
+  }
+
   async function fetchShared(): Promise<IndexedCollection> {
     console.debug(`[store/nodes] Fetching shared nodes`);
     const request = await makeRequest(`nodes/shared/@me`, 'GET', {});
@@ -393,6 +442,11 @@ export const useNodesStore = defineStore('nodes', () => {
     getAll,
     getAllTags,
     getById,
+    links,
+    linksByParent,
+    fetchLinks,
+    cloneTo,
+    removeLink,
     getTotalUsedStorage,
     teams,
     categories,

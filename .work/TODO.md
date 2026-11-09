@@ -19,7 +19,6 @@
 
 - [ ] **笔记软连接/克隆**(Trilium 对位):同笔记多目录出现;克隆表 node_links + 环校验 + 三端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`(已含模型决策:克隆表方案,否决 content 分离重构)。
 
-- [ ] **Go tests 包 build 修复**(上游遗传,2026-11-09 发现):`backend/tests/helpers.go:227` 引用 `LoginAs` 但定义在 `auth_test.go`(测试编译单元才可见)→ `go build ./...` 在 tests 包失败;`go vet ./...`/`go test` 不受影响。修法:LoginAs 挪入 helpers.go 或文件改名 `_test.go`。验证:`go build ./...` 全绿。
 
 ## 待人工验证
 

@@ -37,6 +37,14 @@ export interface Permission {
   created_timestamp: number;
 }
 
+export interface DB_NodeLink {
+  id: string;
+  parent_id: string;
+  node_id: string;
+  created_timestamp: number;
+  order: number; // sort position among siblings; -1 pinned (mirrors DB_Node.order)
+}
+
 export interface NodeInvitation {
   id: string;
   invitation_code: string;

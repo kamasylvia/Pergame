@@ -54,9 +54,12 @@ export default {
   modals: {
     delete: {
       bulkCount: 'Durch diesen Vorgang werden {count} Nodes gelöscht.',
+      clonePick: 'Zielordner',
+      cloneTitle: 'In Ordner klonen',
       confirm: 'Möchtest du {type} wirklich löschen?',
       confirmBulk: 'Möchtest du die ausgewählten Nodes wirklich löschen?',
       hasChildren: '{Typ} hat {Anzahl} untergeordnete Dokumente. Diese werden ebenfalls gelöscht.',
+      hasClones: 'Dieses {type} hat {count} Klon-Positionen. Sie werden mitgelöscht.',
       irreversible: 'Dieser Vorgang ist unwiderruflich',
       title: 'Lösche {type}',
       titleBulk: 'Nodes löschen',
