@@ -58,3 +58,11 @@ zip 解析复用 zip crate;内存上限:zip 字节 ≤256MB(axum DefaultBodyLimi
 - 集成测试:备份 → 改库 → 快照还原 → 断言 nodes/links 重建与报告;上传还原同引擎
 - dr-backup:-n dry-run 走查 restore 计划;实机验证仍待人工(TODO)
 - 前端 lint 绿 + 浏览器走查快照列表/还原流
+
+## 7 批次 A(2026-11-09 已实施,思源对位)
+
+- **还原前安全快照**(SiYuan "Backup before checkout" 对位):两个还原入口执行前同步跑一次 documents+settings 备份(memo = "Pre-restore safety snapshot",约 30s 上限),id 写入 RestoreReport.warnings。
+- **快照 memo**:BackupOptions.memo(≤200 字符,trim)→ manifest.json + sidecar `{uid}/snapshots/<ts>.json`;列表联 sidecar 回显;prune 同删。
+- **还原预检**:POST /backup/snapshots/:id/preview、POST /backup/restore/upload/preview → RestorePlan(format、incoming/current/replaced/added/removed nodes、孤儿 parent、不可解析 links、files 碰撞[按 transformed_path 集合比对]、settings、warnings)。前端 arm 还原时异步调取并在警示区展示统计。
+
+实施 commits:后端 `8ed0d261`、前端 `2d0d9d55`。
