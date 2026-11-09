@@ -22,6 +22,8 @@ pub struct BackupBody {
     pub include_metadata: bool,
     #[serde(default)]
     pub include_settings: bool,
+    #[serde(default)]
+    pub memo: Option<String>,
 }
 
 fn options_from(body: BackupBody) -> BackupOptions {
@@ -30,6 +32,10 @@ fn options_from(body: BackupBody) -> BackupOptions {
         include_files: body.include_files,
         include_metadata: body.include_metadata,
         include_settings: body.include_settings,
+        memo: body
+            .memo
+            .filter(|m| !m.trim().is_empty())
+            .map(|m| m.trim().chars().take(200).collect()),
     }
 }
 
@@ -41,7 +47,10 @@ pub async fn create_backup(
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let options = options_from(body.map(|b| b.0).unwrap_or_default());
 
-    let job_id = state.backups.create(auth.user_id(), options).await?;
+    let job_id = state
+        .backups
+        .create(auth.user_id(), options.clone())
+        .await?;
     let job_id_for_response = job_id.clone();
 
     // Spawn the runner with owned handles (storage optional → runtime error
@@ -127,18 +136,34 @@ pub async fn list_snapshots(
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let mut snaps = storage.list_backup_snapshots(auth.user_id()).await?;
     snaps.sort_by(|a, b| b.0.cmp(&a.0));
-    let rows: Vec<serde_json::Value> = snaps
-        .into_iter()
-        .map(|(key, size, mtime)| {
-            let id = key
-                .rsplit('/')
-                .next()
-                .and_then(|f| f.strip_suffix(".zip"))
-                .unwrap_or("")
-                .to_string();
-            json!({ "id": id, "size": size, "last_modified": mtime })
-        })
-        .collect();
+    let mut rows = Vec::new();
+    for (key, size, mtime) in snaps {
+        let Some(id) = key
+            .rsplit('/')
+            .next()
+            .and_then(|f| f.strip_suffix(".zip"))
+            .map(|s| s.to_string())
+        else {
+            continue;
+        };
+        // Sidecar memo (older snapshots may not have one).
+        let memo = storage
+            .get_backup_object(&format!("{}/snapshots/{id}.json", auth.user_id()))
+            .await
+            .ok()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|v| {
+                v.get("memo")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string())
+            });
+        rows.push(json!({
+            "id": id,
+            "size": size,
+            "last_modified": mtime,
+            "memo": memo,
+        }));
+    }
     Ok(ApiOk::ok(json!(rows)))
 }
 
@@ -181,6 +206,41 @@ pub async fn delete_snapshot(
     Ok(ApiOk::ok(json!("Snapshot deleted successfully.")))
 }
 
+/// Safety snapshot (SiYuan "Backup before checkout" parity): taken before any
+/// restore so the replaced state stays recoverable. Memo marks it. Returns the
+/// snapshot id, appended to the restore report's warnings.
+async fn safety_snapshot(state: &AppState, user_id: i64) -> Option<String> {
+    let storage = state.storage.clone()?;
+    let options = crate::backup::BackupOptions {
+        include_documents: true,
+        include_settings: true,
+        memo: Some("Pre-restore safety snapshot".into()),
+        ..Default::default()
+    };
+    let job_id = state.backups.create(user_id, options).await.ok()?;
+    // Synchronous wait: snapshots are small (documents-only), bounded at ~30s.
+    for _ in 0..60 {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        if let Ok(job) = state.backups.get(user_id, &job_id).await {
+            if job.error.is_some() {
+                tracing::warn!(job = %job_id, "safety snapshot failed");
+                return None;
+            }
+            if job.download_url.is_some() {
+                let snaps = storage.list_backup_snapshots(user_id).await.ok()?;
+                let latest = snaps.iter().map(|(k, _, _)| k).max()?;
+                return latest
+                    .rsplit('/')
+                    .next()
+                    .and_then(|f| f.strip_suffix(".zip"))
+                    .map(|s| s.to_string());
+            }
+        }
+    }
+    tracing::warn!("safety snapshot timed out");
+    None
+}
+
 /// POST /backup/snapshots/:id/restore — replace current data with the snapshot.
 pub async fn restore_snapshot(
     State(state): State<AppState>,
@@ -193,9 +253,18 @@ pub async fn restore_snapshot(
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let key = snapshot_key(auth.user_id(), &id)?;
     let bytes = storage.get_backup_object(&key).await?;
-    let report =
-        crate::restore::restore_from_zip(state.db.clone(), Some(storage), auth.user_id(), bytes)
-            .await?;
+    let mut report = crate::restore::restore_from_zip(
+        state.db.clone(),
+        Some(storage.clone()),
+        auth.user_id(),
+        bytes,
+    )
+    .await?;
+    if let Some(safety_id) = safety_snapshot(&state, auth.user_id()).await {
+        report
+            .warnings
+            .push(format!("pre-restore safety snapshot created: {safety_id}"));
+    }
     Ok(ApiOk::ok(report))
 }
 
@@ -232,4 +301,52 @@ pub async fn restore_upload(
     )
     .await?;
     Ok(ApiOk::ok(report))
+}
+
+// ---------------- restore preview (dry-run, spec backup-restore.md) ----------------
+
+async fn read_upload(multipart: &mut Multipart) -> Result<Vec<u8>, ApiError> {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("multipart: {e}")))?
+    {
+        if field.name() == Some("file") {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::BadRequest(format!("file read: {e}")))?;
+            return Ok(data.to_vec());
+        }
+    }
+    Err(ApiError::BadRequest(
+        "multipart field \"file\" is required".into(),
+    ))
+}
+
+/// POST /backup/snapshots/:id/preview — dry-run plan against current data.
+pub async fn preview_snapshot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<crate::restore::RestorePlan>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let key = snapshot_key(auth.user_id(), &id)?;
+    let bytes = storage.get_backup_object(&key).await?;
+    let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
+    Ok(ApiOk::ok(plan))
+}
+
+/// POST /backup/restore/upload/preview — dry-run plan for an uploaded zip.
+pub async fn preview_upload(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    mut multipart: Multipart,
+) -> Result<ApiOk<crate::restore::RestorePlan>, ApiError> {
+    let bytes = read_upload(&mut multipart).await?;
+    let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
+    Ok(ApiOk::ok(plan))
 }

@@ -183,8 +183,17 @@ async fn main() {
             post(routes::backup::restore_snapshot),
         )
         .route(
+            "/api/backup/snapshots/{id}/preview",
+            post(routes::backup::preview_snapshot),
+        )
+        .route(
             "/api/backup/restore/upload",
             post(routes::backup::restore_upload)
+                .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
+        )
+        .route(
+            "/api/backup/restore/upload/preview",
+            post(routes::backup::preview_upload)
                 .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
         )
         .route("/api/nodes/links", get(routes::links::list_user_links))

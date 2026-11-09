@@ -783,6 +783,20 @@ async fn snapshot_restore_roundtrip() {
         .count();
     assert_eq!(names, 2, "expected only ws1+ws2 after delete");
 
+    // Preview (dry-run) before restoring: incoming 3 nodes vs current 2.
+    let (status, r) = post_json(
+        &client,
+        &format!("/backup/snapshots/{snapshot_id}/preview"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "preview failed: {:?}", r.message);
+    let plan = &r.result;
+    assert_eq!(plan.get("incoming_nodes").and_then(|v| v.as_u64()), Some(3));
+    assert_eq!(plan.get("current_nodes").and_then(|v| v.as_u64()), Some(2));
+    assert_eq!(plan.get("nodes_added").and_then(|v| v.as_u64()), Some(1));
+    assert_eq!(plan.get("nodes_removed").and_then(|v| v.as_u64()), Some(0));
+
     // Restore: the archived state (3 nodes + 1 link) must come back.
     let (status, r) = post_json(
         &client,

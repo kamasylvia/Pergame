@@ -23,7 +23,7 @@ pub const SNAPSHOT_KEEP: usize = 10;
 pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
 const BACKUP_EXPIRY_HOURS: i64 = 24;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackupOptions {
     #[serde(default)]
     pub include_documents: bool,
@@ -33,6 +33,10 @@ pub struct BackupOptions {
     pub include_metadata: bool,
     #[serde(default)]
     pub include_settings: bool,
+    /// Snapshot annotation, stored in the manifest and sidecar (max 200 chars,
+    /// trimmed at the API boundary).
+    #[serde(default)]
+    pub memo: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -58,6 +62,8 @@ pub struct BackupManifest {
     pub version: String,
     pub created_at: String,
     pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memo: Option<String>,
     pub options: BackupOptions,
     pub statistics: BackupStats,
 }
@@ -395,7 +401,8 @@ pub async fn run_backup(
         version: BACKUP_VERSION.into(),
         created_at: rfc3339_now(),
         user_id: user_id.to_string(),
-        options,
+        memo: options.memo.clone(),
+        options: options.clone(),
         statistics: stats.clone(),
     };
     progress!(85, "Creating manifest...");
@@ -435,6 +442,24 @@ pub async fn run_backup(
     if let Err(e) = storage.put_backup_object(&object_name, bytes).await {
         fail!(format!("Failed to upload backup: {e}"));
     }
+    // Sidecar metadata (memo etc.) so listings can show it without reading
+    // the zip. Removed together with the snapshot by retention prune.
+    let sidecar = json!({
+        "id": snapshot_id,
+        "memo": options.memo,
+        "version": BACKUP_VERSION,
+        "created_at": rfc3339_now(),
+    });
+    let sidecar_name = format!("{user_id}/snapshots/{snapshot_id}.json");
+    if let Err(e) = storage
+        .put_backup_object(
+            &sidecar_name,
+            serde_json::to_vec(&sidecar).unwrap_or_default(),
+        )
+        .await
+    {
+        tracing::warn!(error = %e, "snapshot sidecar upload failed (non-fatal)");
+    }
     let download_url = match storage.presign_backup_get(&object_name, &filename).await {
         Ok(url) => url,
         Err(e) => fail!(format!("Failed to generate download URL: {e}")),
@@ -449,6 +474,12 @@ pub async fn run_backup(
             for (key, _, _) in snaps.into_iter().take(excess) {
                 if let Err(e) = storage.delete_backup_object(&key).await {
                     tracing::warn!(%key, error = %e, "snapshot prune failed (non-fatal)");
+                }
+                if let Some(sidecar) = key.strip_suffix(".zip") {
+                    storage
+                        .delete_backup_object(&format!("{sidecar}.json"))
+                        .await
+                        .ok();
                 }
             }
             if excess > 0 {
