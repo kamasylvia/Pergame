@@ -14,6 +14,7 @@ pub struct SessionView {
     pub user_agent: Option<String>,
     pub location: Option<String>,
     #[serde(rename = "type")]
+    #[sqlx(rename = "type")]
     pub session_type: Option<String>,
     pub login_timestamp: i64,
     pub logout_timestamp: i64,

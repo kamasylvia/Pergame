@@ -248,7 +248,7 @@ pub async fn run_backup(
     if options.include_documents {
         let rows: Vec<crate::models::NodeRow> = match sqlx::query_as::<_, crate::models::NodeRow>(
             "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail, \
-             theme, accessibility, access, display, \"order\", content, content_compiled, size, \
+             theme, accessibility, access, display, \"order\" AS node_order, content, content_compiled, size, \
              metadata, created_timestamp, updated_timestamp FROM nodes WHERE user_id = $1",
         )
         .bind(user_id)

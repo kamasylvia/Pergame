@@ -43,7 +43,7 @@
 ## 3. 续接点(2026-11-09 换机落盘)
 
 - **换机续接指引**:backend-rs 可 `cargo run` 直连 NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(PG_*/QUOBJECT_*);集成套件 `cargo test --test integration -- --ignored`(5+1 用例全绿);本仓 main 已推远程(2026-11-09)。
-- **待续**:① 软连接 NL-C(备份 zip 含 links 表)+ 前端树渲染(建议设计稿);② 2FA 全链路自测(可程序化);③ OIDC/邮件实测(待 provider/SMTP);④ S3 TLS delta;⑤ docs 站 Rust 化。
+- **待续**:① 软连接 NL-C(备份 zip 含 links 表)+ 前端树渲染(建议设计稿);② 2FA 全链路自测(可程序化);③ ~~OIDC/邮件实测~~ **OIDC ✅(2026-11-09:Keycloak `pergame-test` 临时 realm 全链授权码流 + sessions 200 + backup order 实测;顺手修 2 个列映射 bug;realm 测后已删;邮件半边仍待 SMTP)**;④ S3 TLS delta;⑤ docs 站 Rust 化。
 - 旧续接点(2026-11-08/09 夜间):
 
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅(骨架+spike) → **P2 核心认证域 ✅(19d0643c,13/13 单测)**。
