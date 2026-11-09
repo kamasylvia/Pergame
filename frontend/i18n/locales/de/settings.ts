@@ -74,6 +74,7 @@ export default {
 
   backups: {
     backupLink: 'Backup-Link',
+    confirmRestore: 'Die Wiederherstellung ERSETZT alle aktuellen Dokumente und Links durch diesen Schnappschuss. Zum Bestätigen erneut klicken.',
     createBackup: 'Backup erstellen',
     creatingBackup: 'Backup wird erstellt...',
     downloadBackup: 'Backup herunterladen',
@@ -92,8 +93,20 @@ export default {
       startedTitle: 'Gestartet',
     },
     options: 'Backup-Optionen',
+    restored: 'Wiederherstellung abgeschlossen',
+    restoredDetail: 'Knoten: {nodes} · Links: {links} · Dateien: {files}',
+    restoreFailed: 'Wiederherstellung fehlgeschlagen',
+    restoring: 'Wiederherstellung läuft…',
+    snapshotDelete: 'Schnappschuss löschen',
+    snapshotDeleted: 'Schnappschuss gelöscht',
+    snapshotDownload: 'Schnappschuss herunterladen',
+    snapshotRestore: 'Diesen Schnappschuss wiederherstellen',
+    snapshots: 'Schnappschüsse',
+    snapshotsEmpty: 'Noch keine Schnappschüsse – oben einen erstellen.',
     subtitle: 'Erstelle eine Sicherung deiner Daten mit anpassbaren Optionen.',
     title: 'Sicherungen',
+    uploadRestore: 'Aus Zip wiederherstellen',
+    uploadRestoreHint: 'Ein Pergame-Backup-Zip hochladen, um die aktuellen Daten zu ersetzen.',
   },
 
   deleteAccountModal: {

@@ -73,6 +73,7 @@ export default {
 
   backups: {
     backupLink: '백업 링크',
+    confirmRestore: '복원하면 현재 모든 문서와 링크가 이 스냅샷으로 대체됩니다. 확인하려면 다시 클릭하세요.',
     createBackup: '백업 생성',
     creatingBackup: '백업 생성 중...',
     downloadBackup: '백업 다운로드',
@@ -91,8 +92,20 @@ export default {
       startedTitle: '시작됨',
     },
     options: '백업 옵션',
+    restored: '복원 완료',
+    restoredDetail: '노드: {nodes} · 링크: {links} · 파일: {files}',
+    restoreFailed: '복원 실패',
+    restoring: '복원 중…',
+    snapshotDelete: '스냅샷 삭제',
+    snapshotDeleted: '스냅샷 삭제됨',
+    snapshotDownload: '스냅샷 다운로드',
+    snapshotRestore: '이 스냅샷 복원',
+    snapshots: '스냅샷',
+    snapshotsEmpty: '스냅샷이 없습니다 — 위에서 생성하세요.',
     subtitle: '사용자 지정 옵션으로 데이터 백업을 생성합니다.',
     title: '백업',
+    uploadRestore: 'Zip에서 복원',
+    uploadRestoreHint: 'Pergame 백업 zip을 업로드하여 현재 데이터를 대체합니다.',
   },
 
   deleteAccountModal: {

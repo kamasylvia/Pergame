@@ -73,6 +73,7 @@ export default {
 
   backups: {
     backupLink: 'Backup link',
+    confirmRestore: 'Restore will REPLACE all current documents and links with this snapshot. Click restore again to confirm.',
     createBackup: 'Create backup',
     creatingBackup: 'Creating backup...',
     downloadBackup: 'Download backup',
@@ -91,8 +92,20 @@ export default {
       startedTitle: 'Started',
     },
     options: 'Backup options',
+    restored: 'Restore complete',
+    restoredDetail: 'Nodes: {nodes} · Links: {links} · Files: {files}',
+    restoreFailed: 'Restore failed',
+    restoring: 'Restoring…',
+    snapshotDelete: 'Delete snapshot',
+    snapshotDeleted: 'Snapshot deleted',
+    snapshotDownload: 'Download snapshot',
+    snapshotRestore: 'Restore this snapshot',
+    snapshots: 'Snapshots',
+    snapshotsEmpty: 'No snapshots yet — create one above.',
     subtitle: 'Create a backup of your data with customizable options.',
     title: 'Backups',
+    uploadRestore: 'Restore from zip',
+    uploadRestoreHint: 'Upload a Pergame backup zip to replace current data.',
   },
 
   deleteAccountModal: {

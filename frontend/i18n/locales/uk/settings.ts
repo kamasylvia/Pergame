@@ -73,6 +73,7 @@ export default {
 
   backups: {
     backupLink: 'Посилання на резервну копію',
+    confirmRestore: 'Відновлення ЗАМІНИТЬ усі поточні документи та посилання цим знімком. Клікніть ще раз для підтвердження.',
     createBackup: 'Створити резервну копію',
     creatingBackup: 'Створення резервної копії...',
     downloadBackup: 'Завантажити резервну копію',
@@ -91,8 +92,20 @@ export default {
       startedTitle: 'Розпочато',
     },
     options: 'Параметри резервного копіювання',
+    restored: 'Відновлення завершено',
+    restoredDetail: 'Вузли: {nodes} · Посилання: {links} · Файли: {files}',
+    restoreFailed: 'Помилка відновлення',
+    restoring: 'Відновлення…',
+    snapshotDelete: 'Видалити знімок',
+    snapshotDeleted: 'Знімок видалено',
+    snapshotDownload: 'Завантажити знімок',
+    snapshotRestore: 'Відновити цей знімок',
+    snapshots: 'Знімки',
+    snapshotsEmpty: 'Знімків ще немає — створіть один вище.',
     subtitle: 'Створіть резервну копію ваших даних з налаштовуваними параметрами.',
     title: 'Резервні копії',
+    uploadRestore: 'Відновити з zip',
+    uploadRestoreHint: 'Завантажте резервний zip Pergame, щоб замінити поточні дані.',
   },
 
   deleteAccountModal: {

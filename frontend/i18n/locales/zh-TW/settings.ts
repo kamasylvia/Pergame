@@ -73,6 +73,7 @@ export default {
 
   backups: {
     backupLink: '備份連結',
+    confirmRestore: '還原將以此快照**取代**目前全部文件與連結。再次點擊還原以確認。',
     createBackup: '建立備份',
     creatingBackup: '正在建立備份...',
     downloadBackup: '下載備份',
@@ -91,8 +92,20 @@ export default {
       startedTitle: '已開始',
     },
     options: '備份選項',
+    restored: '還原完成',
+    restoredDetail: '節點:{nodes} · 連結:{links} · 檔案:{files}',
+    restoreFailed: '還原失敗',
+    restoring: '還原中…',
+    snapshotDelete: '刪除快照',
+    snapshotDeleted: '快照已刪除',
+    snapshotDownload: '下載快照',
+    snapshotRestore: '還原此快照',
+    snapshots: '快照',
+    snapshotsEmpty: '尚無快照 — 在上方建立。',
     subtitle: '使用可自訂的選項建立資料備份。',
     title: '備份',
+    uploadRestore: '從 zip 還原',
+    uploadRestoreHint: '上傳 Pergame 備份 zip 以取代目前資料。',
   },
 
   deleteAccountModal: {

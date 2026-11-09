@@ -74,6 +74,7 @@ export default {
 
   backups: {
     backupLink: 'Lien de la sauvegarde',
+    confirmRestore: 'La restauration REMPLACERA tous les documents et liens actuels par cet instantané. Cliquez à nouveau pour confirmer.',
     createBackup: 'Créer une sauvegarde',
     creatingBackup: 'Création de la sauvegarde...',
     downloadBackup: 'Télécharger la sauvegarde',
@@ -92,8 +93,20 @@ export default {
       startedTitle: 'Commencé',
     },
     options: 'Options de sauvegarde',
+    restored: 'Restauration terminée',
+    restoredDetail: 'Nœuds : {nodes} · Liens : {links} · Fichiers : {files}',
+    restoreFailed: 'Échec de la restauration',
+    restoring: 'Restauration…',
+    snapshotDelete: 'Supprimer l’instantané',
+    snapshotDeleted: 'Instantané supprimé',
+    snapshotDownload: 'Télécharger l’instantané',
+    snapshotRestore: 'Restaurer cet instantané',
+    snapshots: 'Instantanés',
+    snapshotsEmpty: 'Aucun instantané — créez-en un ci-dessus.',
     subtitle: 'Créez une sauvegarde de vos données avec des options personnalisables.',
     title: 'Sauvegardes',
+    uploadRestore: 'Restaurer depuis un zip',
+    uploadRestoreHint: 'Téléversez un zip de sauvegarde Pergame pour remplacer les données actuelles.',
   },
 
   deleteAccountModal: {

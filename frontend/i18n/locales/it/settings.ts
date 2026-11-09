@@ -75,6 +75,7 @@ export default {
 
   backups: {
     backupLink: 'Link del backup',
+    confirmRestore: 'Il ripristino SOSTITUIRÀ tutti i documenti e i link attuali con questo snapshot. Clicca di nuovo per confermare.',
     createBackup: 'Crea backup',
     creatingBackup: 'Creazione backup in corso...',
     downloadBackup: 'Scarica backup',
@@ -93,8 +94,20 @@ export default {
       startedTitle: 'Avviato',
     },
     options: 'Opzioni di backup',
+    restored: 'Ripristino completato',
+    restoredDetail: 'Nodi: {nodes} · Link: {links} · File: {files}',
+    restoreFailed: 'Ripristino non riuscito',
+    restoring: 'Ripristino…',
+    snapshotDelete: 'Elimina snapshot',
+    snapshotDeleted: 'Snapshot eliminato',
+    snapshotDownload: 'Scarica snapshot',
+    snapshotRestore: 'Ripristina questo snapshot',
+    snapshots: 'Snapshot',
+    snapshotsEmpty: 'Nessuno snapshot — creane uno sopra.',
     subtitle: 'Crea un backup dei tuoi dati con opzioni personalizzabili.',
     title: 'Backup',
+    uploadRestore: 'Ripristina da zip',
+    uploadRestoreHint: 'Carica un zip di backup Pergame per sostituire i dati attuali.',
   },
 
   deleteAccountModal: {
