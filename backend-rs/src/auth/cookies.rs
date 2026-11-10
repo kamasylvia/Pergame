@@ -15,17 +15,60 @@ pub fn secure_cookies() -> bool {
 }
 
 pub fn cookie_domain() -> Option<String> {
-    match std::env::var("COOKIE_DOMAIN") {
-        Ok(d) if !d.is_empty() => {
-            // Include leading dot for subdomains (Go parity).
-            Some(if d.starts_with('.') {
-                d
-            } else {
-                format!(".{d}")
-            })
-        }
-        _ => None,
+    let raw = std::env::var("COOKIE_DOMAIN").ok()?;
+    let cleaned = sanitize_cookie_domain(&raw);
+    if cleaned.is_empty() {
+        return None;
     }
+    // Include a leading dot only for real multi-label domains (subdomain
+    // sharing, Go parity). A dotted single-label host — `.localhost`, `.::1`,
+    // any bare IP — is rejected by cookie-domain matching, so the cookie would
+    // be stored and then never sent back: every request 401s.
+    Some(if needs_leading_dot(&cleaned) {
+        format!(".{cleaned}")
+    } else {
+        cleaned.trim_start_matches('.').to_string()
+    })
+}
+
+/// True for domains that can be scoped to subdomains: at least two labels and
+/// not an IP literal. Everything else must be sent host-only.
+fn needs_leading_dot(domain: &str) -> bool {
+    let d = domain.trim_start_matches('.');
+    if d.is_empty() || d.starts_with('[') || d.starts_with("::") {
+        return false; // IPv6
+    }
+    // IPv4: all labels numeric.
+    if d.split('.')
+        .all(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()))
+    {
+        return false;
+    }
+    d.matches('.').count() >= 1
+}
+
+/// A `Domain` attribute may not carry a scheme or a port: browsers and HTTP
+/// clients silently DROP such a cookie, which turns the entire session into
+/// 401s with no error anywhere. Strip both instead of trusting the operator
+/// to have typed a bare host (`COOKIE_DOMAIN=localhost:8200` was the shipped
+/// compose default for a while and broke every authenticated request).
+fn sanitize_cookie_domain(raw: &str) -> String {
+    let mut d = raw.trim();
+    if let Some(rest) = d.split_once("://").map(|(_, r)| r) {
+        d = rest; // drop the scheme
+    }
+    // Drop everything from the first '/', '?' or '#' onwards.
+    d = d.split(['/', '?', '#']).next().unwrap_or(d);
+    // Drop the port (IPv6 literals keep their brackets: [::1]:8200).
+    let without_port = if d.starts_with('[') {
+        match d.find(']') {
+            Some(end) => &d[..=end],
+            None => d,
+        }
+    } else {
+        d.split(':').next().unwrap_or(d)
+    };
+    without_port.trim().trim_end_matches('.').to_string()
 }
 
 fn build(name: &'static str, value: String, max_age_secs: i64) -> Cookie<'static> {
@@ -106,5 +149,49 @@ mod tests {
         let c = clear_access_cookie();
         assert_eq!(c.max_age(), Some(time::Duration::ZERO));
         assert_eq!(c.value(), "");
+    }
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::{needs_leading_dot, sanitize_cookie_domain};
+
+    #[test]
+    fn strips_scheme_port_path() {
+        assert_eq!(sanitize_cookie_domain("localhost:8200"), "localhost");
+        assert_eq!(
+            sanitize_cookie_domain("http://localhost:8200/"),
+            "localhost"
+        );
+        assert_eq!(
+            sanitize_cookie_domain("https://wiki.example.com"),
+            "wiki.example.com"
+        );
+        assert_eq!(sanitize_cookie_domain("  example.com.  "), "example.com");
+        assert_eq!(
+            sanitize_cookie_domain("example.com:443/path"),
+            "example.com"
+        );
+    }
+
+    #[test]
+    fn keeps_ipv6_brackets() {
+        assert_eq!(sanitize_cookie_domain("[::1]:8200"), "[::1]");
+        assert_eq!(sanitize_cookie_domain("[::1]"), "[::1]");
+    }
+
+    #[test]
+    fn single_label_and_ips_stay_host_only() {
+        assert!(!needs_leading_dot("localhost"));
+        assert!(!needs_leading_dot("127.0.0.1"));
+        assert!(!needs_leading_dot("[::1]"));
+        assert!(needs_leading_dot("example.com"));
+        assert!(needs_leading_dot("wiki.example.com"));
+    }
+
+    #[test]
+    fn empty_stays_empty() {
+        assert_eq!(sanitize_cookie_domain(""), "");
+        assert_eq!(sanitize_cookie_domain("   "), "");
     }
 }

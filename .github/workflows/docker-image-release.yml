@@ -47,10 +47,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The fork ships the Rust rewrite (backend-rs/), not the upstream Go
+      # tree (backend/) — that one is kept only for reference.
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: ./backend-rs
           push: true
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
@@ -70,3 +72,17 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
+
+      # Instance DR sidecar (postgres:17 base so pg_dump matches the server).
+      - name: Build and push DR sidecar image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./scripts
+          file: ./scripts/Dockerfile.sidecar
+          push: true
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:latest
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.tag }}

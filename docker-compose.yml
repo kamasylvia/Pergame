@@ -45,14 +45,14 @@ services:
       retries: 3
       start_period: 20s
 
-  # Pergame Backend
+  # Pergame Backend (Rust rewrite; image built and published by GHCR)
+  #
+  # Images come from ghcr.io/<owner>/<repo>-{backend,frontend,dr-backup}
+  # (see .github/workflows/docker-image-release.yml). Pin PERGAME_TAG to a
+  # release tag for reproducible deploys (`latest` follows releases).
+  # Upgrade flow: `docker compose pull && docker compose up -d`.
   backend:
-    # Fork build (Rust backend): the upstream prebuilt image does not support
-    # the S3_* env vars or PostgreSQL.
-    image: pergame-backend:local
-    build:
-      context: ./backend-rs
-      dockerfile: Dockerfile
+    image: ghcr.io/kamasylvia/pergame-backend:${PERGAME_TAG:-latest}
     container_name: pergame-backend
     environment:
       # General configuration
@@ -61,7 +61,9 @@ services:
 
       # Security and authentication
       JWT_SECRET: ${JWT_SECRET:-your-secure-jwt-secret-key-change-this-in-production}
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost:8200} # Common domain for cookies (e.g., yourdomain.com if you have frontend.yourdomain.com and api.yourdomain.com)
+      # Bare host only — a port here produces an invalid Cookie Domain
+      # attribute and browsers/clients silently drop the auth cookies.
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost} # e.g. yourdomain.com (no scheme, no port)
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8200} # URL where the frontend is hosted (for CORS policy and url generation in emails)
       ALLOW_UNSECURE: "${ALLOW_UNSECURE:-true}" # Set to 'true' if you run without HTTPS (e.g., local dev);
 
@@ -120,10 +122,7 @@ services:
 
   # Pergame Frontend
   frontend:
-    image: ghcr.io/kamasylvia/pergame-frontend:latest
-    #build:
-    #  context: ./frontend
-    #  dockerfile: Dockerfile
+    image: ghcr.io/kamasylvia/pergame-frontend:${PERGAME_TAG:-latest}
     container_name: pergame-frontend
     restart: unless-stopped
     environment:
@@ -150,9 +149,7 @@ services:
   # jobs handed over by the backend through the shared volumes. Optional -
   # remove this service (and the backend's /conf,/jobs mounts) to disable.
   dr-backup:
-    build:
-      context: ./scripts
-      dockerfile: Dockerfile.sidecar
+    image: ghcr.io/kamasylvia/pergame-dr-backup:${PERGAME_TAG:-latest}
     container_name: pergame-dr-backup
     restart: unless-stopped
     environment:
