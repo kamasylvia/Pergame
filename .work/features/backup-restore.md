@@ -210,3 +210,15 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 - **P1(本批)**:Store 三实现 + 0005 + admin API(config CRUD 掩码/testTarget/deleteCheck/editCheck)+ fan-out 备份 + 每目标快照列表/单删(引用计数)/还原拉回 + owner/latest refs
 - **P2**:target 级锁 + 工作区只读中间件 + 前端只读态 + emptyTarget 二步确认强化 + maxAgeDays
 - **P3**:zip 同构格式(meta+manifest+blobs)三入口、per-target cron 表达式调度
+
+## 15 P1/P2/P3 全量实施结果(2026-11-10)
+
+**P1 多目标 fan-out ✅**(commits `0fc5b2c4`→`6bdb75b6`→`73addc6b`):Store 三实现(S3/WebDAV/PG)+ 指纹身份去重 + 掩码回填 + deleteCheck/editCheck 门禁 + 按用户 target + 密文原样复制 + 快照后自动复制(增量去重)+ target 侧 keep_last prune/blob GC + fetch 回拉 + admin UI(CRUD/用户勾选/测试/同步/删除/探针)。
+
+**P2 锁与只读 ✅**(`aebfdc01`):备份共享锁(并发允许)/还原独占锁(互斥 + 等备份 60s 排空);中间件对工作区写请求返回 **423**;豁免 `/api/backup`、`/api/admin/dr-backup`、`/api/health`、`/api/auth`、`/api/users/@me`(避免锁死备份机制自身);`GET /admin/dr-backup/status` 暴露 `{backups_in_flight, restore_in_flight, read_only}`;前端 `MaintenanceBanner` 每 4s 轮询显示只读提示(i18n×8)。活测:还原中 status `read_only:true`,写请求 423,还原后恢复 200。
+
+**P3 cron + portable zip ✅**(`646654d6`):5 段 cron 解析(`*`/`*/n`/`a-b`/`a-b/n`/逗号列表,dom|dow 同时受限时按 cron 约定取 OR,dow 0-7),每分钟 tick + 错过的分钟不补跑 + 锁持有期间跳过;`backup_targets.schedule`(migration 0007)。portable zip = `meta.json`(format `pergame-backup/object-set`)+ `manifest.json` + `blobs/<sha256>`,条目名全 ASCII(规避 CP437/UTF-8 乱码),密文原样且不压缩;快照下载对 v2 输出该格式,上传还原/预检自动识别并转换为 v1 形态复用既有引擎;新增 `GET /targets/:id/export/:snapshotId` 直接从 target 组包。
+
+**测试**:单测 49/49(cron 6 + portable 2 + locks 2 + 既有);集成 10/10(新增 `snapshot_targets_lifecycle` 覆盖创建/掩码/去重/增量/门禁/清空/删除);clippy 0;eslint/stylelint 0。
+
+**踩坑**:①已应用的 migration 不可再编辑——新增列/字段必须拆新迁移(sqlx 报 `migration N was previously applied but has been modified`);②软删除批次落地后,还原预检的 `current_nodes` 不再等于"物理节点数",断言应比较关系而非绝对值;③JWT 携带 role 快照,DB 提权后必须重新登录才生效(测试辅助需显式重登)。
