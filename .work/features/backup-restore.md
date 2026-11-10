@@ -112,11 +112,15 @@ zip 解析复用 zip crate;内存上限:zip 字节 ≤256MB(axum DefaultBodyLimi
 **API**(全部 `is_app_admin`,role=2):
 - `GET /api/admin/dr-backup/config` → {exists, content(**敏感字段掩码**:pg 记录第 6 段、s3 第 6/7 段、webdav 第 5 段 → `***`)}
 - `PUT /api/admin/dr-backup/config` {content} → `***` 段回填旧值后写盘(0600);bash 可用时附加 `bash -n` 语法校验
+- `GET /api/admin/dr-backup/config/structured` → {exists, config}(结构化 JSON:源/目的地/保留期,**密钥一律 `***`**)
+- `PUT /api/admin/dr-backup/config/structured` {config} → 校验(禁止 `|`/引号/换行 → 防记录格式损坏)→ 从磁盘原文回填 `***` 密钥 → 渲染 bash conf → 同一 `bash -n` 门 → 写盘(0600)
 - `POST /api/admin/dr-backup/jobs` → 创建 pending job
 - `GET /api/admin/dr-backup/jobs/{id}` → done 输出或 pending 状态
 - 未部署(卷不存在)时全部 503,提示「DR sidecar not deployed」
 
-**前端**:settings 新增 admin 段(role=2 可见)「Instance」→ Instance DR 视图:conf 编辑(掩码说明)+ 保存 + 立即备份 / 列出快照 / 还原(source + ts,二次确认)+ job 输出区。
+> **结构化配置(2026-11-09 补)**:conf 仍是 bash(文件被 sidecar `source`),后端 `routes/dr_config.rs` 在 JSON ⇄ conf 之间转换,**部署契约不变**。前端默认走表单;原始 conf 编辑器降级为「高级」折叠区,仅供表单未覆盖的字段使用。新增记录若密钥仍为 `***` 直接报错(否则会写进字面量星号)。
+
+**前端**:settings 新增 admin 段(role=2 可见)「Instance」→ Instance DR 视图:**结构化表单**(PostgreSQL 源增删 / S3 与 WebDAV 目的地增删 / 保留天数 / 上传校验;密钥字段 `***` 不碰即保留)+ 折叠的原始 conf 编辑器 + 保存 + 立即备份 / 列出快照 / 还原(source + ts,二次确认)+ job 输出区。
 
 **cron 语义变化**:原宿主 cron 改由 sidecar 内置循环(SCHEDULE_HOURS)或保留宿主 cron(直接 `docker exec pergame-dr-backup /opt/dr/dr-backup.sh -c /conf/dr-backup.conf`),二选一,文档两种都给。
 
@@ -129,3 +133,26 @@ zip 解析复用 zip crate;内存上限:zip 字节 ≤256MB(axum DefaultBodyLimi
 ## 12 定位澄清(用户裁决 2026-11-09)
 
 备份主要目标是**异地 3-2-1**:dr-backup(整库 pg_dump → 多目的地)是主力;应用内快照是辅助(用户级、可还原、可下载);本地误删恢复靠**回收站机制**(待做,进 TODO);**git 级版本控制不做**(明确否决,不再评估内容寻址版本历史)。
+
+## 13 批次 D:DR 层 Siyuan 对位补齐(2026-11-09 已实施)
+
+对位 `siyuan/kernel/backup` 包,补齐 5 项差距:
+
+| # | 能力 | 实施 |
+|---|---|---|
+| 1 | 目的地/源连通性探测 | `dr-backup.sh -p <name>` → 单行 `PROBE|kind|name|reachable=|snapshots=|fingerprint=|note=`;`POST jobs {action:"probe", name}` + `get_job` 解析出结构化 `probe` 字段;表单「Test」按钮(源与目的地都有)显示状态条。目的地探测 = rclone lsf -R 目的地根,快照数 = `.dump` 文件计数;源探测 = `psql -c 'SELECT 1'`(PGCONNECT_TIMEOUT=10) |
+| 2 | DR 备份加密 | 每目的地 `crypt_pass`(空=明文);rclone **crypt remote** 包裹目的地(`[drb_crypt_<name>]` section,`remote = <base>:<bucket或根>`),上传/列表/剪枝/还原统一走加密层;crypt 启用时 size 校验跳过(密文尺寸≠明文,rclone crypt 内部 nonce+MAC 保证完整性)。**注意:启用 crypt = 全新对象命名空间,旧明文快照不可经 crypt remote 见**(spec §13 同 Siyuan blobs-e2e 语义) |
+| 3 | keep-last 保留维度 | 记录尾追加 `retain_days|keep_last`(0=继承全局/关);`prune_dest` = 年龄剪枝(全局 RETAIN_DAYS 兜底)+ keep-last(rclone lsf 目录名倒序,超出 N 个 rclone purge;时间戳目录字典序=时间序) |
+| 4 | cron 调度 | 每目的地 `cron`(5 段);**后端调度器**(`spawn_dr_cron_scheduler`,croner 解析,每 60s 重读 conf)对到期目的地写 `dr-backup.sh -T <name>` job;错过不补跑 + 重启不补跑(标准 cron 语义,Siyuan scheduler 对位);pending 已有同目标 job 时跳过(防排队风暴)。sidecar 的 `SCHEDULE_HOURS` 全局循环保留兼容但弃用 |
+| 5 | 删除门禁 + 指纹 | 探测输出含**存储指纹**(host:port|bucket|prefix,逗号分隔);表单删除目的地:探测到快照 >0 → **输错名称即拒**(Siyuan deletecheck 简化版),未探测/0 快照 → confirm 警示「远端快照不会被删除」;conf 校验拒绝完全重复的存储位置(同 type+endpoint+bucket+prefix) |
+
+**关键修复(探测首跑即抓到)**:rclone ≥ 1.76 不再从 `RCLONE_CONFIG_<name>_*` 环境变量段解析 remote type("didn't find section in config file")——原脚本 env-section 方案在真机上会全盘失效。改为**运行时生成私有 rclone config 文件**(`$WORKDIR/rclone.conf` + `export RCLONE_CONFIG`),全版本稳定。
+
+**记录格式(v2,向后兼容)**:
+```
+s3|name|endpoint|bucket|prefix|ak|sk|secure|region|provider[|retain_days|keep_last|cron|crypt_pass]
+webdav|name|url|user|password|prefix[|retain_days|keep_last|cron|crypt_pass]
+```
+旧格式记录(无尾部字段)继续可读(=继承/关),新旧脚本都能 source。
+
+**验证**:41 单测(含 cron 校验/重复指纹/掩码往返/PROBE 解析)全绿;clippy/eslint/stylelint 0;浏览器活测(假 sidecar 消费器 + 真打 NAS QuObjects):探测 reachable=true 且指纹正确、源探测诚实失败(本机无 psql)、conf 全字段落盘、删除 confirm 文案正确、掩码往返保真。**待人工**:crypt 加密路径的真机 dump/restore、cron 触发的实际点火(逻辑已单测)、有快照目的地的删除门禁分支。

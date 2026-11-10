@@ -115,6 +115,10 @@ async fn main() {
     // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).
     spawn_trash_sweeper(state.clone());
 
+    // Per-destination DR cron (conf cron fields; fires dr-backup.sh -T <name>
+    // job files; Siyuan scheduler parity). Inert without the sidecar volumes.
+    routes::admin_dr::spawn_dr_cron_scheduler(state.clone());
+
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/api/auth", post(routes::auth::login))
@@ -209,6 +213,11 @@ async fn main() {
         .route(
             "/api/admin/dr-backup/config",
             get(routes::admin_dr::get_config).put(routes::admin_dr::put_config),
+        )
+        .route(
+            "/api/admin/dr-backup/config/structured",
+            get(routes::admin_dr::get_structured_config)
+                .put(routes::admin_dr::put_structured_config),
         )
         .route(
             "/api/admin/dr-backup/jobs",

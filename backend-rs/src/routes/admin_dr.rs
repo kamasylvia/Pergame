@@ -27,6 +27,13 @@ fn jobs_dir() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
 }
 
+fn sidecar_dirs() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    match (conf_dir(), jobs_dir()) {
+        (Some(c), Some(j)) if c.is_dir() && j.is_dir() => Some((c, j)),
+        _ => None,
+    }
+}
+
 fn require_sidecar() -> Result<(std::path::PathBuf, std::path::PathBuf), ApiError> {
     match (conf_dir(), jobs_dir()) {
         (Some(c), Some(j)) if c.is_dir() && j.is_dir() => Ok((c, j)),
@@ -34,6 +41,133 @@ fn require_sidecar() -> Result<(std::path::PathBuf, std::path::PathBuf), ApiErro
             "DR sidecar not deployed (shared volumes missing)".into(),
         )),
     }
+}
+
+/// Names + cron expressions of every destination that opted into scheduling
+/// (cron field non-empty in its record). A name present in both kinds fires
+/// both records, mirroring the `-T` filter's matching rule.
+fn destination_crons(cfg: &crate::routes::dr_config::DrConfig) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for d in &cfg.s3_destinations {
+        if !d.cron.trim().is_empty() {
+            out.push((d.name.clone(), d.cron.trim().to_string()));
+        }
+    }
+    for d in &cfg.webdav_destinations {
+        if !d.cron.trim().is_empty() {
+            out.push((d.name.clone(), d.cron.trim().to_string()));
+        }
+    }
+    out
+}
+
+/// True when a pending job already targets `name` (the sidecar executes jobs
+/// serially and deletes pending files when done, so an existing file means the
+/// previous tick's backup is still queued or running — skip, no queue storm).
+fn pending_job_for_target(jobs_dir: &std::path::Path, name: &str) -> bool {
+    let pending = jobs_dir.join("pending");
+    let Ok(entries) = std::fs::read_dir(&pending) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let Ok(bytes) = std::fs::read(entry.path()) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            continue;
+        };
+        if v["target"].as_str() == Some(name) {
+            return true;
+        }
+    }
+    false
+}
+
+fn write_pending_job(
+    jobs_dir: &std::path::Path,
+    action: &str,
+    flags: Vec<String>,
+    target: Option<String>,
+) -> Result<String, std::io::Error> {
+    let id = format!(
+        "{}{:04}",
+        crate::auth::service::now_ms(),
+        (rand::random::<u32>() % 10000)
+    );
+    let pending = jobs_dir.join("pending");
+    std::fs::create_dir_all(&pending)?;
+    let mut job = json!({
+        "id": id,
+        "action": action,
+        "flags": flags,
+        "requested_by": "scheduler",
+        "created_at": crate::auth::service::now_ms(),
+    });
+    if let Some(t) = target {
+        job["target"] = json!(t);
+    }
+    std::fs::write(
+        pending.join(format!("{id}.json")),
+        serde_json::to_vec(&job).unwrap_or_default(),
+    )?;
+    Ok(id)
+}
+
+/// Per-destination cron scheduler (Siyuan scheduler parity). Every minute:
+/// re-read the conf (config edits apply live), and for each destination whose
+/// cron produced an occurrence within (last_check, now] write a
+/// `dr-backup.sh -T <name>` job file. Missed ticks are never re-run and
+/// restarts reset the in-memory tick state — standard cron semantics, same as
+/// the Siyuan kernel scheduler.
+pub fn spawn_dr_cron_scheduler(state: crate::AppState) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ticker.tick().await; // fire immediately once so a fresh boot runs due jobs
+        let mut last_check = chrono::Utc::now();
+        loop {
+            ticker.tick().await;
+            let now = chrono::Utc::now();
+            let Some((conf_path, jobs)) = sidecar_dirs()
+                .map(|(c, j)| (c.join(CONF_FILE), j))
+            else {
+                last_check = now;
+                continue;
+            };
+            let Ok(raw) = std::fs::read_to_string(&conf_path) else {
+                last_check = now;
+                continue;
+            };
+            let Ok(cfg) = crate::routes::dr_config::DrConfig::from_conf(&raw) else {
+                tracing::warn!("dr cron: conf unparseable; tick skipped");
+                last_check = now;
+                continue;
+            };
+            let _ = &state; // reserved for future per-run guards
+            for (name, expr) in destination_crons(&cfg) {
+                let Ok(schedule) = crate::routes::dr_config::parse_cron(&expr) else {
+                    // Validation catches this at save time; skip at runtime.
+                    continue;
+                };
+                let due = matches!(
+                    schedule.find_next_occurrence(&last_check, false),
+                    Ok(next) if next <= now
+                );
+                if !due {
+                    continue;
+                }
+                if pending_job_for_target(&jobs, &name) {
+                    tracing::debug!(target = %name, "dr cron: previous job still queued; skipped");
+                    continue;
+                }
+                match write_pending_job(&jobs, "backup", vec!["-T".into(), name.clone()], Some(name.clone())) {
+                    Ok(id) => tracing::info!(target = %name, job = %id, "dr cron fired backup"),
+                    Err(e) => tracing::error!(target = %name, error = %e, "dr cron: job write failed"),
+                }
+            }
+            last_check = now;
+        }
+    });
 }
 
 fn require_admin(auth: &AuthUser) -> Result<(), ApiError> {
@@ -171,6 +305,124 @@ pub struct PutConfigBody {
     pub content: String,
 }
 
+/// Writes the conf and runs the bash syntax gate. Shared by the raw editor and
+/// the structured form so both paths get the same protection.
+fn write_conf(path: &std::path::Path, content: &str) -> Result<(), ApiError> {
+    std::fs::write(path, content).map_err(|e| {
+        ApiError::Internal(Box::new(std::io::Error::other(format!(
+            "conf write failed: {e}"
+        ))))
+    })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    // Syntax check when a shell is available (backend image may lack bash).
+    if let Ok(output) = std::process::Command::new("bash")
+        .arg("-n")
+        .arg(path)
+        .output()
+        && !output.status.success()
+    {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let first = stderr.lines().next().unwrap_or("").to_string();
+        return Err(ApiError::BadRequest(format!("conf syntax error: {first}")));
+    }
+    Ok(())
+}
+
+/// GET /api/admin/dr-backup/config/structured — the same conf as editable JSON.
+/// Secrets come back masked; the UI never sees real credentials.
+pub async fn get_structured_config(
+    State(_state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let (conf_dir, _) = require_sidecar()?;
+    let path = conf_dir.join(CONF_FILE);
+    if !path.exists() {
+        return Ok(ApiOk::ok(json!({
+            "exists": false,
+            "config": crate::routes::dr_config::DrConfig::default(),
+        })));
+    }
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
+    let config = crate::routes::dr_config::DrConfig::from_conf(&raw)
+        .map_err(ApiError::BadRequest)?;
+    Ok(ApiOk::ok(json!({ "exists": true, "config": config })))
+}
+
+/// PUT /api/admin/dr-backup/config/structured — validates, rehydrates masked
+/// secrets from the file on disk, then renders and writes the bash conf.
+pub async fn put_structured_config(
+    State(_state): State<AppState>,
+    auth: AuthUser,
+    body: axum::Json<crate::routes::dr_config::DrConfig>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let (conf_dir, _) = require_sidecar()?;
+    let path = conf_dir.join(CONF_FILE);
+    let mut incoming = body.0;
+
+    let old_raw = std::fs::read_to_string(&path).unwrap_or_default();
+    if !old_raw.trim().is_empty() {
+        let previous =
+            crate::routes::dr_config::DrConfig::from_conf(&old_raw).map_err(ApiError::BadRequest)?;
+        // from_conf masks secrets; unmask it against the raw file so the old
+        // values are available for the fill step below.
+        let mut previous = previous;
+        previous.sources.iter_mut().for_each(|s| {
+            if let Some(raw_pass) = raw_secret(&old_raw, "pg", &s.name, 5) {
+                s.password = raw_pass;
+            }
+        });
+        previous.s3_destinations.iter_mut().for_each(|d| {
+            if let Some(v) = raw_secret(&old_raw, "s3", &d.name, 5) {
+                d.access_key = v;
+            }
+            if let Some(v) = raw_secret(&old_raw, "s3", &d.name, 6) {
+                d.secret_key = v;
+            }
+            // Field 13 (index 13) = crypt_pass; only rehydrate when the old
+            // record actually carries it (old confs end at index 9).
+            if let Some(v) = raw_secret(&old_raw, "s3", &d.name, 13) {
+                d.crypt_pass = v;
+            }
+        });
+        previous.webdav_destinations.iter_mut().for_each(|d| {
+            if let Some(v) = raw_secret(&old_raw, "webdav", &d.name, 4) {
+                d.password = v;
+            }
+            if let Some(v) = raw_secret(&old_raw, "webdav", &d.name, 9) {
+                d.crypt_pass = v;
+            }
+        });
+        incoming
+            .fill_secrets(&previous)
+            .map_err(ApiError::BadRequest)?;
+    }
+
+    incoming.validate().map_err(ApiError::BadRequest)?;
+    let rendered = incoming.to_conf();
+    write_conf(&path, &rendered)?;
+    Ok(ApiOk::ok(json!("Configuration saved.")))
+}
+
+/// Reads one field out of the raw (unmasked) conf for the named record.
+fn raw_secret(raw: &str, kind: &str, name: &str, index: usize) -> Option<String> {
+    raw.lines()
+        .map(|l| l.trim())
+        .filter(|l| l.starts_with('"'))
+        .map(|l| l.trim_matches(|c| c == '"' || c == ','))
+        .map(|record| record.split('|').map(|s| s.to_string()).collect::<Vec<_>>())
+        .find(|fields| {
+            fields.len() > index && fields[0] == kind && fields.get(1).is_some_and(|n| n == name)
+        })
+        .map(|fields| fields[index].clone())
+}
+
 /// PUT /api/admin/dr-backup/config
 pub async fn put_config(
     State(_state): State<AppState>,
@@ -182,37 +434,20 @@ pub async fn put_config(
     let path = conf_dir.join(CONF_FILE);
     let old = std::fs::read_to_string(&path).unwrap_or_default();
     let content = unmask_content(&body.content, &old)?;
-    std::fs::write(&path, content).map_err(|e| {
-        ApiError::Internal(Box::new(std::io::Error::other(format!(
-            "conf write failed: {e}"
-        ))))
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
-    // Syntax check when a shell is available (backend image may lack bash).
-    if let Ok(output) = std::process::Command::new("bash")
-        .arg("-n")
-        .arg(&path)
-        .output()
-        && !output.status.success()
-    {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let first = stderr.lines().next().unwrap_or("").to_string();
-        return Err(ApiError::BadRequest(format!("conf syntax error: {first}")));
-    }
+    write_conf(&path, &content)?;
     Ok(ApiOk::ok(json!("Configuration saved.")))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateJobBody {
-    pub action: String, // backup | list | restore
+    pub action: String, // backup | list | restore | probe
     #[serde(default)]
     pub source: Option<String>,
     #[serde(default)]
     pub ts: Option<String>,
+    /// Target name for the probe action (destination or source).
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// POST /api/admin/dr-backup/jobs
@@ -224,6 +459,7 @@ pub async fn create_job(
     require_admin(&auth)?;
     let (_, jobs_dir) = require_sidecar()?;
     let action = body.action.as_str();
+    let mut target = None;
     let flags: Vec<String> = match action {
         "backup" => vec![],
         "list" => vec!["-l".into()],
@@ -242,6 +478,17 @@ pub async fn create_job(
             f.push("-y".into());
             f
         }
+        // UI "test connection": dr-backup.sh -p <name> prints one PROBE| line.
+        "probe" => {
+            let Some(name) = body.name.as_deref().filter(|s| !s.is_empty()) else {
+                return Err(ApiError::BadRequest("name is required for probe".into()));
+            };
+            if name.contains(' ') {
+                return Err(ApiError::BadRequest("name must not contain spaces".into()));
+            }
+            target = Some(name.to_string());
+            vec!["-p".into(), name.to_string()]
+        }
         other => return Err(ApiError::BadRequest(format!("unknown action: {other}"))),
     };
     let id = format!(
@@ -252,19 +499,45 @@ pub async fn create_job(
     let pending = jobs_dir.join("pending");
     std::fs::create_dir_all(&pending)
         .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
-    let job = json!({
+    let mut job = json!({
         "id": id,
         "action": action,
         "flags": flags,
         "requested_by": auth.user_id().to_string(),
         "created_at": crate::auth::service::now_ms(),
     });
+    if let Some(t) = &target {
+        job["target"] = json!(t);
+    }
     std::fs::write(
         pending.join(format!("{id}.json")),
         serde_json::to_vec(&job).unwrap_or_default(),
     )
     .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
     Ok(ApiOk::ok(json!({ "job_id": id })))
+}
+
+/// Extracts the last `PROBE|...` line from job output into a structured value
+/// (dr-backup.sh -p output; see probe_target there for the line format).
+pub fn parse_probe_line(output: &str) -> Option<serde_json::Value> {
+    let line = output
+        .lines()
+        .rev()
+        .find(|l| l.trim_start().starts_with("PROBE|"))?;
+    let f: Vec<&str> = line.trim_start().split('|').collect();
+    if f.len() < 6 || f[0] != "PROBE" {
+        return None;
+    }
+    Some(json!({
+        "kind": f[1],
+        "name": f[2],
+        "reachable": f[3].strip_prefix("reachable=").unwrap_or(f[3]),
+        "snapshots": f[4]
+            .strip_prefix("snapshots=")
+            .and_then(|v| v.parse::<i64>().ok()),
+        "fingerprint": f[5].strip_prefix("fingerprint=").unwrap_or(f[5]),
+        "note": f[6..].join("|").strip_prefix("note=").unwrap_or(""),
+    }))
 }
 
 /// GET /api/admin/dr-backup/jobs/:id
@@ -283,6 +556,12 @@ pub async fn get_job(
         let mut v: serde_json::Value = serde_json::from_slice(&bytes)
             .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
         v["status"] = json!("done");
+        // Probe jobs carry their machine-readable result inline.
+        if let Some(tail) = v["output_tail"].as_str()
+            && let Some(probe) = parse_probe_line(tail)
+        {
+            v["probe"] = probe;
+        }
         return Ok(ApiOk::ok(v));
     }
     let pending = jobs_dir.join("pending").join(format!("{id}.json"));
@@ -342,5 +621,29 @@ RETAIN_DAYS=14"#;
     fn unmask_rejects_new_record_with_placeholder() {
         let new_content = "  \"pg|new-db|host|5432|user|***|db\"";
         assert!(unmask_content(new_content, SAMPLE).is_err());
+    }
+
+    #[test]
+    fn probe_line_parses_into_structured_value() {
+        let out = "[2026-11-09 20:25:02] some log line\n\
+                   PROBE|s3|primary|reachable=true|snapshots=3|fingerprint=s3,192.0.2.1:9000,bk,pg|note=\n";
+        let v = parse_probe_line(out).expect("probe line");
+        assert_eq!(v["kind"], "s3");
+        assert_eq!(v["name"], "primary");
+        assert_eq!(v["reachable"], "true");
+        assert_eq!(v["snapshots"], 3);
+        assert_eq!(v["fingerprint"], "s3,192.0.2.1:9000,bk,pg");
+        assert_eq!(v["note"], "");
+    }
+
+    #[test]
+    fn probe_line_failure_and_garbage() {
+        let out = "PROBE|pg|db1|reachable=false|snapshots=|fingerprint=|note=psql connect failed\n";
+        let v = parse_probe_line(out).expect("probe line");
+        assert_eq!(v["reachable"], "false");
+        assert_eq!(v["snapshots"], serde_json::Value::Null);
+        assert_eq!(v["note"], "psql connect failed");
+        assert!(parse_probe_line("no probe output here").is_none());
+        assert!(parse_probe_line("PROBE|short").is_none());
     }
 }

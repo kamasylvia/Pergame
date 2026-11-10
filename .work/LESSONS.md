@@ -36,3 +36,25 @@
 - **i18n 8 个 locale 都被 `satisfies MessageSchema` 强约束**:新增翻译 key 必须同时补齐 en/de/fr/it/ko/uk/zh-CN/zh-TW 全部 8 份,漏一个就 typecheck 挂。生成脚本批量写 + 逐个接 index.ts 是可行路径(改后 `grep -c trash` 验)。
 - **perfectionist/sort-objects 会拦 locale 文件**:`.ts` 语言包也在 eslint 管辖内,手写对象字面量天然不满足字母序 → 写完后必须跑 `bun run lint --fix`,否则 CI 红。
 - **`definePageMeta({layout})` 只能引用真实 layout**:本仓 `frontend/app/layouts/` 只有 `public.vue`,dashboard 页走默认布局;写 `layout: 'dashboard'` 直接 typecheck 报错。
+
+## 2026-11-09 DR 配置表单化
+
+- **锚点缩进猜错 = 静默空转**(重演):批量插 key 的 `str.replace('    instanceDR: {\n', ...)` 因真实缩进是 2 空格而没匹配,脚本却因为 `assert 'instanceDR: {' in s` 通过了——**assert 检查的是「存在」不是「替换成功」**。必须改成 `assert replace_anchor in s` 或替换后 `assert s != before`。
+- **Nuxt `I18nKey` 是类型生成物**:新 i18n key 写完必须 `bun run postinstall`(`nuxt prepare`)重生成 `.nuxt` 类型,否则 typecheck 报满屏「not assignable to I18nKey」而误判成代码错。
+- **模板/脚本变量名不一致 typecheck 能抓**:`configExists`(模板) vs `confExists`(脚本)导致 `Property does not exist on ComponentPublicInstance`;这类错看着像组件类型问题,实为拼写。
+
+## 2026-11-09 DR 表单活测(浏览器实测)
+
+- **`backend-rs/.env` 是 dotenvy 的隐形配置源**:CWD 下 .env 会喂入旧值(collectanea 时代残留),显式 env 只覆盖已 export 的键——漏传 `DATABASE_NAME` 就静默用了 .env 的死库名。换机/换环境先查 `backend-rs/.env` 是否过时(已 2026-11-09 更新为 pergame 名 + Infisical 凭据)。
+- **活环境提权的安全路径**:`ADMIN_ACCOUNTS` 启动时会降级所有不在名单内的 admin——对活库先 SQL 查现有 admin id,或确认库内无 admin 后再注册+直接 SQL UPDATE role=2,避免破坏真实实例。
+- **Playwright checkbox 状态看 `el.checked` 属性而非 `getAttribute('checked')`**:Vue 绑定下 attribute 可能不存在但 property 为 true;uncheck 前先 evaluate 读真值。
+- **前端 dev 联调最小配置**:`NUXT_PUBLIC_BASE_API=http://localhost:8201` + 后端 `FRONTEND_URL=http://localhost:3000`(CORS 白名单)+ `DR_CONF_DIR/DR_JOBS_DIR` 指向本地临时目录即可让 DR 配置页完全活起来,无需 docker sidecar。
+
+## 2026-11-09 DR 对位批次 D(1-5 全补)
+
+- **rclone ≥ 1.76 不再从 `RCLONE_CONFIG_<name>_*` env 段解析 remote type**(`config show` 见 section 但 NewFs 报 "didn't find section in config file")——env-section 是老教程广传的模式,新版全静默失效。**修法 = 运行时生成私有 config 文件 + `export RCLONE_CONFIG=<file>`,全版本稳定**。这条直接判了原 dr-backup.sh 真机全链死刑——dry-run 从不碰 rclone,探测按钮首跑才暴露。教训:**凡是「只在真机才触发的路径」,上真机前必须有最小真值冒烟**(哪怕是假 key 打真端点)。
+- **bash `read` 尾变量吞行**:`IFS='|' read -r _ name <<<"$rec"` 两变量版会把记录剩余全部塞进 `name`(read 给最后变量分配整行余量)。瘦身老解析函数时漏了占位 `_rest` → 远端名变成整条记录。规则:**read 变量数必须 ≥ 字段数,或末位显式 `_rest`**。
+- **`$( )` 命令替换里的副作用不回传**:`base=$(dest_source_dir ...)` 在子 shell 设置的 `D_*` 父 shell 看不见,父 shell 随后读 `D_NAME` 拿到的是更早的陈旧值(日志里出现 A 目的地名字配 B 目的地路径)。规则:**凡子 shell 调用后要用 D_*,先在父 shell 显式 parse_dest**。
+- **PROBE 行内嵌指纹不能含分隔符**:指纹按 pipe 分字段,指纹自身用 pipe 会破坏解析——外层协议字段分隔符要为嵌套数据改用逗号。
+- **croner 2.x API**:`Cron::new(expr).parse()`,默认 5 字段标准模式(秒禁用、Vixie DOM/DOW OR),与 robfig ParseStandard 语义对齐;`find_next_occurrence(&last_check, false) <= now` 即「(last_check, now] 内有触发点」= 到期。
+- **rclone crypt 的 size 校验必须跳过**:crypt 容器带 nonce+MAC,尺寸≠明文;校验逻辑要按「该目的地是否启用加密」分支,否则每次备份都误报 verify 失败。

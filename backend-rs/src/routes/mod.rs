@@ -1,6 +1,7 @@
 pub mod admin_dr;
 pub mod auth;
 pub mod backup;
+pub mod dr_config;
 pub mod health;
 pub mod links;
 pub mod nodes;

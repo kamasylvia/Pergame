@@ -71,6 +71,8 @@
 
 ### 最近完成的批次(供考古)
 
+- **DR 管理:表单化 + Siyuan 对位批次 D(2026-11-09,与对位同一压缩 commit 发布)**:①配置表单化——`dr_config.rs` JSON⇄bash conf、结构化端点、表单(原始 conf 降级折叠);②Siyuan kernel/backup 对位 5 项补齐——探测(`dr-backup.sh -p` + PROBE 行 + 前端 Test 按钮)、rclone crypt 每目的地加密、keep-last 保留、每目的地 cron(后端调度器,croner)、删除门禁+存储指纹+重复位置拒绝。**关键修复:rclone ≥1.76 不再解析 env-section remote → 改生成私有 config 文件**(真机全链依赖,探测首跑抓到)。spec §12-13;真机 crypt/cron/门禁分支待人工。
+- **回收站(2026-11-09)**:`migration 0005` + 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + `/dashboard/trash` 前端 + 保留期 sweeper。spec = `features/trash.md`。
 - **备份子系统 A/B/C**(2026-11-09,commits `8ed0d261`/`2d0d9d55`/`1d8b1c71`/`5dcec24a`/`736057b3`/`571ec174`/`9fe0c3d5`):
   - A:还原前自动安全快照 + 快照 memo(manifest+sidecar)+ 还原预检(`/preview` 双入口,返回 incoming/current/replaced/added/removed/文件碰撞)
   - B:存储 v2 = manifest + 内容寻址 blobs(跨快照去重)+ 可选 AES-256-GCM/scrypt 加密(`PERGAME_SNAPSHOT_PASSPHRASE`)+ legacy v1 zip 兼容 + 下载直出 + blob GC
