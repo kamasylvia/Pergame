@@ -481,6 +481,16 @@ async function save() {
   flex-direction: row !important;
   align-items: center;
   gap: 0.4rem !important;
+
+  // The global form styles give every input width:100%, which turns a
+  // checkbox into a full-width box centred in its cell. Keep it box-sized.
+  input[type='checkbox'] {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 .users-box {
@@ -498,10 +508,24 @@ async function save() {
 
 .user-row {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.45rem;
   padding: 0.2rem 0;
   font-size: 0.8rem;
+
+  input[type='checkbox'] {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  // Username hugs the checkbox; the email trails it.
+  span:first-of-type {
+    flex: 0 0 auto;
+  }
 }
 
 .user-mail {
