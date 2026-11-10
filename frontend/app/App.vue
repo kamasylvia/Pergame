@@ -6,6 +6,7 @@
       <NuxtPage />
     </NuxtLayout>
     <Notification />
+    <MaintenanceBanner />
   </div>
   <SplashScreen v-show="isLoading" />
 </template>

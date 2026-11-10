@@ -19,4 +19,7 @@ pub struct AppState {
     pub oidc: Option<SharedManager>,
     /// Per-user backup job store.
     pub backups: std::sync::Arc<BackupStore>,
+    /// Workspace backup/restore locks (spec §14): a read-only window exists
+    /// while any backup or restore is in flight.
+    pub locks: std::sync::Arc<crate::locks::WorkspaceLocks>,
 }

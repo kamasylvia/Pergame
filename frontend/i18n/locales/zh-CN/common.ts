@@ -42,7 +42,6 @@ export default {
     notFound: '找不到',
     unknown: '发生未知的错误',
   },
-
   labels: {
     action: '操作',
     advanced: '高级',
@@ -65,6 +64,10 @@ export default {
     status: '状态',
     tags: '标签',
     type: '类型',
+  },
+
+  maintenance: {
+    readOnly: '维护中:备份或还原正在进行,工作区暂时只读。',
   },
 
   nothing: '没有可显示的内容',

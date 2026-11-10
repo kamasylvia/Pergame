@@ -288,6 +288,9 @@ pub async fn run_backup(
         }};
     }
 
+    // Shared lock: concurrent backups allowed, workspace becomes read-only
+    // for the duration (released when this guard drops at function exit).
+    let _lock = crate::locks::global().acquire_backup().await;
     if store.is_cancelled(&job_id) {
         return;
     }

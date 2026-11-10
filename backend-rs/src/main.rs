@@ -5,6 +5,7 @@ mod db;
 mod db_toasty;
 mod error;
 mod extract;
+mod locks;
 mod logger;
 mod mail;
 mod models;
@@ -91,7 +92,11 @@ async fn main() {
         storage,
         oidc: oidc_manager,
         backups: std::sync::Arc::new(backup::BackupStore::default()),
+        locks: locks::WorkspaceLocks::new(),
     };
+
+    // Middleware needs the lock registry; install it once at startup.
+    locks::install(state.locks.clone());
 
     // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
     auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
@@ -127,6 +132,10 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
+        .route(
+            "/api/admin/dr-backup/status",
+            get(routes::admin_dr::lock_status),
+        )
         .route("/api/auth", post(routes::auth::login))
         .route("/api/auth/refresh", get(routes::auth::refresh))
         .route("/api/auth/logout", post(routes::auth::logout))
@@ -346,6 +355,7 @@ async fn main() {
         )
         .route("/api/resources/{id}", put(routes::resources::update_file))
         .with_state(state)
+        .layer(axum::middleware::from_fn(locks::read_only_middleware))
         .layer(cors_layer())
         .layer(tower_http::trace::TraceLayer::new_for_http());
 

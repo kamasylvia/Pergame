@@ -42,7 +42,6 @@ export default {
     notFound: 'Not found',
     unknown: 'An unknown error occurred',
   },
-
   labels: {
     action: 'Action',
     advanced: 'Advanced',
@@ -65,6 +64,10 @@ export default {
     status: 'Status',
     tags: 'Tags',
     type: 'Type',
+  },
+
+  maintenance: {
+    readOnly: 'Maintenance: a backup or restore is running, the workspace is read-only for a moment.',
   },
 
   nothing: 'Nothing to display',

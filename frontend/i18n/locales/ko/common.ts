@@ -42,7 +42,6 @@ export default {
     notFound: '찾을 수 없음',
     unknown: '알 수 없는 오류가 발생했습니다',
   },
-
   labels: {
     action: '작업',
     advanced: '고급',
@@ -66,6 +65,10 @@ export default {
     status: '상태',
     tags: '태그',
     type: '유형',
+  },
+
+  maintenance: {
+    readOnly: '유지보수: 백업 또는 복원이 진행 중이라 작업 공간이 잠시 읽기 전용입니다.',
   },
 
   nothing: '표시할 항목이 없습니다',

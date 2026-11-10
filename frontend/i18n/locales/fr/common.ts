@@ -42,7 +42,6 @@ export default {
     notFound: 'Non trouvé',
     unknown: 'Une erreur inconnue est survenue',
   },
-
   labels: {
     action: 'Action',
     advanced: 'Avancé',
@@ -65,6 +64,10 @@ export default {
     status: 'Statut',
     tags: 'Tags',
     type: 'Type',
+  },
+
+  maintenance: {
+    readOnly: 'Maintenance : une sauvegarde ou restauration est en cours, l’espace de travail est en lecture seule quelques instants.',
   },
 
   nothing: 'Rien à afficher',

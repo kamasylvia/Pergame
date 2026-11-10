@@ -837,3 +837,13 @@ pub async fn list_backup_users(
         .collect();
     Ok(ApiOk::ok(json!(out)))
 }
+
+/// GET /api/admin/dr-backup/status — lock state for the frontend read-only
+/// banner (also reachable while locked, see the middleware exemptions).
+pub async fn lock_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<crate::locks::LockSnapshot>, ApiError> {
+    require_admin(&auth)?;
+    Ok(ApiOk::ok(state.locks.snapshot().await))
+}

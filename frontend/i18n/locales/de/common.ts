@@ -42,7 +42,6 @@ export default {
     notFound: 'Nicht gefunden',
     unknown: 'Es ist ein unbekannter Fehler aufgetreten',
   },
-
   labels: {
     action: 'Aktion',
     advanced: 'Erweitert',
@@ -65,6 +64,10 @@ export default {
     status: 'Status',
     tags: 'Tags',
     type: 'Typ',
+  },
+
+  maintenance: {
+    readOnly: 'Wartung: Ein Backup oder eine Wiederherstellung läuft, der Arbeitsbereich ist kurz schreibgeschützt.',
   },
 
   nothing: 'Es gibt nichts anzuzeigen',

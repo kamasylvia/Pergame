@@ -317,6 +317,18 @@ pub async fn restore_snapshot(
         .storage
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    // Exclusive lock for the whole restore (blocks other backups/restores).
+    let _guard = crate::locks::global()
+        .acquire_restore()
+        .await
+        .map_err(|e| match e {
+            crate::locks::LockError::RestoreInFlight => {
+                ApiError::Conflict("another restore is already running".into())
+            }
+            crate::locks::LockError::BackupBusy => {
+                ApiError::Conflict("a backup is still running; retry shortly".into())
+            }
+        })?;
     let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id).await?;
     let mut report = crate::restore::restore_from_zip(
         state.db.clone(),
@@ -358,6 +370,17 @@ pub async fn restore_upload(
     let bytes = bytes.ok_or(ApiError::BadRequest(
         "multipart field \"file\" is required".into(),
     ))?;
+    let _guard = crate::locks::global()
+        .acquire_restore()
+        .await
+        .map_err(|e| match e {
+            crate::locks::LockError::RestoreInFlight => {
+                ApiError::Conflict("another restore is already running".into())
+            }
+            crate::locks::LockError::BackupBusy => {
+                ApiError::Conflict("a backup is still running; retry shortly".into())
+            }
+        })?;
     // Safety snapshot first (parity with snapshot restore).
     if let Some(safety_id) = safety_snapshot(&state, auth.user_id()).await {
         tracing::info!(safety = %safety_id, "safety snapshot taken before upload restore");
