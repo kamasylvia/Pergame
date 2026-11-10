@@ -478,6 +478,7 @@ export default {
     saved: 'Destinazione salvata',
     saveFailed: 'Salvataggio non riuscito',
     saving: 'Salvataggio…',
+    schedule: 'Pianificazione (cron)',
     schema: 'Schema',
     secretKey: 'Chiave segreta / password',
     secure: 'Usa TLS',
@@ -489,8 +490,8 @@ export default {
     title: 'Destinazioni snapshot offsite',
     users: 'Utenti proprietari',
     usersCount: '{count} utente/i',
-    usersHint: 'Vengono replicati solo gli utenti selezionati; seleziona tutti per una replica a livello istanza.',
-  },
+        usersHint: 'Vengono replicati solo gli utenti selezionati; seleziona tutti per una replica a livello istanza.',
+    },
 
   snippets: {
     action: {

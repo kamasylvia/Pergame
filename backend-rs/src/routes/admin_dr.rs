@@ -847,3 +847,80 @@ pub async fn lock_status(
     require_admin(&auth)?;
     Ok(ApiOk::ok(state.locks.snapshot().await))
 }
+
+/// GET /api/admin/dr-backup/targets/:id/export/:snapshot_id — download a
+/// portable zip of one snapshot stored on a target (fork §6 "export zip").
+pub async fn export_target_snapshot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path((target_id, snapshot_id)): axum::extract::Path<(uuid::Uuid, String)>,
+) -> Result<axum::response::Response, ApiError> {
+    require_admin(&auth)?;
+    if snapshot_id.is_empty() || !snapshot_id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ApiError::BadRequest("invalid snapshot id".into()));
+    }
+    let row = target_repo::get_target(&state.db, target_id).await?;
+    let conn = row.connect().await?;
+    let manifest_key = format!("{snapshot_id}.json");
+    let objects = conn.list(conn.list_prefix(&row.prefix)).await?;
+    let manifest_obj = objects
+        .iter()
+        .find(|(k, _, _)| k.ends_with(&format!("/manifests/{manifest_key}")))
+        .map(|(k, _, _)| k.clone())
+        .ok_or(ApiError::NotFound("snapshot not found on target".into()))?;
+    let raw = conn.get(&manifest_obj).await?;
+    let manifest: crate::backup::BackupManifest = serde_json::from_slice(&raw)
+        .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
+    // Assemble the portable set straight from target objects (no local copy).
+    use axum::response::IntoResponse;
+    let mut archive = crate::backup::SimpleArchive::new();
+    let meta = crate::restore::PortableMeta {
+        format: crate::restore::PORTABLE_FORMAT.into(),
+        version: crate::restore::PORTABLE_VERSION.into(),
+        created_at: manifest.created_at.clone(),
+        snapshot_id: manifest.id.clone(),
+        user_id: manifest.user_id.clone(),
+        encryption: manifest.encryption.clone(),
+        entries: manifest.entries.clone(),
+        files: manifest.files.clone(),
+    };
+    archive.add(
+        "meta.json",
+        &serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+    );
+    archive.add("manifest.json", &raw);
+    let mut seen = std::collections::HashSet::new();
+    let mut hashes: Vec<String> = manifest.entries.iter().map(|e| e.sha256.clone()).collect();
+    hashes.extend(manifest.files.iter().map(|f| f.sha256.clone()));
+    for sha in hashes {
+        if !seen.insert(sha.clone()) {
+            continue;
+        }
+        let dir = if manifest.encryption.is_some() {
+            "blobs-e2e"
+        } else {
+            "blobs"
+        };
+        let key = objects
+            .iter()
+            .find(|(k, _, _)| k.ends_with(&format!("/{dir}/{sha}")))
+            .map(|(k, _, _)| k.clone())
+            .ok_or(ApiError::NotFound(format!("blob {sha} missing on target")))?;
+        archive.add_stored(format!("blobs/{sha}"), &conn.get(&key).await?);
+    }
+    let bytes = archive
+        .finish()
+        .map_err(|e| ApiError::BadRequest(format!("export assembly failed: {e}")))?;
+    Ok((
+        axum::http::StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, "application/zip"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"pergame-snapshot-{snapshot_id}.zip\"").as_str(),
+            ),
+        ],
+        bytes,
+    )
+        .into_response())
+}

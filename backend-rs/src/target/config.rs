@@ -26,6 +26,7 @@ pub struct BackupTargetRow {
     pub provider: String,
     pub keep_last: i32,
     pub max_age_days: i32,
+    pub schedule: String,
     pub enabled: bool,
     pub users: Vec<i64>,
     pub last_result: String,

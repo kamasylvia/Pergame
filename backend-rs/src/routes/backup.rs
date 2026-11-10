@@ -231,7 +231,17 @@ pub async fn download_snapshot(
         .storage
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id).await?;
+    // v2 snapshots download in the portable object-set layout (meta +
+    // manifest + blobs); legacy v1 zips pass through unchanged.
+    let manifest_key = format!("{}/manifests/{id}.json", auth.user_id());
+    let bytes = match storage.get_backup_object(&manifest_key).await {
+        Ok(raw) => {
+            let manifest: crate::backup::BackupManifest = serde_json::from_slice(&raw)
+                .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
+            crate::restore::export_portable_zip(&storage, auth.user_id(), &manifest).await?
+        }
+        Err(_) => load_snapshot_bytes(&storage, auth.user_id(), &id).await?,
+    };
     let filename = format!("pergame-snapshot-{id}.zip");
     let disposition = format!("attachment; filename=\"{filename}\"");
     Ok((
@@ -367,9 +377,12 @@ pub async fn restore_upload(
             break;
         }
     }
-    let bytes = bytes.ok_or(ApiError::BadRequest(
+    let mut bytes = bytes.ok_or(ApiError::BadRequest(
         "multipart field \"file\" is required".into(),
     ))?;
+    if crate::restore::is_portable_zip(&bytes) {
+        bytes = crate::restore::portable_to_v1_zip(bytes)?;
+    }
     let _guard = crate::locks::global()
         .acquire_restore()
         .await
@@ -437,7 +450,10 @@ pub async fn preview_upload(
     auth: AuthUser,
     mut multipart: Multipart,
 ) -> Result<ApiOk<crate::restore::RestorePlan>, ApiError> {
-    let bytes = read_upload(&mut multipart).await?;
+    let mut bytes = read_upload(&mut multipart).await?;
+    if crate::restore::is_portable_zip(&bytes) {
+        bytes = crate::restore::portable_to_v1_zip(bytes)?;
+    }
     let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
     Ok(ApiOk::ok(plan))
 }

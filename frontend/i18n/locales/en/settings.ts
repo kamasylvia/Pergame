@@ -474,6 +474,7 @@ export default {
     saved: 'Target saved',
     saveFailed: 'Save failed',
     saving: 'Saving…',
+    schedule: 'Schedule (cron)',
     schema: 'Schema',
     secretKey: 'Secret key / password',
     secure: 'Use TLS',
@@ -485,8 +486,8 @@ export default {
     title: 'Offsite snapshot targets',
     users: 'Owning users',
     usersCount: '{count} user(s)',
-    usersHint: 'Only the selected users are replicated; select all for an instance-level replica.',
-  },
+        usersHint: 'Only the selected users are replicated; select all for an instance-level replica.',
+    },
 
   snippets: {
     action: {

@@ -473,6 +473,7 @@ export default {
     saved: '대상 저장됨',
     saveFailed: '저장 실패',
     saving: '저장 중…',
+    schedule: '일정 (cron)',
     schema: '스키마',
     secretKey: '시크릿 키 / 비밀번호',
     secure: 'TLS 사용',
@@ -484,8 +485,8 @@ export default {
     title: '오프사이트 스냅샷 대상',
     users: '소유 사용자',
     usersCount: '사용자 {count}명',
-    usersHint: '선택한 사용자만 복제됩니다. 모두 선택하면 인스턴스 수준 복제입니다.',
-  },
+        usersHint: '선택한 사용자만 복제됩니다. 모두 선택하면 인스턴스 수준 복제입니다.',
+    },
 
   snippets: {
     action: {

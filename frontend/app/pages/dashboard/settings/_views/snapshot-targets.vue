@@ -23,6 +23,7 @@
           <p class="meta">
             {{ t('settings.snapshotTargets.usersCount', { count: tg.users.length }) }}
             · {{ t('settings.snapshotTargets.keepLast') }} {{ tg.keep_last }}
+            <template v-if="tg.schedule"> · cron {{ tg.schedule }}</template>
             <template v-if="tg.last_result"> · {{ tg.last_result }}</template>
           </p>
 
@@ -85,6 +86,10 @@
             {{ t('settings.snapshotTargets.keepLast') }}
             <input v-model.number="form.keep_last" type="number" min="1" max="100" />
           </label>
+          <label>
+            {{ t('settings.snapshotTargets.schedule') }}
+            <input v-model="form.schedule" type="text" placeholder="30 3 * * *" />
+          </label>
           <label class="checkbox-row">
             <input v-model="form.secure" type="checkbox" />
             {{ t('settings.snapshotTargets.secure') }}
@@ -136,6 +141,7 @@ interface Target {
   provider: string;
   keep_last: number;
   max_age_days: number;
+  schedule: string;
   enabled: boolean;
   last_result: string;
   users: number[];
@@ -290,6 +296,7 @@ function startEdit(tg: Target) {
     secret_key: tg.secret_key,
     secure: tg.secure,
     keep_last: tg.keep_last,
+    schedule: tg.schedule ?? '',
     enabled: tg.enabled,
     users: [...tg.users],
   });
@@ -308,6 +315,7 @@ function cancelEdit() {
     secret_key: '',
     secure: true,
     keep_last: 10,
+    schedule: '',
     enabled: true,
     users: [],
   });
@@ -329,6 +337,7 @@ async function save() {
     provider: 'Other',
     keep_last: form.keep_last,
     max_age_days: 0,
+    schedule: form.schedule.trim(),
     enabled: form.enabled,
     users: form.users,
   };

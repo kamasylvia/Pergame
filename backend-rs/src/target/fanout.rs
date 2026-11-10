@@ -203,3 +203,62 @@ pub async fn fetch_user_from_target(
     }
     Ok(fetched)
 }
+
+/// Per-target cron scheduler (fork §4 parity): ticks every minute, asks each
+/// enabled target whether its `schedule` matched the elapsed minute, and runs
+/// a full fan-out for that target's users. Missed minutes are not replayed
+/// (standard cron), and a tick is skipped while a backup/restore lock is held.
+pub fn spawn_target_scheduler(pool: sqlx::PgPool, storage: S3Storage) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ticker.tick().await; // skip the immediate tick
+        let mut last_minute: i64 = 0;
+        loop {
+            ticker.tick().await;
+            let now = crate::auth::service::now_ms() / 1000;
+            let minute = now - now % 60;
+            if minute == last_minute {
+                continue;
+            }
+            last_minute = minute;
+            if crate::locks::global().is_read_only().await {
+                tracing::info!("target scheduler: skipped, backup/restore in flight");
+                continue;
+            }
+            let rows: Vec<(uuid::Uuid, String, String)> = match sqlx::query_as(
+                "SELECT id, name, schedule FROM backup_targets \
+                 WHERE enabled = true AND schedule <> ''",
+            )
+            .fetch_all(&pool)
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!(error = %e, "target scheduler: schedule query failed");
+                    continue;
+                }
+            };
+            for (id, name, expr) in rows {
+                let Ok(spec) = crate::target::cron::CronSpec::parse(&expr) else {
+                    tracing::warn!(target = %name, expr, "target scheduler: bad cron expression");
+                    continue;
+                };
+                if !spec.matches_utc(minute) {
+                    continue;
+                }
+                let Ok(row) = repo::get_target(&pool, id).await else {
+                    continue;
+                };
+                tracing::info!(target = %name, "target scheduler: running scheduled fan-out");
+                for uid in row.users.clone() {
+                    for r in fanout_user(&pool, &storage, uid).await {
+                        if let Some(e) = r.error {
+                            tracing::warn!(target = %r.target, error = %e, "scheduled fan-out failed");
+                        }
+                    }
+                }
+            }
+        }
+    });
+}

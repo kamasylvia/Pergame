@@ -479,6 +479,7 @@ export default {
     saved: 'Cible enregistrée',
     saveFailed: 'Échec de l’enregistrement',
     saving: 'Enregistrement…',
+    schedule: 'Planification (cron)',
     schema: 'Schéma',
     secretKey: 'Clé secrète / mot de passe',
     secure: 'Utiliser TLS',
@@ -490,8 +491,8 @@ export default {
     title: 'Cibles de snapshots hors site',
     users: 'Utilisateurs propriétaires',
     usersCount: '{count} utilisateur(s)',
-    usersHint: 'Seuls les utilisateurs sélectionnés sont répliqués ; tout sélectionner donne une réplique au niveau instance.',
-  },
+        usersHint: 'Seuls les utilisateurs sélectionnés sont répliqués ; tout sélectionner donne une réplique au niveau instance.',
+    },
 
   snippets: {
     action: {

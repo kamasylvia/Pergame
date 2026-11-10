@@ -5,6 +5,7 @@
 #![allow(dead_code)] // consumed by fan-out + admin routes (P1, in progress) and restore-from-target needs no translation.
 
 pub mod config;
+pub mod cron;
 pub mod fanout;
 pub mod pg;
 pub mod repo;

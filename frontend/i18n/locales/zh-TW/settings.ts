@@ -473,6 +473,7 @@ export default {
     saved: '目標已儲存',
     saveFailed: '儲存失敗',
     saving: '儲存中…',
+    schedule: '排程(cron)',
     schema: 'Schema',
     secretKey: 'Secret Key / 密碼',
     secure: '使用 TLS',
@@ -484,8 +485,8 @@ export default {
     title: '異地快照目標',
     users: '歸屬使用者',
     usersCount: '{count} 個使用者',
-    usersHint: '只複製所選使用者;全選即整實例副本。',
-  },
+        usersHint: '只複製所選使用者;全選即整實例副本。',
+    },
 
   snippets: {
     action: {

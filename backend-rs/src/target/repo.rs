@@ -42,6 +42,9 @@ pub struct TargetInput {
     pub keep_last: i32,
     #[serde(default)]
     pub max_age_days: i32,
+    /// Standard 5-field cron; empty = manual only.
+    #[serde(default)]
+    pub schedule: String,
     #[serde(default)]
     pub enabled: bool,
     /// Owning user ids (empty = unassigned, cannot enable).
@@ -81,6 +84,7 @@ pub fn mask_row(row: &BackupTargetRow) -> serde_json::Value {
         "provider": row.provider,
         "keep_last": row.keep_last,
         "max_age_days": row.max_age_days,
+        "schedule": row.schedule,
         "enabled": row.enabled,
         "last_result": row.last_result,
         "users": row.users,
@@ -231,6 +235,10 @@ pub async fn upsert_target(
     if !matches!(input.kind.as_str(), "s3" | "webdav" | "pg") {
         return Err(ApiError::BadRequest("kind must be s3|webdav|pg".into()));
     }
+    if !input.schedule.trim().is_empty() {
+        crate::target::cron::CronSpec::parse(input.schedule.trim())
+            .map_err(|e| ApiError::BadRequest(format!("invalid schedule: {e}")))?;
+    }
     let now = crate::auth::service::now_ms();
     match id {
         Some(id) => {
@@ -243,8 +251,8 @@ pub async fn upsert_target(
             sqlx::query(
                 "UPDATE backup_targets SET kind=$2, name=$3, endpoint=$4, bucket=$5, prefix=$6, \
                  access_key=$7, secret_key=$8, secure=$9, region=$10, provider=$11, \
-                 keep_last=$12, max_age_days=$13, enabled=$14, users=$15, updated_at=$16 \
-                 WHERE id = $1",
+                 keep_last=$12, max_age_days=$13, enabled=$14, users=$15, schedule=$17, \
+                 updated_at=$16 WHERE id = $1",
             )
             .bind(id)
             .bind(&candidate.kind)
@@ -262,6 +270,7 @@ pub async fn upsert_target(
             .bind(candidate.enabled)
             .bind(&candidate.users)
             .bind(now)
+            .bind(&candidate.schedule)
             .execute(pool)
             .await
             .map_err(ApiError::from)?;
@@ -280,8 +289,8 @@ pub async fn upsert_target(
             sqlx::query(
                 "INSERT INTO backup_targets (id, kind, name, endpoint, bucket, prefix, access_key, \
                  secret_key, secure, region, provider, keep_last, max_age_days, enabled, users, \
-                 last_result, created_at, updated_at) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'',$16,$16)",
+                 schedule, last_result, created_at, updated_at) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'',$17,$17)",
             )
             .bind(candidate.id)
             .bind(&candidate.kind)
@@ -299,6 +308,7 @@ pub async fn upsert_target(
             .bind(candidate.enabled)
             .bind(&candidate.users)
             .bind(now)
+            .bind(&candidate.schedule)
             .execute(pool)
             .await
             .map_err(ApiError::from)?;
@@ -322,6 +332,7 @@ fn row_from_input(input: &TargetInput, now: i64, id: Option<Uuid>) -> BackupTarg
         provider: input.provider.clone(),
         keep_last: input.keep_last,
         max_age_days: input.max_age_days,
+        schedule: input.schedule.clone(),
         enabled: input.enabled,
         users: input.users.clone(),
         last_result: String::new(),

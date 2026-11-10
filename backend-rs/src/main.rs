@@ -120,7 +120,8 @@ async fn main() {
     // Scheduled user-level snapshots (SNAPSHOT_INTERVAL_HOURS; disabled when
     // unset). Instance-level 3-2-1 backup stays with the dr-backup sidecar.
     if let Some(storage) = state.storage.clone() {
-        backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage);
+        backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage.clone());
+        target::fanout::spawn_target_scheduler(state.db.clone(), storage);
     }
 
     // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).
@@ -273,6 +274,10 @@ async fn main() {
         .route(
             "/api/admin/dr-backup/backup-users",
             get(routes::admin_dr::list_backup_users),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/export/{snapshotId}",
+            get(routes::admin_dr::export_target_snapshot),
         )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))

@@ -478,6 +478,7 @@ export default {
     saved: 'Ziel gespeichert',
     saveFailed: 'Speichern fehlgeschlagen',
     saving: 'Speichern…',
+    schedule: 'Zeitplan (cron)',
     schema: 'Schema',
     secretKey: 'Secret-Key / Passwort',
     secure: 'TLS verwenden',
@@ -489,8 +490,8 @@ export default {
     title: 'Offsite-Snapshot-Ziele',
     users: 'Eigentümer-Benutzer',
     usersCount: '{count} Benutzer',
-    usersHint: 'Nur ausgewählte Benutzer werden repliziert; alle auswählen = Instanz-Replik.',
-  },
+        usersHint: 'Nur ausgewählte Benutzer werden repliziert; alle auswählen = Instanz-Replik.',
+    },
 
   snippets: {
     action: {
