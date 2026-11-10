@@ -28,6 +28,31 @@
 
 ## 待人工验证
 
+> **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。
+> 后端 80 路由 / 18.5k 行 Rust / 218 Vue / 7 migration;61 单测 + 10 集成全绿;
+> 认证/2FA/OIDC/节点/软链接/回收站/快照/还原/fan-out/只读锁均已对真实 pg + 对象存储活测。
+> 部署步骤与 12 步 smoke 清单 = 思源 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南`(id 20261110160718-8g1wsp1)。
+
+**三个拦验收不拦测试的缺口:**
+
+1. **`docker compose` 从未真正跑起来过**(最大未知)——全部验证都是 `cargo run` + `bun dev` 直连 NAS 的 pg/对象存储;镜像构建、6 服务编排(含 dr-backup sidecar)、卷挂载、healthcheck 依赖全为纸面设计。**测这个优先**。
+2. **dr-backup 真实备份从未跑成**——本机无 `pg_dump`/`rclone`,只验到 job 协议 + 脚本被调用 + 错误回传;真实 dump→上传→`-l`→`-R` 一次未走。
+3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
+
+**明确未实现(按批次,非 bug)**:批次 A 全部(媒体播放器 / Joplin md 特性 / Obsidian 语法兼容)、MCP server、目录索引、Dataview、插件系统、Pergamena 改名。
+
+### 建议测试顺序
+
+- [ ] **1. compose 起全栈**:`docker compose up -d --build` → 6 服务全 healthy → `curl :8201/api/health` 返回 ok。首次需按文档 §5 处理前端镜像 fallback(取消 build 注释或手动打 tag)。
+- [ ] **2. 核心 CRUD**:注册 → 登录 → 建 workspace → 写文档 → 传附件(验 CDN 链路 `/pergame/` → RustFS)。
+- [ ] **3. 回收站**:删文档 → `/dashboard/trash` 看到 → 恢复 → 回树。
+- [ ] **4. 快照全链**:建快照 → 列表 → 下载 zip(验 `meta.json`/`manifest.json`/`blobs/`)→ 改数据 → 还原(验二次确认统计 + 只读提示条)→ 上传该 zip 回灌。
+- [ ] **5. 异地目标**:建 target(S3)→ Test(可达 + 对象数)→ Sync now → 目标桶出现 `manifests/`+`blobs/` → 有对象时 Delete 被拒 → Empty 后才可删。
+- [ ] **6. 实例 DR**:配置 dr-backup.conf → Back up now → 看输出;真实目的地跑 `-l` / `-R`。
+- [ ] **7. 进阶**:2FA(enroll/verify/recovery)、OIDC(Keycloak 环境已有)、SMTP 邮件。
+
+### 旧条目
+
 - [ ] 自托管 smoke(本机无 docker):`docker compose up --build` 后端正常启动(`S3_*` 链路)、注册/登录可用。改名后默认值已切 `pergame`(DB/桶/CDN 路径),首次起库即新名。
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
 - [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。conf 里库名/桶前缀已随改名切 `pergame-*`。还原用 `-R <source> [-t <stamp>]`(非交互加 `-y`;`-l` 列快照)。
