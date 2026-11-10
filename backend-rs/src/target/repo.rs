@@ -251,8 +251,8 @@ pub async fn upsert_target(
             sqlx::query(
                 "UPDATE backup_targets SET kind=$2, name=$3, endpoint=$4, bucket=$5, prefix=$6, \
                  access_key=$7, secret_key=$8, secure=$9, region=$10, provider=$11, \
-                 keep_last=$12, max_age_days=$13, enabled=$14, users=$15, schedule=$17, \
-                 updated_at=$16 WHERE id = $1",
+                 keep_last=$12, max_age_days=$13, enabled=$14, users=$15, schedule=$16, \
+                 updated_at=$17 WHERE id = $1",
             )
             .bind(id)
             .bind(&candidate.kind)
@@ -269,8 +269,8 @@ pub async fn upsert_target(
             .bind(candidate.max_age_days)
             .bind(candidate.enabled)
             .bind(&candidate.users)
-            .bind(now)
             .bind(&candidate.schedule)
+            .bind(now)
             .execute(pool)
             .await
             .map_err(ApiError::from)?;
@@ -307,8 +307,8 @@ pub async fn upsert_target(
             .bind(candidate.max_age_days)
             .bind(candidate.enabled)
             .bind(&candidate.users)
-            .bind(now)
             .bind(&candidate.schedule)
+            .bind(now)
             .execute(pool)
             .await
             .map_err(ApiError::from)?;

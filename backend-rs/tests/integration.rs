@@ -5,8 +5,12 @@
 //! PostgreSQL + S3 storage, so they are `#[ignore]`d for CI — run manually:
 //!
 //! ```bash
-//! cargo test --test integration -- --ignored
+//! cargo test --test integration -- --ignored --test-threads=1
 //! ```
+//!
+//! `--test-threads=1` is REQUIRED: a backup or restore puts the workspace in a
+//! read-only window (HTTP 423 for writes), so parallel tests would fail each
+//! other's writes. Each test cleans up the users it creates.
 
 use std::collections::HashMap;
 
@@ -134,6 +138,32 @@ async fn signup_and_login(client: &Client) -> (String, String) {
 }
 
 /// `tag` disambiguates parallel tests so usernames never collide.
+/// Test-hygiene helper: removes a test user and everything cascading from it.
+/// The suite creates users on every run, so leaving them behind pollutes the
+/// admin user list (and the fan-out target picker) over time.
+async fn cleanup_user(user_id: &str) {
+    let host = std::env::var("DATABASE_HOST").expect("DATABASE_HOST");
+    let port = std::env::var("DATABASE_PORT").unwrap_or_else(|_| "5432".into());
+    let db = std::env::var("DATABASE_NAME").expect("DATABASE_NAME");
+    let user = std::env::var("DATABASE_USER").expect("DATABASE_USER");
+    let pass = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD");
+    let dsn = format!("postgresql://{user}:{pass}@{host}:{port}/{db}");
+    if let Ok(pool) = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&dsn)
+        .await
+    {
+        let _ = sqlx::query("DELETE FROM backup_targets WHERE $1 = ANY(users)")
+            .bind(user_id.parse::<i64>().unwrap_or(0))
+            .execute(&pool)
+            .await;
+        let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id.parse::<i64>().unwrap_or(0))
+            .execute(&pool)
+            .await;
+    }
+}
+
 async fn signup_and_login_tagged(client: &Client, tag: &str) -> (String, String) {
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -233,6 +263,7 @@ async fn auth_and_user_lifecycle() {
     )
     .await;
     assert_eq!(status, 200);
+    cleanup_user(&user_id).await;
 }
 
 // ---------------------------------------------------------------- nodes CRUD
@@ -635,6 +666,7 @@ async fn soft_links_lifecycle() {
     assert_eq!(status, 200);
     assert_eq!(r.result.as_array().map(|a| a.len()), Some(0));
     let _ = owner_id;
+    cleanup_user(&owner_id).await;
 }
 
 // ------------------------------------------------------------- backup links
@@ -724,9 +756,39 @@ async fn backup_zip_contains_links() {
     let bytes = resp.bytes().await.expect("read body").to_vec();
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("valid zip");
-    let mut doc_file = archive
-        .by_name("documents.json")
-        .expect("documents.json entry");
+    // Snapshots download in the portable object-set layout: documents.json is
+    // a blob referenced by the manifest, so resolve it through meta/manifest.
+    let entries: Vec<String> = (0..archive.len())
+        .filter_map(|i| {
+            archive
+                .by_index(i)
+                .ok()
+                .and_then(|f| f.name().ok().map(|n| n.to_string()))
+        })
+        .collect();
+    let doc_member = if entries.iter().any(|n| n == "documents.json") {
+        "documents.json".to_string()
+    } else {
+        // portable: find the blob whose manifest entry names documents.json
+        let mut meta = String::new();
+        use std::io::Read as _;
+        archive
+            .by_name("meta.json")
+            .expect("meta.json entry")
+            .read_to_string(&mut meta)
+            .expect("read meta");
+        let meta: Value = serde_json::from_str(&meta).expect("meta JSON");
+        let sha = meta["entries"]
+            .as_array()
+            .and_then(|a| {
+                a.iter()
+                    .find(|e| e.get("path").and_then(|p| p.as_str()) == Some("documents.json"))
+            })
+            .and_then(|e| e.get("sha256").and_then(|s| s.as_str()))
+            .expect("documents.json entry in meta");
+        format!("blobs/{sha}")
+    };
+    let mut doc_file = archive.by_name(&doc_member).expect("documents member");
     let mut contents = String::new();
     use std::io::Read as _;
     doc_file
@@ -945,6 +1007,7 @@ async fn snapshot_restore_roundtrip() {
         "download must be application/zip"
     );
     let _ = owner_id;
+    cleanup_user(&owner_id).await;
 }
 
 // ------------------------------------------------- fan-out snapshot targets
@@ -1176,4 +1239,5 @@ async fn snapshot_targets_lifecycle() {
         "delete after empty must succeed: {:?}",
         r.message
     );
+    cleanup_user(&user_id).await;
 }
