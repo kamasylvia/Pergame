@@ -32,6 +32,22 @@ pub struct BackupTargetRow {
     pub last_result: String,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Object-namespace scope inside the target prefix (siyuan #15 §1).
+    /// Empty = default scope. Immutable after creation.
+    pub namespace: String,
+}
+
+/// Joins a target prefix with its namespace into the effective store prefix.
+/// Kept as one place so every kind scopes identically.
+fn effective_prefix(prefix: &str, namespace: &str) -> String {
+    let p = prefix.trim().trim_matches('/');
+    let n = namespace.trim().trim_matches('/');
+    match (p.is_empty(), n.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => p.to_string(),
+        (true, false) => n.to_string(),
+        (false, false) => format!("{p}/{n}"),
+    }
 }
 
 /// Kind-normalized connection parameters.
@@ -42,11 +58,16 @@ pub enum TargetParams {
 }
 
 impl BackupTargetRow {
+    /// Store prefix for this row: configured prefix plus namespace scope.
+    pub fn scoped_prefix(&self) -> String {
+        effective_prefix(&self.prefix, &self.namespace)
+    }
+
     pub fn s3_params(&self) -> S3StoreParams {
         S3StoreParams {
             endpoint: self.endpoint.clone(),
             bucket: self.bucket.clone(),
-            prefix: self.prefix.clone(),
+            prefix: self.scoped_prefix(),
             access_key: self.access_key.clone(),
             secret_key: self.secret_key.clone(),
             secure: self.secure,
@@ -60,13 +81,15 @@ impl BackupTargetRow {
             url: self.endpoint.clone(),
             username: self.access_key.clone(),
             password: self.secret_key.clone(),
-            prefix: self.prefix.clone(),
+            prefix: self.scoped_prefix(),
         }
     }
 
     pub fn pg_params(&self) -> PgStoreParams {
         // endpoint = host[:port], bucket = schema, access = user,
         // secret = password, secure = sslmode require (fork pg.go DSN).
+        // PG has no prefix concept, so the namespace becomes an extra key
+        // segment inside the table (see PgStoreParams::key_namespace).
         PgStoreParams {
             dsn: format!(
                 "postgresql://{}:{}@{}/{}?sslmode={}",
@@ -77,6 +100,7 @@ impl BackupTargetRow {
                 if self.secure { "require" } else { "prefer" }
             ),
             schema: self.bucket.clone(),
+            namespace: self.namespace.trim().trim_matches('/').to_string(),
         }
     }
 
@@ -146,6 +170,11 @@ pub struct ProbeOutcome {
     pub reachable: bool,
     pub snapshot_objects: i64,
     pub fingerprint: Option<Fingerprint>,
+    /// Owner marker read from the scope (siyuan #15 §3). None = reachable but
+    /// never claimed, or unreachable.
+    pub owner_instance: Option<String>,
+    /// True when the marker names this deployment.
+    pub owned_by_me: bool,
 }
 
 fn is_snapshot_key(key: &str) -> bool {
@@ -184,6 +213,8 @@ impl TargetConn {
             reachable: false,
             snapshot_objects: -1,
             fingerprint: None,
+            owner_instance: None,
+            owned_by_me: false,
         };
         let store_result = match self {
             Self::S3 { store, .. } => store.probe().await,
@@ -205,10 +236,17 @@ impl TargetConn {
             .iter()
             .filter(|(k, _, _)| is_snapshot_key(k))
             .count() as i64;
+        let owner = super::owner::read_owner(self).await.ok().flatten();
+        let mine = super::owner::instance_id();
+        let owned_by_me = owner
+            .as_ref()
+            .is_some_and(|o| o.instance_id == mine);
         ProbeOutcome {
             reachable: true,
             snapshot_objects,
             fingerprint: Some(self.fingerprint()),
+            owner_instance: owner.map(|o| o.instance_id),
+            owned_by_me,
         }
     }
 
@@ -239,6 +277,15 @@ impl TargetConn {
             copied += 1;
         }
         Ok((copied, skipped))
+    }
+
+    /// Writes one object (used for control-plane markers such as refs/owner).
+    pub async fn put(&self, path: &str, bytes: Vec<u8>) -> Result<(), ApiError> {
+        match self {
+            Self::S3 { store, .. } => store.put(path, bytes).await,
+            Self::WebDav { store, .. } => store.put(path, bytes).await,
+            Self::Pg { store, .. } => store.put(path, bytes).await,
+        }
     }
 
     pub async fn get(&self, path: &str) -> Result<Vec<u8>, ApiError> {

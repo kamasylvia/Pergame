@@ -50,6 +50,15 @@ pub struct TargetInput {
     /// Owning user ids (empty = unassigned, cannot enable).
     #[serde(default)]
     pub users: Vec<i64>,
+    /// Object namespace inside the target prefix (letter/digit/-/_, ≤64).
+    /// Empty = default scope. Immutable after creation.
+    #[serde(default)]
+    pub namespace: String,
+    /// Present when the client ran "test connection" on these connection
+    /// fields. The server recomputes the token and rejects the save when the
+    /// tested fields differ from the submitted ones (siyuan #15 §9).
+    #[serde(default, skip_serializing)]
+    pub connection_token: Option<String>,
 }
 
 fn mask_default() -> String {
@@ -88,6 +97,7 @@ pub fn mask_row(row: &BackupTargetRow) -> serde_json::Value {
         "enabled": row.enabled,
         "last_result": row.last_result,
         "users": row.users,
+        "namespace": row.namespace,
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     })
@@ -235,6 +245,42 @@ pub async fn upsert_target(
     if !matches!(input.kind.as_str(), "s3" | "webdav" | "pg") {
         return Err(ApiError::BadRequest("kind must be s3|webdav|pg".into()));
     }
+    // Save gate (siyuan #15 §9): a target may only be written after its
+    // connection fields were tested. Existing targets may skip the gate when
+    // the connection is unchanged — retention/name/schedule edits are safe.
+    if let Some(token) = input.connection_token.as_deref() {
+        let expected = connection_token(input);
+        if token != expected {
+            return Err(ApiError::Conflict(
+                "connection fields changed since the test; run test connection again".into(),
+            ));
+        }
+    } else {
+        let connection_needs_test = match id {
+            None => true,
+            Some(id) => {
+                let old = get_target(pool, id).await?;
+                let old_input = input_from_row(&old);
+                connection_token(&old_input) != connection_token(input)
+            }
+        };
+        if connection_needs_test {
+            return Err(ApiError::Conflict(
+                "test the connection before saving this target".into(),
+            ));
+        }
+    }
+    let ns = input.namespace.trim().trim_matches('/');
+    if !ns.is_empty()
+        && (ns.len() > 64
+            || !ns
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+    {
+        return Err(ApiError::BadRequest(
+            "namespace must be ≤64 chars of [A-Za-z0-9_-]".into(),
+        ));
+    }
     if !input.schedule.trim().is_empty() {
         crate::target::cron::CronSpec::parse(input.schedule.trim())
             .map_err(|e| ApiError::BadRequest(format!("invalid schedule: {e}")))?;
@@ -246,13 +292,20 @@ pub async fn upsert_target(
             let mut candidate = row_from_input(input, now, Some(old.id));
             candidate.access_key = resolve_secret(&input.access_key, &old.access_key);
             candidate.secret_key = resolve_secret(&input.secret_key, &old.secret_key);
+            // Namespace is immutable: changing it would orphan every object
+            // already written under the old scope.
+            if candidate.namespace != old.namespace {
+                return Err(ApiError::BadRequest(
+                    "namespace cannot be changed after creation".into(),
+                ));
+            }
             edit_check(pool, &old, &candidate).await?;
             assert_identity_unique(pool, &candidate, Some(id)).await?;
             sqlx::query(
                 "UPDATE backup_targets SET kind=$2, name=$3, endpoint=$4, bucket=$5, prefix=$6, \
                  access_key=$7, secret_key=$8, secure=$9, region=$10, provider=$11, \
                  keep_last=$12, max_age_days=$13, enabled=$14, users=$15, schedule=$16, \
-                 updated_at=$17 WHERE id = $1",
+                 namespace=$17, updated_at=$18 WHERE id = $1",
             )
             .bind(id)
             .bind(&candidate.kind)
@@ -270,6 +323,7 @@ pub async fn upsert_target(
             .bind(candidate.enabled)
             .bind(&candidate.users)
             .bind(&candidate.schedule)
+            .bind(&candidate.namespace)
             .bind(now)
             .execute(pool)
             .await
@@ -289,8 +343,8 @@ pub async fn upsert_target(
             sqlx::query(
                 "INSERT INTO backup_targets (id, kind, name, endpoint, bucket, prefix, access_key, \
                  secret_key, secure, region, provider, keep_last, max_age_days, enabled, users, \
-                 schedule, last_result, created_at, updated_at) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'',$17,$17)",
+                 schedule, last_result, created_at, updated_at, namespace) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'',$17,$17,$18)",
             )
             .bind(candidate.id)
             .bind(&candidate.kind)
@@ -308,6 +362,7 @@ pub async fn upsert_target(
             .bind(candidate.enabled)
             .bind(&candidate.users)
             .bind(&candidate.schedule)
+            .bind(&candidate.namespace)
             .bind(now)
             .execute(pool)
             .await
@@ -335,10 +390,70 @@ fn row_from_input(input: &TargetInput, now: i64, id: Option<Uuid>) -> BackupTarg
         schedule: input.schedule.clone(),
         enabled: input.enabled,
         users: input.users.clone(),
+        namespace: input.namespace.trim().trim_matches('/').to_string(),
         last_result: String::new(),
         created_at: now,
         updated_at: now,
     }
+}
+
+/// Hash of the connection *identity* fields (no secrets), used by the UI to
+/// bind a successful probe to the exact connection it validated (siyuan #15
+/// §9). Display/retention/schedule fields are deliberately excluded: editing
+/// a name must not force a re-test.
+pub fn connection_token(input: &TargetInput) -> String {
+    use sha2::{Digest, Sha256};
+    let material = format!(
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        input.kind.trim().to_lowercase(),
+        input.endpoint.trim().trim_end_matches('/').to_lowercase(),
+        input.bucket.trim().to_lowercase(),
+        input.prefix.trim().trim_matches('/').to_lowercase(),
+        input.namespace.trim().trim_matches('/').to_lowercase(),
+        input.region.trim().to_lowercase(),
+        input.provider.trim().to_lowercase(),
+        input.secure,
+    );
+    let digest = Sha256::digest(material.as_bytes());
+    digest.iter().take(12).map(|b| format!("{b:02x}")).collect()
+}
+
+/// Reconstructs the connection-bearing part of an input from a stored row,
+/// so token comparison does not need the client to resend anything.
+fn input_from_row(row: &BackupTargetRow) -> TargetInput {
+    TargetInput {
+        kind: row.kind.clone(),
+        name: row.name.clone(),
+        endpoint: row.endpoint.clone(),
+        bucket: row.bucket.clone(),
+        prefix: row.prefix.clone(),
+        access_key: row.access_key.clone(),
+        secret_key: row.secret_key.clone(),
+        secure: row.secure,
+        region: row.region.clone(),
+        provider: row.provider.clone(),
+        keep_last: row.keep_last,
+        max_age_days: row.max_age_days,
+        schedule: row.schedule.clone(),
+        enabled: row.enabled,
+        users: row.users.clone(),
+        namespace: row.namespace.clone(),
+        connection_token: None,
+    }
+}
+
+/// Public wrapper for the draft-probe route (secret rehydration).
+pub fn resolve_secret_pub(incoming: &str, previous: &str) -> String {
+    resolve_secret(incoming, previous)
+}
+
+/// Public wrapper for the draft-probe route (build a candidate row).
+pub fn row_from_input_pub(
+    input: &TargetInput,
+    now: i64,
+    id: Option<Uuid>,
+) -> BackupTargetRow {
+    row_from_input(input, now, id)
 }
 
 fn resolve_secret(incoming: &str, previous: &str) -> String {
@@ -362,4 +477,86 @@ pub async fn empty_target(pool: &PgPool, id: Uuid) -> Result<usize, ApiError> {
         }
     }
     Ok(deleted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input(over: impl FnOnce(&mut TargetInput)) -> TargetInput {
+        let mut t = TargetInput {
+            kind: "s3".into(),
+            name: "t".into(),
+            endpoint: "https://s3.example.com".into(),
+            bucket: "bk".into(),
+            prefix: "pergame".into(),
+            access_key: "AK".into(),
+            secret_key: "SK".into(),
+            secure: true,
+            region: "us-east-1".into(),
+            provider: "Other".into(),
+            keep_last: 10,
+            max_age_days: 0,
+            schedule: String::new(),
+            enabled: true,
+            users: vec![1],
+            namespace: String::new(),
+            connection_token: None,
+        };
+        over(&mut t);
+        t
+    }
+
+    #[test]
+    fn connection_token_ignores_display_and_retention() {
+        let base = connection_token(&input(|_| {}));
+        // Name / retention / schedule are not connection identity.
+        let display_only = connection_token(&input(|t| {
+            t.name = "renamed".into();
+            t.keep_last = 3;
+            t.schedule = "0 3 * * *".into();
+            t.users = vec![1, 2];
+        }));
+        assert_eq!(base, display_only);
+        // Connection fields do change it.
+        let moved = connection_token(&input(|t| t.endpoint = "https://other.example".into()));
+        assert_ne!(base, moved);
+        let ns = connection_token(&input(|t| t.namespace = "scope-a".into()));
+        assert_ne!(base, ns);
+    }
+
+    #[test]
+    fn connection_token_never_leaks_secrets() {
+        let token = connection_token(&input(|t| {
+            t.access_key = "SUPER-SECRET-AK".into();
+            t.secret_key = "SUPER-SECRET-SK".into();
+        }));
+        assert!(!token.contains("SUPER"));
+        assert_eq!(token.len(), 24, "12 bytes hex");
+    }
+
+    #[test]
+    fn namespace_format_is_validated() {
+        // Valid shapes pass the charset/length rule the route enforces.
+        for ok in ["", "a", "scope-1", "SCOPE_2", &"x".repeat(64)] {
+            let ns = ok.trim().trim_matches('/');
+            assert!(
+                ns.is_empty()
+                    || (ns.len() <= 64
+                        && ns
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            );
+        }
+        for bad in ["has space", "has/slash", "dot.dot"] {
+            let ns = bad.trim().trim_matches('/');
+            assert!(
+                !(ns.is_empty()
+                    || (ns.len() <= 64
+                        && ns
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')))
+            );
+        }
+    }
 }

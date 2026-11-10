@@ -87,6 +87,26 @@ pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: i64) -> Ve
         };
         match target.connect().await {
             Ok(conn) => {
+                // Ownership gate: only the claiming instance writes. A foreign
+                // claim means another deployment owns this scope's lineage.
+                match super::owner::claim(&conn, false).await {
+                    Ok(super::owner::ClaimOutcome::Claimed) => {}
+                    Ok(super::owner::ClaimOutcome::Foreign { owner, .. }) => {
+                        result.error = Some(format!(
+                            "target owned by instance '{}' (claimed {}); take over explicitly to write",
+                            owner.instance_id, owner.claimed_at
+                        ));
+                        record_result(pool, &target, &result).await;
+                        results.push(result);
+                        continue;
+                    }
+                    Err(e) => {
+                        result.error = Some(format!("ownership check failed: {e}"));
+                        record_result(pool, &target, &result).await;
+                        results.push(result);
+                        continue;
+                    }
+                }
                 match conn.replicate(entries.clone()).await {
                     Ok((copied, skipped)) => {
                         result.copied = copied;
@@ -102,21 +122,30 @@ pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: i64) -> Ve
             }
             Err(e) => result.error = Some(e.to_string()),
         }
-        let summary = match &result.error {
-            Some(e) => format!("error: {e}"),
-            None => format!("copied {}, skipped {}", result.copied, result.skipped),
-        };
-        let _ = sqlx::query(
-            "UPDATE backup_targets SET last_result = $2, updated_at = $3 WHERE id = $1",
-        )
-        .bind(target.id)
-        .bind(&summary)
-        .bind(crate::auth::service::now_ms())
-        .execute(pool)
-        .await;
+        record_result(pool, &target, &result).await;
         results.push(result);
     }
     results
+}
+
+/// Records the last fan-out outcome on the target row (operator visibility).
+async fn record_result(
+    pool: &PgPool,
+    target: &super::config::BackupTargetRow,
+    result: &FanoutResult,
+) {
+    let summary = match &result.error {
+        Some(e) => format!("error: {e}"),
+        None => format!("copied {}, skipped {}", result.copied, result.skipped),
+    };
+    let _ = sqlx::query(
+        "UPDATE backup_targets SET last_result = $2, updated_at = $3 WHERE id = $1",
+    )
+    .bind(target.id)
+    .bind(&summary)
+    .bind(crate::auth::service::now_ms())
+    .execute(pool)
+    .await;
 }
 
 /// Prunes the oldest manifests on a target beyond `keep_last`, then deletes

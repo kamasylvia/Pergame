@@ -16,6 +16,9 @@ use super::{Fingerprint, ObjectRow, PgStoreParams, internal, join_prefix};
 pub struct PgTarget {
     pool: sqlx::PgPool,
     schema: String,
+    /// Namespace key prefix (empty = default scope). Applied on top of every
+    /// path because PG has no store-level prefix concept.
+    namespace: String,
 }
 
 impl PgTarget {
@@ -36,9 +39,22 @@ impl PgTarget {
                 "pg target schema must be [A-Za-z0-9_]".into(),
             ));
         }
-        let t = Self { pool, schema };
+        let t = Self {
+            pool,
+            schema,
+            namespace: p.namespace.trim().trim_matches('/').to_string(),
+        };
         t.ensure_table().await?;
         Ok(t)
+    }
+
+    /// Applies the namespace to a logical path (no-op when unset).
+    fn ns_key(&self, path: &str) -> String {
+        if self.namespace.is_empty() {
+            path.to_string()
+        } else {
+            join_prefix(&self.namespace, path)
+        }
     }
 
     fn table(&self) -> String {
@@ -106,7 +122,7 @@ impl PgTarget {
             "SELECT count(*) FROM {} WHERE path = $1",
             self.table()
         )))
-        .bind(path)
+        .bind(self.ns_key(path))
         .fetch_one(&self.pool)
         .await
         .map_err(|e| internal(format!("pg target has: {e}")))?;
@@ -120,7 +136,7 @@ impl PgTarget {
              size = EXCLUDED.size, updated_at = now()",
             self.table()
         )))
-        .bind(path)
+        .bind(self.ns_key(path))
         .bind(&bytes)
         .bind(bytes.len() as i64)
         .execute(&self.pool)
@@ -134,7 +150,7 @@ impl PgTarget {
             "SELECT data FROM {} WHERE path = $1",
             self.table()
         )))
-        .bind(path)
+        .bind(self.ns_key(path))
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| internal(format!("pg target get: {e}")))?
@@ -147,7 +163,7 @@ impl PgTarget {
             "DELETE FROM {} WHERE path = $1",
             self.table()
         )))
-        .bind(path)
+        .bind(self.ns_key(path))
         .execute(&self.pool)
         .await
         .map_err(|e| internal(format!("pg target delete: {e}")))?;
@@ -155,7 +171,15 @@ impl PgTarget {
     }
 
     pub async fn list(&self, path: &str) -> Result<Vec<ObjectRow>, crate::error::ApiError> {
-        let like = format!("{}%", join_prefix("", path));
+        // Scope the listing to this target's namespace: the pattern must
+        // never match another instance's objects in a shared schema.
+        let scoped = self.ns_key(path);
+        let like = format!("{}%", join_prefix("", &scoped));
+        let strip = if self.namespace.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", self.namespace)
+        };
         let rows: Vec<(String, i64, i64)> = sqlx::query_as(AssertSqlSafe(format!(
             "SELECT path, size, (extract(epoch from updated_at) * 1000)::bigint \
              FROM {} WHERE path LIKE $1 ORDER BY path",
@@ -165,7 +189,14 @@ impl PgTarget {
         .fetch_all(&self.pool)
         .await
         .map_err(|e| internal(format!("pg target list: {e}")))?;
-        Ok(rows)
+        // Callers reason about logical keys, so strip the namespace back off.
+        Ok(rows
+            .into_iter()
+            .map(|(k, size, ts)| {
+                let logical = k.strip_prefix(&strip).unwrap_or(&k).to_string();
+                (logical, size, ts)
+            })
+            .collect())
     }
 }
 

@@ -738,6 +738,70 @@ pub async fn test_target(
         "reachable": probe.reachable,
         "snapshot_objects": probe.snapshot_objects,
         "fingerprint": probe.fingerprint.map(|f| f.0),
+        "owner_instance": probe.owner_instance,
+        "owned_by_me": probe.owned_by_me,
+    })))
+}
+
+/// POST /api/admin/dr-backup/targets/probe-draft — probe connection fields that
+/// have not been saved yet (siyuan #15 §9: the save button stays disabled until
+/// a test passes). `***` credentials are resolved against the stored row when
+/// `id` is supplied, so an untouched password still tests the real store.
+///
+/// Returns a `connection_token` the client echoes back on save; the server
+/// recomputes it there to prove the tested connection is the saved one.
+pub async fn probe_draft_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::Json(body): axum::Json<ProbeDraftBody>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let mut input = body.target;
+    // Rehydrate masked secrets from the stored row (edit mode).
+    if let Some(id) = body.id {
+        let old = target_repo::get_target(&state.db, id).await?;
+        input.access_key = target_repo::resolve_secret_pub(&input.access_key, &old.access_key);
+        input.secret_key = target_repo::resolve_secret_pub(&input.secret_key, &old.secret_key);
+    } else if input.access_key == target_repo::MASK || input.secret_key == target_repo::MASK {
+        return Err(ApiError::BadRequest(
+            "new target cannot test with *** credentials".into(),
+        ));
+    }
+    let candidate = target_repo::row_from_input_pub(&input, crate::auth::service::now_ms(), body.id);
+    let probe = target_repo::probe_row(&candidate).await?;
+    Ok(ApiOk::ok(json!({
+        "reachable": probe.reachable,
+        "snapshot_objects": probe.snapshot_objects,
+        "fingerprint": probe.fingerprint.map(|f| f.0),
+        "owner_instance": probe.owner_instance,
+        "owned_by_me": probe.owned_by_me,
+        "connection_token": target_repo::connection_token(&input),
+    })))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ProbeDraftBody {
+    #[serde(default)]
+    pub id: Option<uuid::Uuid>,
+    pub target: target_repo::TargetInput,
+}
+
+/// POST /api/admin/dr-backup/targets/:id/take-ownership — explicit takeover
+/// (siyuan #15 §3: "last configured instance wins", but only on request).
+pub async fn take_ownership(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let row = target_repo::get_target(&state.db, id).await?;
+    let conn = row.connect().await?;
+    let previous = crate::target::owner::read_owner(&conn).await?;
+    crate::target::owner::claim(&conn, true).await?;
+    let now = crate::target::owner::current_owner();
+    Ok(ApiOk::ok(json!({
+        "instance_id": now.instance_id,
+        "previous_instance": previous.map(|p| p.instance_id),
     })))
 }
 

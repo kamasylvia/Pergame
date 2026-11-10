@@ -58,3 +58,11 @@
 - **PROBE 行内嵌指纹不能含分隔符**:指纹按 pipe 分字段,指纹自身用 pipe 会破坏解析——外层协议字段分隔符要为嵌套数据改用逗号。
 - **croner 2.x API**:`Cron::new(expr).parse()`,默认 5 字段标准模式(秒禁用、Vixie DOM/DOW OR),与 robfig ParseStandard 语义对齐;`find_next_occurrence(&last_check, false) <= now` 即「(last_check, now] 内有触发点」= 到期。
 - **rclone crypt 的 size 校验必须跳过**:crypt 容器带 nonce+MAC,尺寸≠明文;校验逻辑要按「该目的地是否启用加密」分支,否则每次备份都误报 verify 失败。
+
+## 2026-11-10 Siyuan issue #15 借鉴批次
+
+- **namespace 最省力的落点是「并入 store prefix」**:三个 store(S3/WebDAV/PG)本来就有 prefix 字段,把 `namespace` 拼进 `effective_prefix()` 后上传/列表/剪枝/还原全部自动生效,零路径构造点改动。PG 没有 prefix 概念,单独在 store 内加一段 `ns_key` 并在 list 时剥回——**调用方永远只看到逻辑 key**,这是避免一条链路上「有时带前缀有时不带」的关键。
+- **归属认领必须区分读写路径**:写路径(fan-out/定时)要求认领,读路径(还原/导出/管理)不要求。反过来会把灾难恢复卡在「先接管」上——恢复现场时恰恰最不该有多余的前置条件。
+- **保存门禁用「服务端算 token 客户端回传」而非客户端自报**:`connection_token` = 连接字段的 sha256 前 12 字节(不含密钥/名称/保留/定时)。客户端测试拿到 token → 保存时回传 → 服务端重算比对,不一致 409。这样即使前端状态被绕过,后端仍然守住「测过才能存」。**token 里绝不含密钥**,否则等于把凭据哈希塞进前端。
+- **`Object.assign` 到 reactive 不等于类型声明**:`form` 上 Object.assign 过 `schedule/region/provider`,但 `reactive({...})` 初值里没有 → typecheck 报 `Property does not exist`,而运行时因 Object.assign 又是好的。这类「运行时正常、类型报错」的坑要在初值里显式声明字段。
+- **判据:借鉴前先问「这条约束在我们这里有没有作用对象」**。Siyuan 的还原身份重置针对 system.id/锁屏口令,而 Pergame 快照按 user_id 隔离且只含三类偏好设置——没有实例身份可重置。照搬会写出无对象的代码,不如在 spec 里记录判定理由。

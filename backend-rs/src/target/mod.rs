@@ -7,6 +7,7 @@
 pub mod config;
 pub mod cron;
 pub mod fanout;
+pub mod owner;
 pub mod pg;
 pub mod repo;
 pub mod s3;
@@ -66,6 +67,9 @@ pub struct PgStoreParams {
     /// Full connection string (built from endpoint + credentials upstream).
     pub dsn: String,
     pub schema: String,
+    /// Object namespace (siyuan #15 §1): PG has no prefix concept, so the
+    /// namespace is applied as an extra key segment by the store itself.
+    pub namespace: String,
 }
 
 /// Normalized identity string pieces (joined into a Fingerprint upstream).

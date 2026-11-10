@@ -260,6 +260,14 @@ async fn main() {
             post(routes::admin_dr::test_target),
         )
         .route(
+            "/api/admin/dr-backup/targets/probe-draft",
+            post(routes::admin_dr::probe_draft_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/take-ownership",
+            post(routes::admin_dr::take_ownership),
+        )
+        .route(
             "/api/admin/dr-backup/targets/{id}/empty",
             post(routes::admin_dr::empty_target),
         )

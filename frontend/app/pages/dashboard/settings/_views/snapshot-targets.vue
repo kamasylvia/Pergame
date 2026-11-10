@@ -24,6 +24,7 @@
             {{ t('settings.snapshotTargets.usersCount', { count: tg.users.length }) }}
             · {{ t('settings.snapshotTargets.keepLast') }} {{ tg.keep_last }}
             <template v-if="tg.schedule"> · cron {{ tg.schedule }}</template>
+            <template v-if="tg.namespace"> · ns {{ tg.namespace }}</template>
             <template v-if="tg.last_result"> · {{ tg.last_result }}</template>
           </p>
 
@@ -34,6 +35,15 @@
             <AppButton type="secondary" small :disabled="busy === tg.id" @click="sync(tg)">
               {{ t('settings.snapshotTargets.syncNow') }}
             </AppButton>
+            <AppButton
+              v-if="isForeign(tg.id)"
+              type="danger"
+              small
+              :disabled="busy === tg.id"
+              @click="takeOwnership(tg)"
+            >
+              {{ t('settings.snapshotTargets.takeover') }}
+            </AppButton>
             <AppButton type="secondary" small @click="startEdit(tg)">
               {{ t('settings.snapshotTargets.edit') }}
             </AppButton>
@@ -42,8 +52,8 @@
             </AppButton>
           </div>
 
-          <p v-if="probeResults[tg.id]" class="probe" :class="probeResults[tg.id].reachable ? 'ok' : 'bad'">
-            {{ probeLabel(probeResults[tg.id]) }}
+          <p v-if="probeLabel(tg.id)" class="probe" :class="probeClass(tg.id)">
+            {{ probeLabel(tg.id) }}
           </p>
         </div>
       </div>
@@ -73,6 +83,15 @@
           <label>
             {{ t('settings.snapshotTargets.prefix') }}
             <input v-model="form.prefix" type="text" placeholder="pergame" />
+          </label>
+          <label>
+            {{ t('settings.snapshotTargets.namespace') }}
+            <input
+              v-model="form.namespace"
+              type="text"
+              :disabled="!!editing"
+              :placeholder="t('settings.snapshotTargets.namespacePlaceholder')"
+            />
           </label>
           <label>
             {{ t('settings.snapshotTargets.accessKey') }}
@@ -112,8 +131,19 @@
           <p v-if="users.length === 0" class="hint">{{ t('settings.snapshotTargets.noUsers') }}</p>
         </fieldset>
 
+        <!-- Save gate: connection fields must be tested first (siyuan #15 §9) -->
+        <div class="test-row">
+          <AppButton type="secondary" :disabled="testing || saving" @click="testDraft">
+            {{ testing ? t('settings.snapshotTargets.testing') : t('settings.snapshotTargets.testConnection') }}
+          </AppButton>
+          <span v-if="draftProbe" class="probe" :class="draftProbe.reachable ? 'ok' : 'bad'">
+            {{ draftProbeLabel }}
+          </span>
+          <span v-else-if="needsTest" class="hint">{{ t('settings.snapshotTargets.mustTest') }}</span>
+        </div>
+
         <div class="row-actions">
-          <AppButton type="primary" :disabled="saving" @click="save">
+          <AppButton type="primary" :disabled="saving || needsTest" @click="save">
             {{ saving ? t('settings.snapshotTargets.saving') : t('settings.snapshotTargets.save') }}
           </AppButton>
           <AppButton v-if="editing" type="secondary" @click="cancelEdit">
@@ -145,18 +175,23 @@ interface Target {
   enabled: boolean;
   last_result: string;
   users: number[];
+  namespace: string;
 }
 
 interface Probe {
   reachable: boolean;
   snapshot_objects: number;
   fingerprint?: string | null;
+  owner_instance?: string | null;
+  owned_by_me?: boolean;
+  /** Server-computed digest of the tested connection fields. */
+  connection_token?: string;
 }
 
 const { t } = useI18nT();
 const notifications = useNotifications();
 
-const KINDS = ['s3', 'webdav', 'pg'];
+const KINDS = ['s3', 'webdav', 'pg'] as unknown as never[];
 
 const targets = ref<Target[]>([]);
 const users = ref<Array<{ id: string; username: string; email?: string }>>([]);
@@ -178,9 +213,40 @@ const form = reactive({
   secret_key: '',
   secure: true,
   keep_last: 10,
+  schedule: '',
   enabled: true,
   users: [] as number[],
+  namespace: '',
+  region: 'us-east-1',
+  provider: 'Other',
 });
+
+// Draft probe (siyuan #15 §9): a target may only be saved after its
+// connection fields were tested, and the token pins the exact field values.
+const draftProbe = ref<Probe | null>(null);
+const testing = ref(false);
+
+/** Connection-bearing form slice: these are what a test validates. */
+const connectionFields = computed(() => ({
+  kind: form.kind,
+  endpoint: form.endpoint.trim(),
+  bucket: form.bucket.trim(),
+  prefix: form.prefix.trim(),
+  namespace: form.namespace.trim(),
+  access_key: form.access_key,
+  secret_key: form.secret_key,
+  secure: form.secure,
+  region: form.region,
+  provider: form.provider,
+}));
+
+/** Fields the successful test ran against; null until a test passes. */
+const testedFields = ref<string | null>(null);
+
+/** True while the form's connection fields differ from the tested ones. */
+const needsTest = computed(
+  () => testedFields.value === null || JSON.stringify(connectionFields.value) !== testedFields.value,
+);
 
 const endpointHint = computed(() =>
   form.kind === 's3'
@@ -226,12 +292,37 @@ async function loadUsers() {
   }
 }
 
-function probeLabel(p: Probe): string {
+function probeFor(id: string): Probe | undefined {
+  return probeResults.value[id];
+}
+
+/** Empty string when no probe yet (lets the template v-if on the text). */
+function probeLabel(id: string): string {
+  const p = probeFor(id);
+  return p ? describeProbe(p) : '';
+}
+
+/** Probe result rendered as one line (shared by saved rows and the draft). */
+function describeProbe(p: Probe): string {
   if (!p.reachable) return t('settings.snapshotTargets.probeUnreachable');
   return t('settings.snapshotTargets.probeOk', {
     count: p.snapshot_objects,
     fingerprint: p.fingerprint || '—',
   });
+}
+
+const draftProbeLabel = computed(() =>
+  draftProbe.value ? describeProbe(draftProbe.value) : '',
+);
+
+function probeClass(id: string): string {
+  const p = probeFor(id);
+  return p?.reachable ? 'ok' : 'bad';
+}
+
+function isForeign(id: string): boolean {
+  const p = probeFor(id);
+  return !!p?.owner_instance && !p.owned_by_me;
 }
 
 async function probe(tg: Target) {
@@ -299,6 +390,22 @@ function startEdit(tg: Target) {
     schedule: tg.schedule ?? '',
     enabled: tg.enabled,
     users: [...tg.users],
+    namespace: tg.namespace ?? '',
+  });
+  // An existing target's stored connection is already proven; a test is only
+  // required again once a connection field is edited.
+  draftProbe.value = null;
+  testedFields.value = JSON.stringify({
+    kind: tg.kind,
+    endpoint: tg.endpoint.trim(),
+    bucket: tg.bucket.trim(),
+    prefix: tg.prefix.trim(),
+    namespace: (tg.namespace ?? '').trim(),
+    access_key: tg.access_key,
+    secret_key: tg.secret_key,
+    secure: tg.secure,
+    region: 'us-east-1',
+    provider: 'Other',
   });
 }
 
@@ -318,7 +425,77 @@ function cancelEdit() {
     schedule: '',
     enabled: true,
     users: [],
+    namespace: '',
   });
+  draftProbe.value = null;
+  testedFields.value = null;
+}
+
+/** Probes the unsaved connection fields; a pass unlocks the save button. */
+async function testDraft() {
+  testing.value = true;
+  formError.value = '';
+  const body = {
+    id: editing.value?.id ?? null,
+    target: {
+      kind: form.kind,
+      name: form.name.trim() || 'draft',
+      endpoint: form.endpoint.trim(),
+      bucket: form.bucket.trim(),
+      prefix: form.prefix.trim(),
+      namespace: form.namespace.trim(),
+      access_key: form.access_key,
+      secret_key: form.secret_key,
+      secure: form.secure,
+      region: form.region,
+      provider: form.provider,
+      keep_last: form.keep_last,
+      max_age_days: 0,
+      schedule: form.schedule.trim(),
+      enabled: form.enabled,
+      users: form.users,
+    },
+  };
+  const result = await makeRequest<Probe>('admin/dr-backup/targets/probe-draft', 'POST', body);
+  testing.value = false;
+  if (result.status === 'success' && result.result) {
+    draftProbe.value = result.result;
+    testedFields.value = result.result.reachable
+      ? JSON.stringify(connectionFields.value)
+      : null;
+    if (!result.result.reachable) {
+      formError.value = t('settings.snapshotTargets.probeUnreachable');
+    } else if (result.result.owner_instance && !result.result.owned_by_me) {
+      notifications.add({
+        type: 'warning',
+        title: t('settings.snapshotTargets.foreignOwner', { instance: result.result.owner_instance }),
+      });
+    }
+  } else {
+    formError.value = result.message || t('settings.snapshotTargets.probeUnreachable');
+  }
+}
+
+/** Explicit takeover of a scope claimed by another deployment. */
+async function takeOwnership(tg: Target) {
+  busy.value = tg.id;
+  const result = await makeRequest<{ instance_id: string; previous_instance?: string }>(
+    `admin/dr-backup/targets/${tg.id}/take-ownership`,
+    'POST',
+    {},
+  );
+  busy.value = '';
+  if (result.status === 'success') {
+    notifications.add({
+      type: 'success',
+      title: t('settings.snapshotTargets.takeoverDone', {
+        instance: result.result?.instance_id ?? '',
+      }),
+    });
+    await load();
+  } else {
+    notifications.add({ type: 'error', title: t('common.errors.generic'), message: result.message });
+  }
 }
 
 async function save() {
@@ -340,6 +517,9 @@ async function save() {
     schedule: form.schedule.trim(),
     enabled: form.enabled,
     users: form.users,
+    namespace: form.namespace.trim(),
+    // Proves to the server that these exact connection fields were tested.
+    connection_token: draftProbe.value?.connection_token ?? null,
   };
   const result = editing.value
     ? await makeRequest(`admin/dr-backup/targets/${editing.value.id}`, 'PUT', body)
