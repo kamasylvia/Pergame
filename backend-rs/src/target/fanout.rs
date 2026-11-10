@@ -40,11 +40,18 @@ async fn collect_user_objects(
 
     let mut out = Vec::with_capacity(keys.len());
     for key in keys {
-        // Strip the user prefix so targets are user-scoped like the local bucket.
-        if let Ok(bytes) = storage.get_backup_object(&key).await {
-            out.push((key, bytes));
+        match storage.get_backup_object(&key).await {
+            Ok(bytes) => out.push((key, bytes)),
+            // Must be visible: a silently skipped manifest means the offsite
+            // replica is incomplete even though fan-out reports success.
+            Err(e) => tracing::warn!(%key, error = %e, "fan-out: local object unreadable"),
         }
     }
+    tracing::info!(
+        user_id,
+        objects = out.len(),
+        "fan-out: collected local objects"
+    );
     Ok(out)
 }
 
@@ -120,7 +127,7 @@ async fn prune_target(
     keep_last: i32,
 ) -> Result<usize, crate::error::ApiError> {
     let keep = keep_last.max(1) as usize;
-    let objects = conn.list(prefix).await?;
+    let objects = conn.list(conn.list_prefix(prefix)).await?;
     let mut manifests: Vec<String> = objects
         .iter()
         .filter(|(k, _, _)| k.contains("/manifests/"))
@@ -139,7 +146,7 @@ async fn prune_target(
     }
     // Blob GC: keep only hashes referenced by surviving manifests.
     let mut referenced = std::collections::HashSet::new();
-    for (k, _, _) in conn.list(prefix).await? {
+    for (k, _, _) in conn.list(conn.list_prefix(prefix)).await? {
         if !k.contains("/manifests/") {
             continue;
         }
@@ -154,7 +161,7 @@ async fn prune_target(
             }
         }
     }
-    for (k, _, _) in conn.list(prefix).await? {
+    for (k, _, _) in conn.list(conn.list_prefix(prefix)).await? {
         if !k.contains("/blobs") {
             continue;
         }
@@ -178,7 +185,7 @@ pub async fn fetch_user_from_target(
     let target = repo::get_target(pool, target_id).await?;
     let conn = target.connect().await?;
     let prefix = format!("{}/", user_id);
-    let objects = conn.list(&target.prefix).await?;
+    let objects = conn.list(conn.list_prefix(&target.prefix)).await?;
     let mut fetched = 0usize;
     for (key, _, _) in objects {
         if !key.starts_with(&prefix) {

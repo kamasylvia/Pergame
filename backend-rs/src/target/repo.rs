@@ -343,7 +343,7 @@ fn resolve_secret(incoming: &str, previous: &str) -> String {
 pub async fn empty_target(pool: &PgPool, id: Uuid) -> Result<usize, ApiError> {
     let row = get_target(pool, id).await?;
     let conn = row.connect().await?;
-    let objects = conn.list(&row.prefix).await?;
+    let objects = conn.list(conn.list_prefix(&row.prefix)).await?;
     let mut deleted = 0usize;
     for (key, _, _) in objects {
         if conn.delete(&key).await.is_ok() {

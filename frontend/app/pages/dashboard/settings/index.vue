@@ -38,6 +38,7 @@ import EditorView from './_views/editor.vue';
 import SecurityView from './_views/security.vue';
 import BackupView from './_views/backups.vue';
 import InstanceDrView from './_views/instance-dr.vue';
+import SnapshotTargetsView from './_views/snapshot-targets.vue';
 import ShortcutsView from './_views/shortcuts.vue';
 import SnippetsView from './_views/snippets.vue';
 import MarkdownView from './_views/markdown.vue';
@@ -73,6 +74,7 @@ const pages = {
   security: SecurityView,
   backup: BackupView,
   instanceDr: InstanceDrView,
+  snapshotTargets: SnapshotTargetsView,
   shortcuts: ShortcutsView,
   snippets: SnippetsView,
   markdown: MarkdownView,
@@ -134,7 +136,10 @@ const navSections = computed<NavSection[]>(() => [
     ? [
         {
           title: t('settings.nav.admin'),
-          items: [{ key: 'instanceDr', label: t('settings.pages.instanceDr'), icon: 'backup' }],
+          items: [
+            { key: 'instanceDr', label: t('settings.pages.instanceDr'), icon: 'backup' },
+            { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
+          ],
         },
       ]
     : []),

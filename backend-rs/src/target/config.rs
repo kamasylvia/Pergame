@@ -148,10 +148,26 @@ pub struct ProbeOutcome {
 }
 
 fn is_snapshot_key(key: &str) -> bool {
+    // Directory placeholder objects (S3 providers like QuObjects materialise
+    // `prefix/dir/` as a zero-byte key) are not snapshot payload; counting
+    // them makes the delete gate refuse forever after an empty().
+    if key.ends_with('/') {
+        return false;
+    }
     key.contains("/manifests/") || key.contains("/blobs") || key.contains("refs/latest")
 }
 
 impl TargetConn {
+    /// Prefix argument for `list`: empty for stores that scope internally
+    /// (S3/WebDAV apply their configured prefix), the row prefix for PG
+    /// (which has no prefix concept).
+    pub fn list_prefix<'a>(&self, row_prefix: &'a str) -> &'a str {
+        match self {
+            Self::S3 { .. } | Self::WebDav { .. } => "",
+            Self::Pg { .. } => row_prefix,
+        }
+    }
+
     pub fn fingerprint(&self) -> Fingerprint {
         match self {
             Self::S3 { fingerprint, .. } => fingerprint.clone(),
@@ -177,7 +193,10 @@ impl TargetConn {
             tracing::warn!(error = %e, "backup target probe failed");
             return unreachable;
         }
-        let objects = match self.list(prefix).await {
+        // The concrete stores already scope by their configured prefix, so
+        // the probe must not add it again (double prefix => zero objects and
+        // a delete gate that wrongly passes).
+        let objects = match self.list(self.list_prefix(prefix)).await {
             Ok(v) => v,
             Err(_) => return unreachable,
         };

@@ -66,11 +66,16 @@ impl S3Target {
     }
 
     pub async fn has(&self, path: &str) -> Result<bool, crate::error::ApiError> {
+        let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
+            path.to_string()
+        } else {
+            self.key(path)
+        };
         match self
             .client
             .head_object()
             .bucket(&self.bucket)
-            .key(self.key(path))
+            .key(&key)
             .send()
             .await
         {
@@ -109,11 +114,16 @@ impl S3Target {
     }
 
     pub async fn get(&self, path: &str) -> Result<Vec<u8>, crate::error::ApiError> {
+        let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
+            path.to_string()
+        } else {
+            self.key(path)
+        };
         let resp = self
             .client
             .get_object()
             .bucket(&self.bucket)
-            .key(self.key(path))
+            .key(&key)
             .send()
             .await
             .map_err(|e| internal(format!("s3 get {}: {e}", self.key(path))))?;
@@ -122,14 +132,19 @@ impl S3Target {
     }
 
     pub async fn delete(&self, path: &str) -> Result<bool, crate::error::ApiError> {
-        let _res = self
-            .client
+        // Accepts both relative paths and absolute keys (as returned by list).
+        let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
+            path.to_string()
+        } else {
+            self.key(path)
+        };
+        self.client
             .delete_object()
             .bucket(&self.bucket)
-            .key(self.key(path))
+            .key(&key)
             .send()
             .await
-            .map_err(|e| internal(format!("s3 delete {}: {e}", self.key(path))))?;
+            .map_err(|e| internal(format!("s3 delete {key}: {e}")))?;
         Ok(true)
     }
 

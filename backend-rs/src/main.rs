@@ -261,6 +261,10 @@ async fn main() {
             "/api/admin/dr-backup/targets/{id}/fetch",
             post(routes::admin_dr::fetch_target),
         )
+        .route(
+            "/api/admin/dr-backup/backup-users",
+            get(routes::admin_dr::list_backup_users),
+        )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))
         .route(

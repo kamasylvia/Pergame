@@ -810,3 +810,30 @@ pub async fn fetch_target(
     let fetched = fanout::fetch_user_from_target(&state.db, &storage, id, uid).await?;
     Ok(ApiOk::ok(json!({ "fetched": fetched })))
 }
+
+/// GET /api/admin/dr-backup/backup-users — users that own data (candidates
+/// for target assignment). Admin only; ids are snowflake strings on the wire.
+pub async fn list_backup_users(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let rows: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT DISTINCT u.id, u.username, u.email FROM users u \
+         JOIN nodes n ON n.user_id = u.id ORDER BY u.username",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(ApiError::from)?;
+    let out: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|(id, username, email)| {
+            json!({
+                "id": id.to_string(),
+                "username": username,
+                "email": email.unwrap_or_default(),
+            })
+        })
+        .collect();
+    Ok(ApiOk::ok(json!(out)))
+}
