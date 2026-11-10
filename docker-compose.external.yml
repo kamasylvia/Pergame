@@ -1,0 +1,123 @@
+# ==============================================================================
+# Pergame — 精简版(复用已有 PostgreSQL + S3)
+#
+# 只跑三个服务:backend / frontend / dr-backup。
+# pg 与对象存储用外部已有的,通过名为 postgres 的外部 Docker 网络接入。
+#
+# 与 docker-compose.yml 的区别:那个是自包含版(pg + RustFS 一起起,5 个服务
+# 5 个卷);这个只跑应用本身(3 个服务 2 个卷),pg 与 S3 用外面已有的。
+# 精简版的好处:down -v 只删 DR 配置,不会碰 pg 数据或 S3 对象。
+#
+# 前置:
+#   docker network ls | grep postgres     # 确认网络存在
+#   docker network inspect postgres       # 确认 pg 容器在里面
+#   psql -c 'CREATE DATABASE pergame;'    # backend 只跑 migration,不建库
+#
+# 启动:
+#   cp .env.external.example .env && vi .env
+#   docker compose -f docker-compose.external.yml up -d
+# ==============================================================================
+services:
+  # Pergame Backend (Rust rewrite)
+  backend:
+    image: ghcr.io/kamasylvia/pergame-backend:${PERGAME_TAG:-latest}
+    container_name: pergame-backend
+    restart: unless-stopped
+    environment:
+      BACKEND_PORT: 8201
+      GIN_MODE: release
+
+      # --- 认证 ---
+      JWT_SECRET: ${JWT_SECRET:-your-secure-jwt-secret-key-change-this-in-production}
+      # 只填主机名:带端口会产生非法 Cookie Domain,cookie 被浏览器丢弃
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8200}
+      ALLOW_UNSECURE: "${ALLOW_UNSECURE:-true}"
+      CONFIG_DISABLE_SIGNUP: "${CONFIG_DISABLE_SIGNUP:-false}"
+      CONFIG_DISABLE_NATIVE_LOGIN: "${CONFIG_DISABLE_NATIVE_LOGIN:-false}"
+
+      # --- 外部 PostgreSQL ---
+      # DATABASE_HOST 是 pg 容器在该 Docker 网络内的名字
+      DATABASE_HOST: ${DATABASE_HOST:-pg18}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-pergame}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+
+      # --- 外部对象存储(S3 兼容)---
+      # S3_ENDPOINT 走容器网络(内网地址);S3_PUBLIC_URL 是浏览器可达地址
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_PUBLIC_URL: ${CDN_URL}
+      S3_SECURE: "${S3_SECURE:-true}"
+      S3_ACCESSKEY: ${S3_ACCESSKEY}
+      S3_SECRETKEY: ${S3_SECRETKEY}
+      S3_BUCKET: ${S3_BUCKET:-pergame}
+
+      # --- 快照与回收站 ---
+      SNAPSHOT_INTERVAL_HOURS: "${SNAPSHOT_INTERVAL_HOURS:-0}"
+      PERGAME_SNAPSHOT_PASSPHRASE: "${PERGAME_SNAPSHOT_PASSPHRASE:-}"
+      TRASH_RETENTION_DAYS: "${TRASH_RETENTION_DAYS:-30}"
+      TRASH_SWEEP_INTERVAL_HOURS: "${TRASH_SWEEP_INTERVAL_HOURS:-24}"
+
+      # --- 邮件(可选)---
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_MAIL: ${SMTP_MAIL:-}
+      SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+
+    ports:
+      - "${BACKEND_EXTERNAL_PORT:-8201}:8201"
+    volumes:
+      - dr_conf:/conf
+      - dr_jobs:/jobs
+    networks:
+      - pergame
+      - postgres
+
+  # Pergame Frontend
+  frontend:
+    image: ghcr.io/kamasylvia/pergame-frontend:${PERGAME_TAG:-latest}
+    container_name: pergame-frontend
+    restart: unless-stopped
+    environment:
+      PORT: 8200
+      NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "${CONFIG_DISABLE_SIGNUP:-false}"
+      NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "${CONFIG_DISABLE_LANDING:-false}"
+      NUXT_PUBLIC_BASE_API: ${API_URL:-http://localhost:8201}
+      NUXT_PUBLIC_BASE_CDN: ${CDN_URL}
+      NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/pergame/}
+      NUXT_PUBLIC_BASE_URL: ${FRONTEND_URL:-http://localhost:8200}
+    ports:
+      - "${FRONTEND_EXTERNAL_PORT:-8200}:8200"
+    depends_on:
+      - backend
+    networks:
+      - pergame
+
+  # Instance DR sidecar: 执行 backend 通过共享卷交付的 pg_dump 任务
+  # 不需要实例级备份就删掉本服务 + backend 的 /conf,/jobs 挂载
+  dr-backup:
+    image: ghcr.io/kamasylvia/pergame-dr-backup:${PERGAME_TAG:-latest}
+    container_name: pergame-dr-backup
+    restart: unless-stopped
+    environment:
+      SCHEDULE_HOURS: "${DR_BACKUP_SCHEDULE_HOURS:-0}"
+      SCAN_INTERVAL_SECONDS: 2
+    volumes:
+      - dr_conf:/conf
+      - dr_jobs:/jobs
+    networks:
+      - pergame
+      - postgres   # sidecar 需要能连到 pg 做 dump
+
+networks:
+  # 应用内部网络(本 compose 自建)
+  pergame:
+    driver: bridge
+  # 已有的外部网络,pg 容器在其中;不创建、不删除
+  postgres:
+    external: true
+
+volumes:
+  dr_conf:
+  dr_jobs:
