@@ -51,6 +51,8 @@
 | 用户级快照(应用内) | v2 manifest + 内容寻址 blobs(`{uid}/manifests/`+`blobs[-e2e]/`),keep-10 + GC | 误删/误改恢复、可下载、可上传还原 | ✅ 全部实现 |
 | 定时自动快照 | `SNAPSHOT_INTERVAL_HOURS` ticker,复用 run_backup | 无人值守的用户级保护 | ✅ 实现(默认关) |
 | 实例级 3-2-1 异地 | dr-backup sidecar(pg_dump → 多 S3/WebDAV 目的地) | **主力备份目标** | ✅ 实现,待容器内实机验证 |
+| 快照异地副本(fan-out) | 每用户 target(S3/WebDAV/外置 PG),快照后自动增量复制(密文原样) | 对象集异地副本 + 离线 zip 出口 | ✅ 实现并活测 |
+| 离线 zip 出口 | portable 对象集格式(`meta.json`+`manifest.json`+`blobs/<sha256>`,条目名纯 ASCII) | 下载/上传还原/从 target 导出 | ✅ 实现并活测 |
 | 本地误删恢复 | 回收站 | 用户明确要求,替代 git 级版本历史 | ✅ 实现(2026-11-09) |
 | git 级版本控制 | — | 用户明确否决,不再评估 | ❌ 不做 |
 
@@ -60,17 +62,25 @@
 2. 容器内实机验证备份全链(本机无 docker):`docker compose up` → 设置 Instance DR 配 conf → 立即备份 / `-l` / `-R` 还原;同时验证应用内快照创建/还原/下载。
 3. 部署 smoke(思源笔记 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南` 有 9 步清单,含新增的快照与 DR 步骤)。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
+5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
 
 ### 换机续接指引
 
 - **编译/测试环境**:backend-rs 需 `rustup override set 1.95.0`(仓库根 `backend-rs` 目录,toasty 要求 ≥1.95);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。
 - **活环境**:NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(`PG_HOST/PG_PORT/PG_USERNAME/PG_PASSWORD`, `QUOBJECT_ENDPOINT/ACCESS_KEY/SECRET_KEY`;QUOBJECT_ENDPOINT 值是容器内主机名,本机用需替换为 `qnap.elf-balance.ts.net`)。Keycloak(`KEYCLOAK_URL` :10002)可复用于 OIDC 测试。
-- **集成套件**:`cargo test --test integration -- --ignored`(8 用例,需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` 环境变量供直连断言)。
-- **验证门**:`cargo test`(26 单测)、`cargo clippy --all-targets`(0)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
+- **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;10 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET`(一个存在的空桶,fan-out 用例用)。
+- **验证门**:`cargo test`(**49 单测**)、`cargo clippy --all-targets`(0)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
 
+- **多目标 fan-out + 锁 + portable zip(2026-11-10,`0fc5b2c4`→`6bdb75b6`→`73addc6b`→`e50bc2fb`→`aebfdc01`→`646654d6`→`901bc518`→`286d4b3e`→`ef108f0f`)**:
+  - **P1 多目标**:`target/` 模块(S3/WebDAV/外置 PG 三实现 + 指纹身份去重 + 掩码回填 + deleteCheck/editCheck 门禁 + `empty` + 引用计数 prune/GC);**按用户** target(admin 勾选,全选=实例级);快照成功后**自动增量复制**(密文原样不解密);`GET /targets/:id/export/:snapshotId` 直接从 target 出包;前端 `?p=snapshotTargets` 管理页。
+  - **P2 锁与只读**:备份共享锁/还原独占锁;中间件对工作区写请求 **423**(豁免 `/api/backup`、`/api/admin/dr-backup`、`/api/health`、`/api/auth`、`/api/users/@me`);`GET /admin/dr-backup/status` + 前端 `MaintenanceBanner` 提示只读。活测:还原中 status `read_only:true`、写请求 423、还原后恢复 200。
+  - **P3**:5 段 cron 解析(`*`/`*/n`/`a-b`/`a-b/n`/逗号,dom|dow 同时受限按 cron 取 OR)+ 每分钟调度(错过不补跑、锁期间跳过)+ `backup_targets.schedule`(migration 0007);portable zip 三入口(下载/上传还原自动识别/从 target 导出)。
+  - 走查抓到的真 bug(全部已修 + 有测试):**双前缀**(probe/empty/prune 把 row prefix 传给已自带 prefix 的 store → 对象数恒 0 → 门禁误放行删掉唯一异地副本)、**绝对 key 二次加前缀**(empty 报删成功其实没删)、**S3 `has()` 用字符串匹配 404**(SDK Display 只有 "service error" → 每次 replicate 中止)、**目录占位对象**(QuObjects 把 `.../blobs/` 物化成零字节 key → 门禁永远拒绝)、**INSERT/UPDATE 占位符错位**(schedule 落进 last_result、created_at 收到 text)、**migration 0006 被改动**(已应用迁移不可编辑,拆 0007)。
+  - 测试建设:新增 `snapshot_targets_lifecycle`(创建/掩码/去重/增量/门禁/清空/删除全链)、测试自清理(`cleanup_user`)、`--test-threads=1` 强制(锁会互相 423)。
+- **Toasty 铺向业务域(2026-11-10,`120caf4d`)**:新增 `NodeLink`/`Permission` 模型,links 4 个 + permissions 6 个 CRUD 改走 Toasty。**实测边界**:11 条 `WITH RECURSIVE` 留 sqlx(无 CTE 支持)、user-wide links 联表、邀请复合元组留 sqlx;`serde_json::Value` 无 `Field` impl 且 `#[document]` 不能带 `#[column]` → `user_settings` 留 sqlx。**用户裁决:到此为止**,剩余收益低于胶水成本。
 - **DR 管理:表单化 + Siyuan 对位批次 D(2026-11-09,与对位同一压缩 commit 发布)**:①配置表单化——`dr_config.rs` JSON⇄bash conf、结构化端点、表单(原始 conf 降级折叠);②Siyuan kernel/backup 对位 5 项补齐——探测(`dr-backup.sh -p` + PROBE 行 + 前端 Test 按钮)、rclone crypt 每目的地加密、keep-last 保留、每目的地 cron(后端调度器,croner)、删除门禁+存储指纹+重复位置拒绝。**关键修复:rclone ≥1.76 不再解析 env-section remote → 改生成私有 config 文件**(真机全链依赖,探测首跑抓到)。spec §12-13;真机 crypt/cron/门禁分支待人工。
 - **回收站(2026-11-09)**:`migration 0005` + 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + `/dashboard/trash` 前端 + 保留期 sweeper。spec = `features/trash.md`。
 - **备份子系统 A/B/C**(2026-11-09,commits `8ed0d261`/`2d0d9d55`/`1d8b1c71`/`5dcec24a`/`736057b3`/`571ec174`/`9fe0c3d5`):
