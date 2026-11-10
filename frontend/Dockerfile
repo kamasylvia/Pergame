@@ -5,9 +5,12 @@ FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-# Dépendances (cacheable)
+# Dépendances (cacheable).
+# BUN_REGISTRY lets a deployment point at a reachable mirror; the default
+# stays the public registry so CI behaves as before.
+ARG BUN_REGISTRY=https://registry.npmjs.org
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --registry "$BUN_REGISTRY"
 
 # Code source
 COPY . .
