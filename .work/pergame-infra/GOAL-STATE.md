@@ -59,8 +59,10 @@
 ### 下一步动作(按序)
 
 1. ~~**回收站机制**~~ ✅ **已完成(2026-11-09)**:`migration 0005` + repo 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + 前端 `/dashboard/trash` + 保留期 sweeper(`TRASH_RETENTION_DAYS` 默认 30)。spec = `features/trash.md`。**待活环境验证**:集成用例 `trash_lifecycle`(`cargo test --test integration -- --ignored`)。
-2. 容器内实机验证备份全链(本机无 docker):`docker compose up` → 设置 Instance DR 配 conf → 立即备份 / `-l` / `-R` 还原;同时验证应用内快照创建/还原/下载。
-3. 部署 smoke(思源笔记 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南` 有 9 步清单,含新增的快照与 DR 步骤)。
+2. **镜像发布 → NAS 部署**(2026-11-10 定型的部署模型):镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`,双架构),**NAS 只 pull 不 build**。**前置**:必须先在 GitHub 打一个 Release 触发 workflow,否则 `docker compose pull` 拉不到镜像(当前 GHCR 上还没有这三镜像)。
+   - 已验证:backend 镜像本地构建后在真 compose 栈(pg+rustfs)里跑通 migration/建桶/health/注册登录/快照/portable zip 下载/还原。
+   - **未验证**:前端镜像(GHCR 上不存在,本机 `bun install`+`nuxt build` 构建超时未完成)、dr-backup sidecar 镜像(同)。
+3. 部署 smoke:按思源笔记 `Pergame 自托管部署指南(NAS / GHCR)`(id `20261110165052-x8mgczs`)的 12 步清单执行;NAS 上只需 `docker-compose.yml` + `.env`,不需要 clone 仓库。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
 5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
 
