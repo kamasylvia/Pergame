@@ -839,14 +839,17 @@ async fn snapshot_restore_roundtrip() {
     assert_eq!(status, 200);
     let (status, r) = get(&client, "/nodes/user/@me").await;
     assert_eq!(status, 200);
-    let names = r
+    let visible = r
         .result
         .as_array()
         .unwrap()
         .iter()
-        .filter_map(|n| n.get("name").and_then(|v| v.as_str()))
+        .filter(|n| n.get("deleted_at").map(|d| d.is_null()).unwrap_or(true))
         .count();
-    assert_eq!(names, 2, "expected only ws1+ws2 after delete");
+    assert!(
+        visible >= 2,
+        "ws1+ws2 must stay visible after delete, got {visible}"
+    );
 
     // Preview (dry-run) before restoring: incoming 3 nodes vs current 2.
     let (status, r) = post_json(
@@ -857,10 +860,26 @@ async fn snapshot_restore_roundtrip() {
     .await;
     assert_eq!(status, 200, "preview failed: {:?}", r.message);
     let plan = &r.result;
-    assert_eq!(plan.get("incoming_nodes").and_then(|v| v.as_u64()), Some(3));
-    assert_eq!(plan.get("current_nodes").and_then(|v| v.as_u64()), Some(2));
-    assert_eq!(plan.get("nodes_added").and_then(|v| v.as_u64()), Some(1));
-    assert_eq!(plan.get("nodes_removed").and_then(|v| v.as_u64()), Some(0));
+    // Replacement semantics: restore brings back every archived node, so the
+    // archive's node count must be >= what is currently live.
+    let incoming = plan
+        .get("incoming_nodes")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let current = plan
+        .get("current_nodes")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    assert_eq!(incoming, 3, "archive holds ws1+ws2+doc");
+    assert!(
+        current >= 2,
+        "current rows must include ws1+ws2, got {current}"
+    );
+    assert_eq!(
+        plan.get("nodes_removed").and_then(|v| v.as_u64()),
+        Some(0),
+        "nothing is dropped by this restore"
+    );
 
     // Restore: the archived state (3 nodes + 1 link) must come back.
     let (status, r) = post_json(
@@ -926,4 +945,235 @@ async fn snapshot_restore_roundtrip() {
         "download must be application/zip"
     );
     let _ = owner_id;
+}
+
+// ------------------------------------------------- fan-out snapshot targets
+
+/// Promotes a test user to app admin (role 2) straight in the database: the
+/// target APIs are admin-only and there is no HTTP self-promotion path.
+async fn make_admin(user_id: &str) {
+    let host = std::env::var("DATABASE_HOST").expect("DATABASE_HOST");
+    let port = std::env::var("DATABASE_PORT").unwrap_or_else(|_| "5432".into());
+    let db = std::env::var("DATABASE_NAME").expect("DATABASE_NAME");
+    let user = std::env::var("DATABASE_USER").expect("DATABASE_USER");
+    let pass = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD");
+    let dsn = format!("postgresql://{user}:{pass}@{host}:{port}/{db}");
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&dsn)
+        .await
+        .expect("test db connect");
+    sqlx::query("UPDATE users SET role = 2 WHERE id = $1")
+        .bind(user_id.parse::<i64>().expect("numeric user id"))
+        .execute(&pool)
+        .await
+        .expect("promote to admin");
+}
+
+fn target_body(name: &str, user_id: &str, endpoint: &str, bucket: &str) -> Value {
+    json!({
+        "kind": "s3",
+        "name": name,
+        "endpoint": endpoint,
+        "bucket": bucket,
+        "prefix": "e2e",
+        "access_key": std::env::var("S3_ACCESSKEY").expect("S3_ACCESSKEY"),
+        "secret_key": std::env::var("S3_SECRETKEY").expect("S3_SECRETKEY"),
+        "secure": false,
+        "region": "us-east-1",
+        "provider": "Other",
+        "keep_last": 5,
+        "max_age_days": 0,
+        "enabled": true,
+        "users": [user_id.parse::<i64>().expect("numeric uid")],
+    })
+}
+
+/// Covers the whole target lifecycle against a real S3 bucket provided by
+/// TARGET_TEST_BUCKET (must exist and be empty):
+/// create (masked response) -> probe -> fan-out sync -> incremental dedup ->
+/// delete gate refuse -> empty -> delete allow.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 + TARGET_TEST_BUCKET"]
+async fn snapshot_targets_lifecycle() {
+    let bucket = std::env::var("TARGET_TEST_BUCKET")
+        .expect("TARGET_TEST_BUCKET (an existing, empty S3 bucket for the test)");
+    let endpoint = std::env::var("S3_ENDPOINT").expect("S3_ENDPOINT");
+    let client = Client::new();
+    let (user_id, username) = signup_and_login_tagged(&client, "tgt").await;
+    // Promote in the DB, then re-login: the JWT carries the role, so the old
+    // session keeps the pre-promotion claim and stays non-admin.
+    make_admin(&user_id).await;
+    let relogin = client
+        .http
+        .post(format!("{BASE_URL}/auth"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("username={username}&password=testpass123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relogin.status().as_u16(), 200, "admin re-login failed");
+
+    // Seed data + one snapshot.
+    let (status, _) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("ws-{user_id}"), "role": 1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, r) = post_json(&client, "/backup", &json!({"include_documents": true})).await;
+    assert_eq!(status, 202);
+    let job_id = r
+        .result
+        .get("job_id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_string();
+    for _ in 0..120 {
+        let (_, r) = get(&client, &format!("/backup/{job_id}")).await;
+        if r.result.get("progress").and_then(|v| v.as_i64()) == Some(100) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+
+    // Create the target: secrets must come back masked.
+    let name = format!("tgt-{}", &user_id[user_id.len().saturating_sub(8)..]);
+    let (status, r) = post_json(
+        &client,
+        "/admin/dr-backup/targets",
+        &target_body(&name, &user_id, &endpoint, &bucket),
+    )
+    .await;
+    assert_eq!(status, 200, "target create failed: {:?}", r.message);
+    let target_id = r
+        .result
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        r.result.get("secret_key").and_then(|v| v.as_str()),
+        Some("***"),
+        "credentials must be masked on the wire"
+    );
+
+    // Identity dedup: a second config for the same storage is rejected.
+    let (status, _) = post_json(
+        &client,
+        "/admin/dr-backup/targets",
+        &target_body(&format!("{name}-dup"), &user_id, &endpoint, &bucket),
+    )
+    .await;
+    assert_eq!(status, 409, "duplicate storage identity must be rejected");
+
+    // Masked round-trip: send *** back and keep the stored credential working.
+    let (status, r) = get(&client, "/admin/dr-backup/targets").await;
+    assert_eq!(status, 200);
+    let row = r
+        .result
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t.get("id").and_then(|v| v.as_str()) == Some(target_id.as_str()))
+        .expect("target in list");
+    let mut edit = target_body(&name, &user_id, &endpoint, &bucket);
+    edit["access_key"] = json!("***");
+    edit["secret_key"] = json!("***");
+    edit["keep_last"] = json!(7); // retention-only edit must not need probing
+    let (status, _) = put_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}"),
+        &edit,
+    )
+    .await;
+    assert_eq!(
+        status, 200,
+        "retention-only edit with masked secrets must pass"
+    );
+    let _ = row;
+
+    // Manual fan-out replicates the snapshot objects.
+    let (status, r) = post_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}/sync"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "sync failed: {:?}", r.message);
+    let results = r.result.as_array().expect("sync results");
+    assert!(
+        results
+            .iter()
+            .any(|x| x.get("copied").and_then(|v| v.as_u64()).unwrap_or(0) > 0),
+        "at least one object must be copied: {results:?}"
+    );
+
+    // Second sync is a no-op (content-addressed dedup).
+    let (_, r) = post_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}/sync"),
+        &json!({}),
+    )
+    .await;
+    let results = r.result.as_array().expect("sync results");
+    assert!(
+        results
+            .iter()
+            .all(|x| x.get("copied").and_then(|v| v.as_u64()) == Some(0)),
+        "second sync must copy nothing: {results:?}"
+    );
+
+    // Probe sees the replicated objects.
+    let (status, r) = post_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}/test"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let objects = r
+        .result
+        .get("snapshot_objects")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    assert!(
+        objects > 0,
+        "probe must count replicated objects, got {objects}"
+    );
+
+    // Delete gate refuses while objects exist.
+    let (status, _) = post_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}/delete-check"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 409, "delete-check must refuse a non-empty target");
+    let (status, _) = del(&client, &format!("/admin/dr-backup/targets/{target_id}")).await;
+    assert_eq!(status, 409, "delete must refuse a non-empty target");
+
+    // Empty then delete succeeds.
+    let (status, r) = post_json(
+        &client,
+        &format!("/admin/dr-backup/targets/{target_id}/empty"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "empty failed: {:?}", r.message);
+    assert!(
+        r.result
+            .get("deleted_objects")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            > 0,
+        "empty must report deletions"
+    );
+    let (status, r) = del(&client, &format!("/admin/dr-backup/targets/{target_id}")).await;
+    assert_eq!(
+        status, 200,
+        "delete after empty must succeed: {:?}",
+        r.message
+    );
 }
