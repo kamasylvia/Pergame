@@ -85,7 +85,8 @@
 - **push 压缩映射(2026-11-09 第一次)**:15 commits → 5 主题(`30c8ba06` 改名 / `b445b6fa` 上游追踪 / `100473d2` 活测修复 / `ad76b47d` TLS / `6e0abd8a` 软链端到端),`--force-with-lease` 推 origin。旧 SHA 考古走 reflog。
 - **已完成(2026-11-08 夜)**:P0 ✅ → P1 ✅ 骨架+spike → P2 核心认证域 ✅(`19d0643c`,13/13 单测)。
 - **改名落地 ✅**、**2FA ✅**、**OIDC ✅**、**邮件 ✅(用户确认收件)**、**S3 TLS ✅**、**docs Rust 化 ✅**、**软连接三阶段 ✅** —— 详见 queue 与 commit 历史。
-- **运行时验证欠账**:Toasty 生成 SQL vs 0001 schema 实测(首个活 pg 时);Rust 集成套件已镜像 Go tests/ 主路径(8 用例)。
+- **Toasty 铺向业务域 ✅(2026-11-10,`120caf4d`)**:新增 `NodeLink`/`Permission` 模型;links 4 个 + permissions 6 个 CRUD 改走 Toasty。**边界实测**:11 条 `WITH RECURSIVE`、user-wide links 联表、邀请复合元组留 sqlx(Toasty 无 CTE);`serde_json::Value` 列无 `Field` impl、`#[document]` 不能带 `#[column]` → `user_settings` 留 sqlx,不强塞有损结构。验证:49/49 单测 + 集成 10/10。
+- **运行时验证欠账**:Toasty 生成 SQL vs 0001 schema 实测(首个活 pg 时);Rust 集成套件已镜像 Go tests/ 主路径(10 用例)。
 
 ## 4. 机制配置指针
 
