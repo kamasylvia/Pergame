@@ -5,7 +5,9 @@
 #![allow(dead_code)] // consumed by fan-out + admin routes (P1, in progress) and restore-from-target needs no translation.
 
 pub mod config;
+pub mod fanout;
 pub mod pg;
+pub mod repo;
 pub mod s3;
 pub mod webdav;
 
@@ -105,8 +107,16 @@ fn normalize_endpoint(endpoint: &str) -> String {
 }
 
 pub(crate) fn internal(e: impl std::fmt::Display) -> ApiError {
-    tracing::error!(error = %e, "backup target operation failed");
-    ApiError::Internal(Box::new(std::io::Error::other(e.to_string())))
+    let msg = e.to_string();
+    tracing::error!(error = %msg, "backup target operation failed");
+    // Surface the detail to the admin UI: "internal error" alone is useless
+    // for a misconfigured target (wrong bucket policy, clock skew, creds).
+    ApiError::BadRequest(format!("target store error: {msg}"))
+}
+
+/// Same, but preserving a store-level NotFound distinction.
+pub(crate) fn not_found(what: &str) -> ApiError {
+    ApiError::NotFound(format!("target object not found: {what}"))
 }
 
 pub(crate) fn join_prefix(prefix: &str, rest: &str) -> String {

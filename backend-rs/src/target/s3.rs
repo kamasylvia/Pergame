@@ -76,11 +76,21 @@ impl S3Target {
         {
             Ok(_) => Ok(true),
             Err(e) => {
-                let msg = e.to_string();
-                if msg.contains("404") || msg.contains("NoSuchKey") || msg.contains("NotFound") {
+                // Display for S3 errors is just "service error"; the status
+                // code and error code live in the raw response / details.
+                let status = e.raw_response().map(|r| r.status().as_u16()).unwrap_or(0);
+                let code = e
+                    .raw_response()
+                    .map(|r| format!("{:?}", r.status()))
+                    .unwrap_or_default();
+                let not_found = status == 404;
+                if not_found {
                     Ok(false)
                 } else {
-                    Err(internal(msg))
+                    Err(internal(format!(
+                        "s3 head {}: status={status} code={code} err={e:?}",
+                        self.key(path)
+                    )))
                 }
             }
         }

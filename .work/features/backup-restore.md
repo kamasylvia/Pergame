@@ -162,7 +162,7 @@ webdav|name|url|user|password|prefix[|retain_days|keep_last|cron|crypt_pass]
 
 | 思源概念 | Pergame 对应 | 说明 |
 |---|---|---|
-| 工作区 `data/`(全部文档) | 全体用户的 v2 快照对象集(每用户 manifests+blobs) | **target 范围裁决:target = 整实例对象副本**(键布局与本地桶同构);还原粒度 = 单 manifest(单用户),admin 可循环全实例 |
+| 工作区 `data/`(全部文档) | **target 归属用户集合**的 v2 快照对象集(每用户 manifests+blobs,键布局同构) | **裁决 2026-11-10:按用户**——target 上记录 `users[]`(admin 勾选);勾选全部用户 ≡ 实例级。备份时只复制所选用户的对象;还原粒度 = 单 manifest |
 | `conf/` | backup_targets 配置本身(排除,不进快照) | 同思源排除 backup.json |
 | `history/` | 无(git 级版本已否决) | 不进快照 |
 | SQLite 索引重建 | 无需(还原即重建 DB 行) | 内在 |
@@ -187,6 +187,10 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 
 ### 14.4 配置与门禁
 
+**裁决(2026-11-10)**:① target 归属 = **按用户**(admin 勾选,全选=实例级);② 目标 blob = **密文原样复制**(字节级,不解密,不重加密);③ 触发 = **快照成功后自动复制**(增量:仅传新增 blob);④ 删除/改连接 = **完整门禁**(思源 parity)。
+
+- **migration 0006 增列** `users BIGINT[]`(归属用户集合;空数组 = 未指定,拒绝启用)
+
 - **migration 0005**:`backup_targets`(id uuid、kind、name、endpoint/url、bucket_or_schema、prefix、access_key、secret_key、secure、region、provider、schedule cron(P3)、keep_last、max_age_days、enabled、时间戳)
 - 身份唯一:保存/编辑按 fingerprint 查重,同存储拒绝双配置
 - **凭据掩码**:GET 时 access/secret/password → `***`;PUT `***` 回填库内旧值;新增记录带 `***` = 400
@@ -197,7 +201,7 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 
 ### 14.5 fan-out 备份与还原
 
-- **fan-out** = 对象级复制:本地桶全体用户 manifests+blobs(含 refs)逐对象复制到各启用 target(HEAD→PUT 去重;加密 blob 原样密文复制,不解密);手动「立即备份」触发 + 逐 target 记录结果
+- **fan-out** = 对象级复制:对 target 的**归属用户集合**逐个取本地桶对象(`{uid}/manifests/*` + `{uid}/blobs[-e2e]/*` + refs)逐对象复制(HEAD→PUT 去重;加密 blob **原样密文**复制,不解密)。**自动触发**:每次快照成功后(run_backup 尾部)对所有启用且归属该用户的 target 自动增量复制;另提供 admin 手动「立即同步」
 - **还原自 target** = 把 target 上该用户 manifest 及其引用 blobs **拉回本地桶**(缺失才拉),然后走既有 `restore_from_zip` 组装引擎——引擎零改动
 - 锁:P1 用现有单作业互斥(同用户);target 级共享/还原独占锁 → P2(与只读中间件同批)
 

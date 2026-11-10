@@ -499,6 +499,18 @@ pub async fn run_backup(
         }
     }
 
+    // Auto fan-out (spec §14.5): replicate this user's objects to every
+    // enabled target listing them. Best-effort; failures land in last_result.
+    if let Some(pool) = crate::APP_DB.get() {
+        for r in crate::target::fanout::fanout_user(pool, &storage, user_id).await {
+            if let Some(e) = &r.error {
+                tracing::warn!(target = %r.target, error = %e, "fan-out failed");
+            } else {
+                tracing::info!(target = %r.target, copied = r.copied, skipped = r.skipped, "fan-out done");
+            }
+        }
+    }
+
     let manifest_name = format!("{user_id}/manifests/{snapshot_id}.json");
     if let Err(e) = storage
         .put_backup_object(

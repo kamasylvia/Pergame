@@ -653,3 +653,160 @@ RETAIN_DAYS=14"#;
         assert!(parse_probe_line("PROBE|short").is_none());
     }
 }
+
+// ---------------- fan-out targets (spec §14) ----------------
+
+use crate::target::{fanout, repo as target_repo};
+
+/// GET /api/admin/dr-backup/targets — list (secrets masked).
+pub async fn list_targets(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let rows = target_repo::list_targets(&state.db).await?;
+    let masked: Vec<serde_json::Value> = rows.iter().map(target_repo::mask_row).collect();
+    Ok(ApiOk::ok(json!(masked)))
+}
+
+/// POST /api/admin/dr-backup/targets — create.
+pub async fn create_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    body: axum::Json<target_repo::TargetInput>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let row = target_repo::upsert_target(&state.db, None, &body).await?;
+    Ok(ApiOk::ok(target_repo::mask_row(&row)))
+}
+
+/// PUT /api/admin/dr-backup/targets/:id — edit (gated on connection changes).
+pub async fn update_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+    body: axum::Json<target_repo::TargetInput>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let row = target_repo::upsert_target(&state.db, Some(id), &body).await?;
+    Ok(ApiOk::ok(target_repo::mask_row(&row)))
+}
+
+/// POST /api/admin/dr-backup/targets/:id/delete-check — probe before delete.
+pub async fn delete_check_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let row = target_repo::get_target(&state.db, id).await?;
+    let probe = target_repo::probe_row(&row).await?;
+    target_repo::delete_check(&state.db, id).await?;
+    Ok(ApiOk::ok(json!({
+        "deletable": true,
+        "reachable": probe.reachable,
+        "snapshot_objects": probe.snapshot_objects,
+    })))
+}
+
+/// DELETE /api/admin/dr-backup/targets/:id — gated delete.
+pub async fn delete_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    target_repo::delete_check(&state.db, id).await?;
+    sqlx::query("DELETE FROM backup_targets WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(json!("Target deleted.")))
+}
+
+/// POST /api/admin/dr-backup/targets/:id/test — connectivity probe.
+pub async fn test_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let row = target_repo::get_target(&state.db, id).await?;
+    let probe = target_repo::probe_row(&row).await?;
+    Ok(ApiOk::ok(json!({
+        "reachable": probe.reachable,
+        "snapshot_objects": probe.snapshot_objects,
+        "fingerprint": probe.fingerprint.map(|f| f.0),
+    })))
+}
+
+/// POST /api/admin/dr-backup/targets/:id/empty — clear all objects.
+pub async fn empty_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let deleted = target_repo::empty_target(&state.db, id).await?;
+    Ok(ApiOk::ok(json!({ "deleted_objects": deleted })))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SyncTargetBody {
+    #[serde(default)]
+    pub user_id: Option<String>,
+}
+
+/// POST /api/admin/dr-backup/targets/:id/sync — manual fan-out now.
+/// Without user_id, syncs every user assigned to the target.
+pub async fn sync_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+    body: Option<axum::Json<SyncTargetBody>>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let row = target_repo::get_target(&state.db, id).await?;
+    let users: Vec<i64> = match body.and_then(|b| b.0.user_id) {
+        Some(uid) => uid
+            .parse::<i64>()
+            .map(|v| vec![v])
+            .map_err(|_| ApiError::BadRequest("user_id must be numeric".into()))?,
+        None => row.users.clone(),
+    };
+    let mut results = Vec::new();
+    for uid in users {
+        for r in fanout::fanout_user(&state.db, &storage, uid).await {
+            results.push(json!(r));
+        }
+    }
+    Ok(ApiOk::ok(json!(results)))
+}
+
+/// POST /api/admin/dr-backup/targets/:id/fetch — pull a user's objects from
+/// the target back into the local bucket (prerequisite for restore).
+pub async fn fetch_target(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+    axum::Json(body): axum::Json<SyncTargetBody>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    let uid = body
+        .user_id
+        .as_deref()
+        .ok_or(ApiError::BadRequest("user_id is required".into()))?
+        .parse::<i64>()
+        .map_err(|_| ApiError::BadRequest("user_id must be numeric".into()))?;
+    let fetched = fanout::fetch_user_from_target(&state.db, &storage, id, uid).await?;
+    Ok(ApiOk::ok(json!({ "fetched": fetched })))
+}

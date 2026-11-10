@@ -23,6 +23,10 @@ mod utils;
 use std::net::SocketAddr;
 
 use axum::Router;
+
+/// One-shot global handle to the app pool for background workers (fan-out,
+/// scheduled snapshots) that are spawned without an AppState argument.
+pub(crate) static APP_DB: std::sync::OnceLock<sqlx::PgPool> = std::sync::OnceLock::new();
 use axum::routing::{delete, get, patch, post, put};
 
 pub use state::AppState;
@@ -79,6 +83,7 @@ async fn main() {
     };
 
     let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
+    let _ = APP_DB.set(pool.clone());
     let state = AppState {
         db: pool,
         toasty: toasty_db,
@@ -227,6 +232,34 @@ async fn main() {
         .route(
             "/api/admin/dr-backup/jobs/{id}",
             get(routes::admin_dr::get_job),
+        )
+        .route(
+            "/api/admin/dr-backup/targets",
+            get(routes::admin_dr::list_targets).post(routes::admin_dr::create_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}",
+            put(routes::admin_dr::update_target).delete(routes::admin_dr::delete_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/delete-check",
+            post(routes::admin_dr::delete_check_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/test",
+            post(routes::admin_dr::test_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/empty",
+            post(routes::admin_dr::empty_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/sync",
+            post(routes::admin_dr::sync_target),
+        )
+        .route(
+            "/api/admin/dr-backup/targets/{id}/fetch",
+            post(routes::admin_dr::fetch_target),
         )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))

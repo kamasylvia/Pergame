@@ -19,6 +19,10 @@ CREATE TABLE backup_targets (
     keep_last     INT    NOT NULL DEFAULT 10,
     max_age_days  INT    NOT NULL DEFAULT 0,   -- 0 = age-based pruning off
     enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+    -- Owning user set (decision 2026-11-10): a target replicates only the
+    -- listed users' snapshot objects; selecting every user == instance-level.
+    -- Empty array means unassigned and the target cannot be enabled.
+    users         BIGINT[] NOT NULL DEFAULT '{}',
     last_result   TEXT   NOT NULL DEFAULT '',  -- last fan-out outcome for this target
     created_at    BIGINT NOT NULL,
     updated_at    BIGINT NOT NULL
