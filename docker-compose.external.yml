@@ -4,69 +4,85 @@
 # 只跑三个服务:backend / frontend / dr-backup。
 # pg 与对象存储用外部已有的,通过名为 postgres 的外部 Docker 网络接入。
 #
+# 所有配置直接写在本文件里,**不需要 .env**。改配置 = 编辑本文件后
+#   docker compose -f docker-compose.external.yml up -d
+#
 # 与 docker-compose.yml 的区别:那个是自包含版(pg + RustFS 一起起,5 个服务
-# 5 个卷);这个只跑应用本身(3 个服务 2 个卷),pg 与 S3 用外面已有的。
-# 精简版的好处:down -v 只删 DR 配置,不会碰 pg 数据或 S3 对象。
+# 5 个卷,配 .env 使用);这个只跑应用本身(3 个服务 2 个卷)。精简版的好处:
+# down -v 只删 DR 配置,不会碰 pg 数据或 S3 对象。
 #
 # 前置:
-#   docker network ls | grep postgres     # 确认网络存在
-#   docker network inspect postgres       # 确认 pg 容器在里面
-#   psql -c 'CREATE DATABASE pergame;'    # backend 只跑 migration,不建库
+#   1) 确认外部网络存在:docker network inspect postgres
+#   2) 确认 pg 容器在其中,记下容器名 → 填 DATABASE_HOST
+#   3) 手工建库(backend 只跑 migration,不建库):
+#        docker exec -it <pg容器> psql -U postgres -c 'CREATE DATABASE pergame;'
+#   4) 确认 S3 桶存在(backend 会自动建,但不会改已有桶的归属)
 #
 # 启动:
-#   cp .env.external.example .env && vi .env
 #   docker compose -f docker-compose.external.yml up -d
 # ==============================================================================
 services:
-  # Pergame Backend (Rust rewrite)
+  # ---------------------------------------------------------------- backend
   backend:
-    image: ghcr.io/kamasylvia/pergame-backend:${PERGAME_TAG:-latest}
+    image: ghcr.io/kamasylvia/pergame-backend:latest
     container_name: pergame-backend
     restart: unless-stopped
     environment:
       BACKEND_PORT: 8201
       GIN_MODE: release
 
-      # --- 认证 ---
-      JWT_SECRET: ${JWT_SECRET:-your-secure-jwt-secret-key-change-this-in-production}
-      # 只填主机名:带端口会产生非法 Cookie Domain,cookie 被浏览器丢弃
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8200}
-      ALLOW_UNSECURE: "${ALLOW_UNSECURE:-true}"
-      CONFIG_DISABLE_SIGNUP: "${CONFIG_DISABLE_SIGNUP:-false}"
-      CONFIG_DISABLE_NATIVE_LOGIN: "${CONFIG_DISABLE_NATIVE_LOGIN:-false}"
+      # ---------- 认证:必须改 ----------
+      # 改 JWT_SECRET = 所有会话失效。生成:openssl rand -hex 32
+      JWT_SECRET: "CHANGE-ME-openssl-rand-hex-32"
+      # 只填主机名,不带协议不带端口。带端口会产生非法 Cookie Domain,
+      # 浏览器静默丢弃认证 cookie(症状:登录成功但所有操作 401)
+      COOKIE_DOMAIN: "pergame.example.com"
+      # 浏览器访问前端的地址,用于 CORS 白名单与邮件链接
+      FRONTEND_URL: "http://192.168.1.10:8200"
+      # 无 HTTPS 时 true;上 HTTPS 后改 false
+      ALLOW_UNSECURE: "true"
+      CONFIG_DISABLE_SIGNUP: "false"
+      CONFIG_DISABLE_NATIVE_LOGIN: "false"
 
-      # --- 外部 PostgreSQL ---
-      # DATABASE_HOST 是 pg 容器在该 Docker 网络内的名字
-      DATABASE_HOST: ${DATABASE_HOST:-pg18}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
-      DATABASE_NAME: ${DATABASE_NAME:-pergame}
-      DATABASE_USER: ${DATABASE_USER:-postgres}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      # ---------- 外部 PostgreSQL:必须改 ----------
+      # DATABASE_HOST = pg 容器在 postgres 网络里的名字(不是 IP、不是域名)
+      DATABASE_HOST: "pg18"
+      DATABASE_PORT: 5432
+      DATABASE_NAME: "pergame"
+      DATABASE_USER: "postgres"
+      DATABASE_PASSWORD: "CHANGE-ME-pg-password"
 
-      # --- 外部对象存储(S3 兼容)---
-      # S3_ENDPOINT 走容器网络(内网地址);S3_PUBLIC_URL 是浏览器可达地址
-      S3_ENDPOINT: ${S3_ENDPOINT}
-      S3_PUBLIC_URL: ${CDN_URL}
-      S3_SECURE: "${S3_SECURE:-true}"
-      S3_ACCESSKEY: ${S3_ACCESSKEY}
-      S3_SECRETKEY: ${S3_SECRETKEY}
-      S3_BUCKET: ${S3_BUCKET:-pergame}
+      # ---------- 外部对象存储:必须改 ----------
+      # S3_ENDPOINT 是**容器内**能访问到的地址;若 S3 监听宿主机端口,
+      # 容器内用 172.17.0.1(docker0 网关)或 host.docker.internal。
+      # 填 localhost 会指向容器自身,必然失败。
+      S3_ENDPOINT: "http://172.17.0.1:8010"
+      # S3_PUBLIC_URL 是**浏览器**能访问到的地址(附件直链走它)
+      S3_PUBLIC_URL: "http://192.168.1.10:8010"
+      # S3 走 HTTPS 时填 true
+      S3_SECURE: "false"
+      S3_ACCESSKEY: "CHANGE-ME-s3-access-key"
+      S3_SECRETKEY: "CHANGE-ME-s3-secret-key"
+      # 建议用独立空桶:backend 启动会给整个桶设公共读策略
+      S3_BUCKET: "pergame"
 
-      # --- 快照与回收站 ---
-      SNAPSHOT_INTERVAL_HOURS: "${SNAPSHOT_INTERVAL_HOURS:-0}"
-      PERGAME_SNAPSHOT_PASSPHRASE: "${PERGAME_SNAPSHOT_PASSPHRASE:-}"
-      TRASH_RETENTION_DAYS: "${TRASH_RETENTION_DAYS:-30}"
-      TRASH_SWEEP_INTERVAL_HOURS: "${TRASH_SWEEP_INTERVAL_HOURS:-24}"
+      # ---------- 快照与回收站 ----------
+      # 每 N 小时自动为所有用户建快照;0 = 关闭
+      SNAPSHOT_INTERVAL_HOURS: "0"
+      # 快照端到端加密口令。设了务必存密码管理器,丢了加密快照永久不可解
+      PERGAME_SNAPSHOT_PASSPHRASE: ""
+      # 回收站保留天数;0 = 永不自动清理
+      TRASH_RETENTION_DAYS: "30"
+      TRASH_SWEEP_INTERVAL_HOURS: "24"
 
-      # --- 邮件(可选)---
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_MAIL: ${SMTP_MAIL:-}
-      SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # ---------- 邮件(可选,不填则密码重置不可用)----------
+      SMTP_HOST: ""
+      SMTP_MAIL: ""
+      SMTP_MAIL_FROM: ""
+      SMTP_PASSWORD: ""
 
     ports:
-      - "${BACKEND_EXTERNAL_PORT:-8201}:8201"
+      - "8201:8201"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
@@ -74,47 +90,54 @@ services:
       - pergame
       - postgres
 
-  # Pergame Frontend
+  # --------------------------------------------------------------- frontend
   frontend:
-    image: ghcr.io/kamasylvia/pergame-frontend:${PERGAME_TAG:-latest}
+    image: ghcr.io/kamasylvia/pergame-frontend:latest
     container_name: pergame-frontend
     restart: unless-stopped
     environment:
       PORT: 8200
-      NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "${CONFIG_DISABLE_SIGNUP:-false}"
-      NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "${CONFIG_DISABLE_LANDING:-false}"
-      NUXT_PUBLIC_BASE_API: ${API_URL:-http://localhost:8201}
-      NUXT_PUBLIC_BASE_CDN: ${CDN_URL}
-      NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/pergame/}
-      NUXT_PUBLIC_BASE_URL: ${FRONTEND_URL:-http://localhost:8200}
+      NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "false"
+      NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "false"
+      # 后端地址,浏览器要能访问到
+      NUXT_PUBLIC_BASE_API: "http://192.168.1.10:8201"
+      # 对象存储对外地址,与 backend 的 S3_PUBLIC_URL 保持一致
+      NUXT_PUBLIC_BASE_CDN: "http://192.168.1.10:8010"
+      # CDN 路径,与桶名一致,别乱改
+      NUXT_PUBLIC_CDN_ENDPOINT: "/pergame/"
+      # 前端自身访问地址
+      NUXT_PUBLIC_BASE_URL: "http://192.168.1.10:8200"
     ports:
-      - "${FRONTEND_EXTERNAL_PORT:-8200}:8200"
+      - "8200:8200"
     depends_on:
       - backend
     networks:
       - pergame
 
-  # Instance DR sidecar: 执行 backend 通过共享卷交付的 pg_dump 任务
-  # 不需要实例级备份就删掉本服务 + backend 的 /conf,/jobs 挂载
+  # --------------------------------------------------------------- dr-backup
+  # 实例 DR sidecar:执行 backend 通过共享卷交付的 pg_dump 任务。
+  # 不需要实例级备份就删掉本服务 + backend 的 /conf,/jobs 挂载。
   dr-backup:
-    image: ghcr.io/kamasylvia/pergame-dr-backup:${PERGAME_TAG:-latest}
+    image: ghcr.io/kamasylvia/pergame-dr-backup:latest
     container_name: pergame-dr-backup
     restart: unless-stopped
     environment:
-      SCHEDULE_HOURS: "${DR_BACKUP_SCHEDULE_HOURS:-0}"
-      SCAN_INTERVAL_SECONDS: 2
+      # 全局定时 pg_dump 间隔(小时);0 = 仅手动。
+      # 推荐用 UI 里的目标级 cron(更灵活),此项留 0 即可。
+      SCHEDULE_HOURS: "0"
+      SCAN_INTERVAL_SECONDS: "2"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
     networks:
       - pergame
-      - postgres   # sidecar 需要能连到 pg 做 dump
+      - postgres   # sidecar 要连 pg 做 dump
 
 networks:
   # 应用内部网络(本 compose 自建)
   pergame:
     driver: bridge
-  # 已有的外部网络,pg 容器在其中;不创建、不删除
+  # 已有的外部网络,pg 容器在其中;compose 不创建也不删除它
   postgres:
     external: true
 
