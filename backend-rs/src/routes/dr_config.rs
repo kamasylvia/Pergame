@@ -157,11 +157,7 @@ fn check_duplicates(cfg: &DrConfig) -> Result<(), String> {
         check_seen(&mut seen, fp, &label)?;
     }
     for d in &cfg.webdav_destinations {
-        let fp = format!(
-            "webdav|{}|{}",
-            d.url.trim().to_lowercase(),
-            d.prefix.trim()
-        );
+        let fp = format!("webdav|{}|{}", d.url.trim().to_lowercase(), d.prefix.trim());
         let label = format!("WebDAV '{}'", d.name);
         check_seen(&mut seen, fp, &label)?;
     }

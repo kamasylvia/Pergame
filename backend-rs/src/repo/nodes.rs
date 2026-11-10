@@ -391,14 +391,13 @@ pub async fn soft_delete_subtree(
     if ids.is_empty() {
         return Ok((now, 0));
     }
-    let affected = sqlx::query(
-        "UPDATE nodes SET deleted_at = $2 WHERE id = ANY($1) AND deleted_at IS NULL",
-    )
-    .bind(&ids)
-    .bind(now)
-    .execute(pool)
-    .await?
-    .rows_affected();
+    let affected =
+        sqlx::query("UPDATE nodes SET deleted_at = $2 WHERE id = ANY($1) AND deleted_at IS NULL")
+            .bind(&ids)
+            .bind(now)
+            .execute(pool)
+            .await?
+            .rows_affected();
     Ok((now, affected))
 }
 
@@ -483,14 +482,13 @@ pub async fn restore_subtree(
         }
     }
 
-    let restored = sqlx::query(
-        "UPDATE nodes SET deleted_at = NULL WHERE id = ANY($1) AND deleted_at = $2",
-    )
-    .bind(&ids)
-    .bind(deleted_at)
-    .execute(pool)
-    .await?
-    .rows_affected();
+    let restored =
+        sqlx::query("UPDATE nodes SET deleted_at = NULL WHERE id = ANY($1) AND deleted_at = $2")
+            .bind(&ids)
+            .bind(deleted_at)
+            .execute(pool)
+            .await?
+            .rows_affected();
     Ok((restored, reparented))
 }
 
@@ -526,7 +524,6 @@ pub async fn trash_roots(pool: &PgPool, user_id: i64) -> Result<Vec<i64>, sqlx::
     .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
-
 
 /// Builds a 'simple'-dialect tsquery string of OR-ed tokens from the raw query
 /// (closest pg equivalent of MySQL NATURAL LANGUAGE MODE's any-word match).

@@ -128,8 +128,7 @@ pub fn spawn_dr_cron_scheduler(state: crate::AppState) {
         loop {
             ticker.tick().await;
             let now = chrono::Utc::now();
-            let Some((conf_path, jobs)) = sidecar_dirs()
-                .map(|(c, j)| (c.join(CONF_FILE), j))
+            let Some((conf_path, jobs)) = sidecar_dirs().map(|(c, j)| (c.join(CONF_FILE), j))
             else {
                 last_check = now;
                 continue;
@@ -160,9 +159,16 @@ pub fn spawn_dr_cron_scheduler(state: crate::AppState) {
                     tracing::debug!(target = %name, "dr cron: previous job still queued; skipped");
                     continue;
                 }
-                match write_pending_job(&jobs, "backup", vec!["-T".into(), name.clone()], Some(name.clone())) {
+                match write_pending_job(
+                    &jobs,
+                    "backup",
+                    vec!["-T".into(), name.clone()],
+                    Some(name.clone()),
+                ) {
                     Ok(id) => tracing::info!(target = %name, job = %id, "dr cron fired backup"),
-                    Err(e) => tracing::error!(target = %name, error = %e, "dr cron: job write failed"),
+                    Err(e) => {
+                        tracing::error!(target = %name, error = %e, "dr cron: job write failed")
+                    }
                 }
             }
             last_check = now;
@@ -349,8 +355,8 @@ pub async fn get_structured_config(
     }
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
-    let config = crate::routes::dr_config::DrConfig::from_conf(&raw)
-        .map_err(ApiError::BadRequest)?;
+    let config =
+        crate::routes::dr_config::DrConfig::from_conf(&raw).map_err(ApiError::BadRequest)?;
     Ok(ApiOk::ok(json!({ "exists": true, "config": config })))
 }
 
@@ -368,8 +374,8 @@ pub async fn put_structured_config(
 
     let old_raw = std::fs::read_to_string(&path).unwrap_or_default();
     if !old_raw.trim().is_empty() {
-        let previous =
-            crate::routes::dr_config::DrConfig::from_conf(&old_raw).map_err(ApiError::BadRequest)?;
+        let previous = crate::routes::dr_config::DrConfig::from_conf(&old_raw)
+            .map_err(ApiError::BadRequest)?;
         // from_conf masks secrets; unmask it against the raw file so the old
         // values are available for the fill step below.
         let mut previous = previous;

@@ -35,11 +35,12 @@ async fn require_trash_node(
         .await
         .map_err(ApiError::from)?
         .ok_or(ApiError::NotFound("not found".into()))?;
-    let stamp: Option<(Option<i64>,)> = sqlx::query_as("SELECT deleted_at FROM nodes WHERE id = $1")
-        .bind(node_id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(ApiError::from)?;
+    let stamp: Option<(Option<i64>,)> =
+        sqlx::query_as("SELECT deleted_at FROM nodes WHERE id = $1")
+            .bind(node_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(ApiError::from)?;
     let deleted_at = stamp
         .and_then(|r| r.0)
         .ok_or_else(|| ApiError::BadRequest("node is not in the trash".into()))?;
