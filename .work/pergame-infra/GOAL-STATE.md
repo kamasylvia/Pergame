@@ -74,6 +74,7 @@
 
 ### 最近完成的批次(供考古)
 
+- **部署模型定型:GHCR 构建 → NAS 拉取(2026-11-10,`e5eb262b`)**:**compose 不再本地 build**——backend/frontend/dr-backup 全部 `ghcr.io/kamasylvia/pergame-*:${PERGAME_TAG:-latest}`;release workflow 修掉「构建 `./backend`(Go 遗留树)」的错并补上 sidecar 镜像。**首次真跑 compose 暴露并修复 4 个只有运行时才现形的问题**:①运行时基底误用 `distroless/static`(sqlx 用 `tls-native-tls` → 动态链接 libssl,且缺 CA,永远起不来);②`gcr.io` 国内不可达(502),改同 registry 的 `debian-slim`;③运行时必须匹配 builder 的 Debian 版本(rust:1.95-slim = trixie/glibc 2.41,bookworm 运行时报 `GLIBC_2.38 not found`);④**`COOKIE_DOMAIN=localhost:8200`(compose 旧默认)产生非法 Domain `.localhost:8200`,认证 cookie 被丢弃 → 登录成功但所有操作 401**,已改默认值 + 代码 sanitize(剥 scheme/port/path,且单标签主机/IP 不加前导点)。**已实测**:真 compose 栈(pg+rustfs+backend 容器)跑通 migration/建桶/health/注册/登录/快照/portable zip 下载/还原。
 - **多目标 fan-out + 锁 + portable zip(2026-11-10,`0fc5b2c4`→`6bdb75b6`→`73addc6b`→`e50bc2fb`→`aebfdc01`→`646654d6`→`901bc518`→`286d4b3e`→`ef108f0f`)**:
   - **P1 多目标**:`target/` 模块(S3/WebDAV/外置 PG 三实现 + 指纹身份去重 + 掩码回填 + deleteCheck/editCheck 门禁 + `empty` + 引用计数 prune/GC);**按用户** target(admin 勾选,全选=实例级);快照成功后**自动增量复制**(密文原样不解密);`GET /targets/:id/export/:snapshotId` 直接从 target 出包;前端 `?p=snapshotTargets` 管理页。
   - **P2 锁与只读**:备份共享锁/还原独占锁;中间件对工作区写请求 **423**(豁免 `/api/backup`、`/api/admin/dr-backup`、`/api/health`、`/api/auth`、`/api/users/@me`);`GET /admin/dr-backup/status` + 前端 `MaintenanceBanner` 提示只读。活测:还原中 status `read_only:true`、写请求 423、还原后恢复 200。
