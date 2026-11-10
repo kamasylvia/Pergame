@@ -24,7 +24,6 @@
             {{ t('settings.snapshotTargets.usersCount', { count: tg.users.length }) }}
             · {{ t('settings.snapshotTargets.keepLast') }} {{ tg.keep_last }}
             <template v-if="tg.schedule"> · cron {{ tg.schedule }}</template>
-            <template v-if="tg.namespace"> · ns {{ tg.namespace }}</template>
             <template v-if="tg.last_result"> · {{ tg.last_result }}</template>
           </p>
 
@@ -83,15 +82,6 @@
           <label>
             {{ t('settings.snapshotTargets.prefix') }}
             <input v-model="form.prefix" type="text" placeholder="pergame" />
-          </label>
-          <label>
-            {{ t('settings.snapshotTargets.namespace') }}
-            <input
-              v-model="form.namespace"
-              type="text"
-              :disabled="!!editing"
-              :placeholder="t('settings.snapshotTargets.namespacePlaceholder')"
-            />
           </label>
           <label>
             {{ t('settings.snapshotTargets.accessKey') }}
@@ -175,7 +165,6 @@ interface Target {
   enabled: boolean;
   last_result: string;
   users: number[];
-  namespace: string;
 }
 
 interface Probe {
@@ -216,7 +205,6 @@ const form = reactive({
   schedule: '',
   enabled: true,
   users: [] as number[],
-  namespace: '',
   region: 'us-east-1',
   provider: 'Other',
 });
@@ -232,7 +220,6 @@ const connectionFields = computed(() => ({
   endpoint: form.endpoint.trim(),
   bucket: form.bucket.trim(),
   prefix: form.prefix.trim(),
-  namespace: form.namespace.trim(),
   access_key: form.access_key,
   secret_key: form.secret_key,
   secure: form.secure,
@@ -390,7 +377,6 @@ function startEdit(tg: Target) {
     schedule: tg.schedule ?? '',
     enabled: tg.enabled,
     users: [...tg.users],
-    namespace: tg.namespace ?? '',
   });
   // An existing target's stored connection is already proven; a test is only
   // required again once a connection field is edited.
@@ -400,7 +386,6 @@ function startEdit(tg: Target) {
     endpoint: tg.endpoint.trim(),
     bucket: tg.bucket.trim(),
     prefix: tg.prefix.trim(),
-    namespace: (tg.namespace ?? '').trim(),
     access_key: tg.access_key,
     secret_key: tg.secret_key,
     secure: tg.secure,
@@ -425,8 +410,7 @@ function cancelEdit() {
     schedule: '',
     enabled: true,
     users: [],
-    namespace: '',
-  });
+    });
   draftProbe.value = null;
   testedFields.value = null;
 }
@@ -443,8 +427,7 @@ async function testDraft() {
       endpoint: form.endpoint.trim(),
       bucket: form.bucket.trim(),
       prefix: form.prefix.trim(),
-      namespace: form.namespace.trim(),
-      access_key: form.access_key,
+          access_key: form.access_key,
       secret_key: form.secret_key,
       secure: form.secure,
       region: form.region,
@@ -517,8 +500,7 @@ async function save() {
     schedule: form.schedule.trim(),
     enabled: form.enabled,
     users: form.users,
-    namespace: form.namespace.trim(),
-    // Proves to the server that these exact connection fields were tested.
+      // Proves to the server that these exact connection fields were tested.
     connection_token: draftProbe.value?.connection_token ?? null,
   };
   const result = editing.value

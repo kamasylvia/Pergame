@@ -472,8 +472,6 @@ export default {
     loadFailed: 'Ziele konnten nicht geladen werden',
     mustTest: 'Vor dem Speichern die Verbindung testen.',
     name: 'Name',
-    namespace: 'Namensraum',
-    namespacePlaceholder: 'leer = Standardbereich',
     noUsers: 'Noch keine Benutzer mit Daten.',
     prefix: 'Präfix',
     probeOk: 'Erreichbar · {count} Objekt(e) · {fingerprint}',

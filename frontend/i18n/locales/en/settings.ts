@@ -468,8 +468,6 @@ export default {
     loadFailed: 'Could not load targets',
     mustTest: 'Test the connection before saving.',
     name: 'Name',
-    namespace: 'Namespace',
-    namespacePlaceholder: 'empty = default scope',
     noUsers: 'No users with data yet.',
     prefix: 'Prefix',
     probeOk: 'Reachable · {count} snapshot object(s) · {fingerprint}',

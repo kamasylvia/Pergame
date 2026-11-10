@@ -468,8 +468,6 @@ export default {
     loadFailed: 'Не вдалося завантажити цілі',
     mustTest: 'Перевірте з’єднання перед збереженням.',
     name: 'Назва',
-    namespace: 'Простір імен',
-    namespacePlaceholder: 'порожньо = типова область',
     noUsers: 'Ще немає користувачів з даними.',
     prefix: 'Префікс',
     probeOk: 'Доступно · об’єктів: {count} · {fingerprint}',

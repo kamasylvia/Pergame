@@ -467,8 +467,6 @@ export default {
     loadFailed: '대상을 불러올 수 없습니다',
     mustTest: '저장하기 전에 연결을 테스트하세요.',
     name: '이름',
-    namespace: '네임스페이스',
-    namespacePlaceholder: '비우면 기본 범위',
     noUsers: '데이터가 있는 사용자가 없습니다.',
     prefix: '접두사',
     probeOk: '연결됨 · 객체 {count}개 · {fingerprint}',

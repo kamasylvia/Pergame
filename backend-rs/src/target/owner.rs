@@ -17,6 +17,31 @@ use crate::error::ApiError;
 
 pub const OWNER_KEY: &str = "refs/owner.json";
 
+const CROCKFORD: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// New namespace id: 26-char Crockford Base32 ULID (10 chars of ms
+/// timestamp, 16 chars of randomness). Allocated by the server when a target
+/// is created — operators never type or see it in the form, which is what
+/// makes two instances sharing a store isolated without configuration.
+pub fn new_namespace_id() -> String {
+    let mut out = [0u8; 26];
+    let mut ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    for i in (0..10).rev() {
+        out[i] = CROCKFORD[(ms & 0x1f) as usize];
+        ms >>= 5;
+    }
+    // 16 random chars. rand::random::<u8>() is the version-stable call across
+    // rand 0.8/0.9/0.10.
+    for slot in out.iter_mut().skip(10) {
+        let b: u8 = rand::random();
+        *slot = CROCKFORD[(b & 0x1f) as usize];
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetOwner {
     /// Stable instance identity (INSTANCE_ID env or derived hostname/db pair).

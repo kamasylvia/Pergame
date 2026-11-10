@@ -50,9 +50,10 @@ pub struct TargetInput {
     /// Owning user ids (empty = unassigned, cannot enable).
     #[serde(default)]
     pub users: Vec<i64>,
-    /// Object namespace inside the target prefix (letter/digit/-/_, ≤64).
-    /// Empty = default scope. Immutable after creation.
-    #[serde(default)]
+    /// Namespace is server-allocated (ULID) at creation and never accepted
+    /// from the client — two instances sharing a store stay isolated without
+    /// anyone configuring it. Ignored when supplied.
+    #[serde(default, skip_serializing)]
     pub namespace: String,
     /// Present when the client ran "test connection" on these connection
     /// fields. The server recomputes the token and rejects the save when the
@@ -105,7 +106,27 @@ pub fn mask_row(row: &BackupTargetRow) -> serde_json::Value {
 
 // The row carries `users` now; keep it in the struct via a thin alias so the
 // sqlx FromRow derive in config.rs stays in one place.
+/// Backfills a namespace for rows created before the column existed. Called
+/// on every list so a deployment upgrading from an older build self-heals
+/// instead of writing those targets' objects into the shared root scope.
+async fn backfill_namespaces(pool: &PgPool) -> Result<(), ApiError> {
+    let rows: Vec<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM backup_targets WHERE namespace = ''")
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default();
+    for (id,) in rows {
+        let _ = sqlx::query("UPDATE backup_targets SET namespace = $2 WHERE id = $1")
+            .bind(id)
+            .bind(crate::target::owner::new_namespace_id())
+            .execute(pool)
+            .await;
+    }
+    Ok(())
+}
+
 pub async fn list_targets(pool: &PgPool) -> Result<Vec<BackupTargetRow>, ApiError> {
+    let _ = backfill_namespaces(pool).await;
     sqlx::query_as::<_, BackupTargetRow>("SELECT * FROM backup_targets ORDER BY created_at")
         .fetch_all(pool)
         .await
@@ -270,17 +291,6 @@ pub async fn upsert_target(
             ));
         }
     }
-    let ns = input.namespace.trim().trim_matches('/');
-    if !ns.is_empty()
-        && (ns.len() > 64
-            || !ns
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
-    {
-        return Err(ApiError::BadRequest(
-            "namespace must be ≤64 chars of [A-Za-z0-9_-]".into(),
-        ));
-    }
     if !input.schedule.trim().is_empty() {
         crate::target::cron::CronSpec::parse(input.schedule.trim())
             .map_err(|e| ApiError::BadRequest(format!("invalid schedule: {e}")))?;
@@ -292,13 +302,9 @@ pub async fn upsert_target(
             let mut candidate = row_from_input(input, now, Some(old.id));
             candidate.access_key = resolve_secret(&input.access_key, &old.access_key);
             candidate.secret_key = resolve_secret(&input.secret_key, &old.secret_key);
-            // Namespace is immutable: changing it would orphan every object
-            // already written under the old scope.
-            if candidate.namespace != old.namespace {
-                return Err(ApiError::BadRequest(
-                    "namespace cannot be changed after creation".into(),
-                ));
-            }
+            // Namespace is server-owned and immutable: it names the object
+            // scope, so a change would orphan everything already written.
+            candidate.namespace = old.namespace.clone();
             edit_check(pool, &old, &candidate).await?;
             assert_identity_unique(pool, &candidate, Some(id)).await?;
             sqlx::query(
@@ -332,6 +338,8 @@ pub async fn upsert_target(
         }
         None => {
             let mut candidate = row_from_input(input, now, None);
+            // Auto-allocated scope id (siyuan #15 §1: ULID, never user-typed).
+            candidate.namespace = crate::target::owner::new_namespace_id();
             if candidate.access_key == MASK || candidate.secret_key == MASK {
                 return Err(ApiError::BadRequest(
                     "new target cannot use *** as a credential".into(),
@@ -390,7 +398,8 @@ fn row_from_input(input: &TargetInput, now: i64, id: Option<Uuid>) -> BackupTarg
         schedule: input.schedule.clone(),
         enabled: input.enabled,
         users: input.users.clone(),
-        namespace: input.namespace.trim().trim_matches('/').to_string(),
+        // Assigned by the caller (ULID on create, stored value on update).
+        namespace: String::new(),
         last_result: String::new(),
         created_at: now,
         updated_at: now,
@@ -404,12 +413,11 @@ fn row_from_input(input: &TargetInput, now: i64, id: Option<Uuid>) -> BackupTarg
 pub fn connection_token(input: &TargetInput) -> String {
     use sha2::{Digest, Sha256};
     let material = format!(
-        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
         input.kind.trim().to_lowercase(),
         input.endpoint.trim().trim_end_matches('/').to_lowercase(),
         input.bucket.trim().to_lowercase(),
         input.prefix.trim().trim_matches('/').to_lowercase(),
-        input.namespace.trim().trim_matches('/').to_lowercase(),
         input.region.trim().to_lowercase(),
         input.provider.trim().to_lowercase(),
         input.secure,
@@ -437,7 +445,7 @@ fn input_from_row(row: &BackupTargetRow) -> TargetInput {
         schedule: row.schedule.clone(),
         enabled: row.enabled,
         users: row.users.clone(),
-        namespace: row.namespace.clone(),
+        namespace: String::new(), // server-owned, never part of the token
         connection_token: None,
     }
 }
@@ -521,8 +529,6 @@ mod tests {
         // Connection fields do change it.
         let moved = connection_token(&input(|t| t.endpoint = "https://other.example".into()));
         assert_ne!(base, moved);
-        let ns = connection_token(&input(|t| t.namespace = "scope-a".into()));
-        assert_ne!(base, ns);
     }
 
     #[test]
@@ -536,27 +542,36 @@ mod tests {
     }
 
     #[test]
-    fn namespace_format_is_validated() {
-        // Valid shapes pass the charset/length rule the route enforces.
-        for ok in ["", "a", "scope-1", "SCOPE_2", &"x".repeat(64)] {
-            let ns = ok.trim().trim_matches('/');
+    fn namespace_is_server_allocated_ulid() {
+        use crate::target::owner::new_namespace_id;
+        let a = new_namespace_id();
+        let b = new_namespace_id();
+        assert_eq!(a.len(), 26, "ULID is 26 Crockford Base32 chars");
+        assert_eq!(b.len(), 26);
+        assert_ne!(a, b, "each target gets its own scope");
+        for id in [&a, &b] {
             assert!(
-                ns.is_empty()
-                    || (ns.len() <= 64
-                        && ns
-                            .chars()
-                            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+                id.bytes().all(|c| {
+                    c.is_ascii_digit()
+                        || (c.is_ascii_uppercase()
+                            && c != b'I'
+                            && c != b'L'
+                            && c != b'O'
+                            && c != b'U')
+                }),
+                "Crockford Base32 alphabet only: {id}"
             );
         }
-        for bad in ["has space", "has/slash", "dot.dot"] {
-            let ns = bad.trim().trim_matches('/');
-            assert!(
-                !(ns.is_empty()
-                    || (ns.len() <= 64
-                        && ns
-                            .chars()
-                            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')))
-            );
-        }
+        // Time-ordered prefix: two ids generated in sequence share the high
+        // chars far more often than random ones would.
+        assert_eq!(a[..6], b[..6], "timestamp prefix should be close");
+    }
+
+    #[test]
+    fn client_supplied_namespace_is_ignored() {
+        // The input carries the field only so old clients don't break; the
+        // row builder drops it and the caller assigns a ULID instead.
+        let row = row_from_input(&input(|t| t.namespace = "user-typed".into()), 0, None);
+        assert_eq!(row.namespace, "", "client value must not reach the row");
     }
 }

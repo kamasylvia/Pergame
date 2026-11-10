@@ -229,7 +229,7 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 
 | # | 能力 | 实施 |
 |---|---|---|
-| 1 | **namespace 作用域**(§1) | `migration 0008` 加 `backup_targets.namespace`(空=默认范围);`effective_prefix()` 把 namespace 并入 store prefix,`manifests/ blobs/ refs/` 全落各自前缀——多实例共用一个桶时谱系/认领/保留互不干扰。字符集 `[A-Za-z0-9_-]` ≤64;**创建后不可改**(改了会使既有对象失联,API 直接拒绝)。PG 目标无 prefix 概念,由 `PgTarget::ns_key` 在 key 前加一段,list 时剥回,调用方永远只看到逻辑 key |
+| 1 | **namespace 作用域**(§1) | `migration 0008` 加 `backup_targets.namespace`;**由内核在创建目标时自动分配 ULID**(26 位 Crockford Base32,前 10 位毫秒时间戳),用户既不可输入也不可修改、前端不显示(siyuan 2026-11-10 定稿口径)。`effective_prefix()` 把 namespace 并入 store prefix,`manifests/ blobs/ refs/` 全落各自前缀——多实例共用一个桶时谱系/认领/保留互不干扰。存量行(该列引入前创建)在每次 list 时自愈补发 ULID。PG 目标无 prefix 概念,由 `PgTarget::ns_key` 在 key 前加一段,list 时剥回,调用方永远只看到逻辑 key |
 | 2 | **归属认领**(§3) | `target/owner.rs`:`refs/owner.json` 记 `{instance_id, host, claimed_at}`。实例身份 = `INSTANCE_ID` env,缺省 hostname/库名。写路径(fan-out/定时)先 `claim(force=false)`:无主则认领、同名则刷新、异主则**拒绝写入**并在 `last_result` 记原因。显式接管 = `POST targets/:id/take-ownership`(「last configured instance wins」但必须由人触发)。读路径(还原/管理/导出)**不要求认领**。probe 输出新增 `owner_instance` / `owned_by_me` |
 | 3 | **保存前连接测试门禁**(§9) | `POST targets/probe-draft`:对未保存的表单字段探测,`***` 凭据按 `id` 从库中回填真值;返回 `connection_token`(连接身份字段的 sha256 前 12 字节,不含密钥、不含名称/保留/定时)。保存时服务端**重算 token 并比对**,不符即 409「字段已变,请重测」;新建或连接字段变过而未带 token → 409「先测试连接」。前端 Test 按钮 → 通过后 Save 才可用,任一连接字段编辑立刻失效 |
 | — | **还原身份重置**(§5) | **判定不适用**。Siyuan 的 system.id/锁屏口令属于实例级配置,其快照会整份覆盖 conf 目录;Pergame 快照按 `user_id` 隔离且**只含 general/editor/advanced 三类偏好**(不含凭据、不含实例身份),跨实例迁移不存在身份继承。强行加 reset 是无对象的重构。记录于此供将来若引入实例级配置快照时复查 |

@@ -467,8 +467,6 @@ export default {
     loadFailed: '無法載入目標',
     mustTest: '儲存前請先測試連線。',
     name: '名稱',
-    namespace: '命名空間',
-    namespacePlaceholder: '留空 = 預設範圍',
     noUsers: '尚無有資料的使用者。',
     prefix: '前綴',
     probeOk: '可達 · {count} 個物件 · {fingerprint}',

@@ -472,8 +472,6 @@ export default {
     loadFailed: 'Impossibile caricare le destinazioni',
     mustTest: 'Testa la connessione prima di salvare.',
     name: 'Nome',
-    namespace: 'Namespace',
-    namespacePlaceholder: 'vuoto = ambito predefinito',
     noUsers: 'Nessun utente con dati.',
     prefix: 'Prefisso',
     probeOk: 'Raggiungibile · {count} oggetto/i · {fingerprint}',

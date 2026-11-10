@@ -473,8 +473,6 @@ export default {
     loadFailed: 'Impossible de charger les cibles',
     mustTest: 'Testez la connexion avant d’enregistrer.',
     name: 'Nom',
-    namespace: 'Espace de noms',
-    namespacePlaceholder: 'vide = portée par défaut',
     noUsers: 'Aucun utilisateur avec des données.',
     prefix: 'Préfixe',
     probeOk: 'Accessible · {count} objet(s) · {fingerprint}',

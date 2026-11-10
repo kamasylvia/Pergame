@@ -467,8 +467,6 @@ export default {
     loadFailed: '无法加载目标',
     mustTest: '保存前请先测试连接。',
     name: '名称',
-    namespace: '命名空间',
-    namespacePlaceholder: '留空 = 默认范围',
     noUsers: '暂无有数据的用户。',
     prefix: '前缀',
     probeOk: '可达 · {count} 个对象 · {fingerprint}',
