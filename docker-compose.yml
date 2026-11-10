@@ -105,8 +105,11 @@ services:
       SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
 
+    # No published port by default: browsers reach the API through the
+    # frontend's same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET). Set
+    # BACKEND_DIRECT_PORT in .env to publish it for debugging.
     ports:
-      - "${BACKEND_EXTERNAL_PORT:-8201}:8201"
+      - "${BACKEND_DIRECT_PORT:-}:8201"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
@@ -132,10 +135,14 @@ services:
       NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "${CONFIG_DISABLE_SIGNUP:-false}" # Disable signup page if set to 'true'
       NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "${CONFIG_DISABLE_LANDING:-false}" # Disable landing page
 
-      # Runtime configuration - builds with these values at startup
-      NUXT_PUBLIC_BASE_API: ${API_URL:-http://localhost:8201}
-      NUXT_PUBLIC_BASE_CDN: ${CDN_URL:-http://localhost:9000}
+      # Runtime configuration. BASE_API/BASE_CDN stay empty: the browser uses
+      # same-origin paths and the Nitro proxy middleware forwards /api and the
+      # CDN endpoint prefix to the containers below (no CORS, one port).
+      NUXT_PUBLIC_BASE_API: ""
+      NUXT_PUBLIC_BASE_CDN: ""
       NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/pergame/}
+      NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
+      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://rustfs:9000"
       NUXT_PUBLIC_BASE_URL: ${FRONTEND_URL:-http://localhost:8200}
 
     ports:

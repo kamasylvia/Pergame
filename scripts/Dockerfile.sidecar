@@ -1,8 +1,14 @@
 # dr-backup sidecar (spec backup-restore.md §10): long-running container that
 # executes dr-backup.sh jobs handed over by the backend through the shared
-# dr_jobs volume. Based on the postgres image so pg_dump always matches the
-# server major version.
-FROM postgres:17-alpine
+# dr_jobs volume.
+#
+# pg_dump cannot read a database newer than its own major version, so this
+# base image's tag IS a compatibility constraint: it must be >= the PostgreSQL
+# server major version being dumped. The tag below matches the server this
+# deployment targets (18). Upgrading the database past this major version
+# requires bumping the tag here and rebuilding — there is no runtime
+# negotiation between pg_dump and a newer server.
+FROM postgres:18-alpine
 
 RUN apk add --no-cache rclone bash coreutils
 

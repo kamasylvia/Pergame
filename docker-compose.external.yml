@@ -81,8 +81,12 @@ services:
       SMTP_MAIL_FROM: ""
       SMTP_PASSWORD: ""
 
-    ports:
-      - "8201:8201"
+    # No published port: the browser reaches the API through the frontend's
+    # same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET below). For direct
+    # access during debugging, temporarily re-add:
+    #   ports: ["8201:8201"]
+    expose:
+      - "8201"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
@@ -99,13 +103,18 @@ services:
       PORT: 8200
       NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "false"
       NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "false"
-      # 后端地址,浏览器要能访问到
-      NUXT_PUBLIC_BASE_API: "http://192.168.1.10:8201"
-      # 对象存储对外地址,与 backend 的 S3_PUBLIC_URL 保持一致
-      NUXT_PUBLIC_BASE_CDN: "http://192.168.1.10:8010"
-      # CDN 路径,与桶名一致,别乱改
+      # ---- 同源反代模式(推荐):浏览器只访问前端端口 ----
+      # BASE_API/BASE_CDN 留空 = 走相对路径,由 Nitro 中间件转发:
+      #   /api/**        → NUXT_PUBLIC_API_PROXY_TARGET (backend 容器)
+      #   /pergame/**    → NUXT_PUBLIC_CDN_PROXY_TARGET (对象存储)
+      NUXT_PUBLIC_BASE_API: ""
+      NUXT_PUBLIC_BASE_CDN: ""
       NUXT_PUBLIC_CDN_ENDPOINT: "/pergame/"
-      # 前端自身访问地址
+      # backend 服务在本 compose 的 pergame 网络内,直接用服务名
+      NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
+      # S3 内网地址:容器内访问宿主机端口用 172.17.0.1(填 localhost 会指向容器自身)
+      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://172.17.0.1:8010"
+      # 前端自身访问地址(浏览器地址栏)
       NUXT_PUBLIC_BASE_URL: "http://192.168.1.10:8200"
     ports:
       - "8200:8200"

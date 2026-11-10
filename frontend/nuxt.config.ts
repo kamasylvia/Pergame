@@ -187,6 +187,13 @@ export default defineNuxtConfig({
       // Feature flags
       configDisableSignupPage: '',
       configOidcProviderAutoRedirect: '',
+
+      // Same-origin reverse-proxy targets (server/middleware/proxy.ts).
+      // Empty = proxy disabled (browser talks to backend/S3 directly).
+      // NUXT_PUBLIC_API_PROXY_TARGET, e.g. http://backend:8201
+      apiProxyTarget: '',
+      // NUXT_PUBLIC_CDN_PROXY_TARGET, e.g. http://rustfs:9000
+      cdnProxyTarget: '',
     },
   },
 
