@@ -16,6 +16,7 @@ mod routes;
 mod snapcrypto;
 mod state;
 mod storage;
+mod target;
 mod types;
 mod utils;
 

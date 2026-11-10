@@ -17,6 +17,7 @@ croner = "2.1.4"
 dotenvy = "0.15.7"
 form_urlencoded = "1.2.2"
 hex = "0.4.3"
+uuid = { version = "1", features = ["v4", "serde"] }
 jsonwebtoken = { version = "11.1.0", features = ["rust_crypto"] }
 lettre = { version = "0.11.23", features = ["smtp-transport", "builder"] }
 rand = { version = "0.10.3", features = ["thread_rng"] }

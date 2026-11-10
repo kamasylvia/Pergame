@@ -156,3 +156,53 @@ webdav|name|url|user|password|prefix[|retain_days|keep_last|cron|crypt_pass]
 旧格式记录(无尾部字段)继续可读(=继承/关),新旧脚本都能 source。
 
 **验证**:41 单测(含 cron 校验/重复指纹/掩码往返/PROBE 解析)全绿;clippy/eslint/stylelint 0;浏览器活测(假 sidecar 消费器 + 真打 NAS QuObjects):探测 reachable=true 且指纹正确、源探测诚实失败(本机无 psql)、conf 全字段落盘、删除 confirm 文案正确、掩码往返保真。**待人工**:crypt 加密路径的真机 dump/restore、cron 触发的实际点火(逻辑已单测)、有快照目的地的删除门禁分支。
+## 14 多目标备份(思源 fork kernel/backup 对位;2026-11-10 开工,权威输入 = kamasylvia/siyuan#15 + 本地 Go 实现 kernel/backup/)
+
+### 13.1 语义翻译表(思源工作区 → Pergame DB+S3)
+
+| 思源概念 | Pergame 对应 | 说明 |
+|---|---|---|
+| 工作区 `data/`(全部文档) | 全体用户的 v2 快照对象集(每用户 manifests+blobs) | **target 范围裁决:target = 整实例对象副本**(键布局与本地桶同构);还原粒度 = 单 manifest(单用户),admin 可循环全实例 |
+| `conf/` | backup_targets 配置本身(排除,不进快照) | 同思源排除 backup.json |
+| `history/` | 无(git 级版本已否决) | 不进快照 |
+| SQLite 索引重建 | 无需(还原即重建 DB 行) | 内在 |
+| 快照 conf.json 身份重置 | N/A(单实例无 system.id;owner claim 保留接口,优先级低) | |
+| force 收敛(删快照外文件) | 删目标用户当前非快照内 S3 对象(nodes 天然收敛于 DB 替换) | |
+| ReindexRestoredWorkspace | 无需 | |
+
+### 13.2 对象布局(target 上,与本地桶同键)
+
+- `<prefix若配>/manifests/<ts>.json`、`<prefix>/blobs[-e2e]/{sha256}`、`<prefix>/refs/owner.json`、`<prefix>/refs/latest.json`
+- 内容 = 本地桶全体用户 v2 对象的字节级副本(fan-out 逐对象 HEAD→PUT 去重复制;加密态原样,e2e blob 不解密)
+
+### 14.3 Store 抽象
+
+```
+trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(path) / delete(path) / list(prefix)
+```
+- **S3**:endpoint/bucket/prefix/access/secret/secure/region/provider(path-style)
+- **WebDAV**:url/user/password/prefix;PROPFIND(depth 1)list、MKCOL 建目录、PUT/GET/DELETE
+- **PG**:外部库单表 `<schema>.pergame_backup_objects(path pk, data bytea, size, updated_at)`;fingerprint = `system_identifier`(pg_controldata/函数)+ db name + schema(PG<14 回退 oid)
+- 指纹(target 身份):S3 = endpoint|bucket 归一(小写/去尾斜杠);WebDAV = url 归一 + 归属标记内容哈希(从未写入 = 空);PG = system_identifier|db|schema
+
+### 14.4 配置与门禁
+
+- **migration 0005**:`backup_targets`(id uuid、kind、name、endpoint/url、bucket_or_schema、prefix、access_key、secret_key、secure、region、provider、schedule cron(P3)、keep_last、max_age_days、enabled、时间戳)
+- 身份唯一:保存/编辑按 fingerprint 查重,同存储拒绝双配置
+- **凭据掩码**:GET 时 access/secret/password → `***`;PUT `***` 回填库内旧值;新增记录带 `***` = 400
+- **testTarget 保存门禁**:connect(列目录或 SELECT 1)+ 掩码回填后探测;连接字段一变即失效(前端 + 后端双检)
+- **deleteCheck**:探测连通 + 快照数(目标上有对象 → 拒绝,先 emptyTarget);不可达且无法证明已清空 → 拒绝;指纹一致的重复配置一个可连且已清空 → 另一个放行
+- **editCheck**:连接字段变更时同款(指纹一致 或 原存储已清空);名称/保留/启停跳过探测
+- **emptyTarget**:两步确认,删全部 manifests+blobs,保留 owner 标记
+
+### 14.5 fan-out 备份与还原
+
+- **fan-out** = 对象级复制:本地桶全体用户 manifests+blobs(含 refs)逐对象复制到各启用 target(HEAD→PUT 去重;加密 blob 原样密文复制,不解密);手动「立即备份」触发 + 逐 target 记录结果
+- **还原自 target** = 把 target 上该用户 manifest 及其引用 blobs **拉回本地桶**(缺失才拉),然后走既有 `restore_from_zip` 组装引擎——引擎零改动
+- 锁:P1 用现有单作业互斥(同用户);target 级共享/还原独占锁 → P2(与只读中间件同批)
+
+### 14.6 分阶段
+
+- **P1(本批)**:Store 三实现 + 0005 + admin API(config CRUD 掩码/testTarget/deleteCheck/editCheck)+ fan-out 备份 + 每目标快照列表/单删(引用计数)/还原拉回 + owner/latest refs
+- **P2**:target 级锁 + 工作区只读中间件 + 前端只读态 + emptyTarget 二步确认强化 + maxAgeDays
+- **P3**:zip 同构格式(meta+manifest+blobs)三入口、per-target cron 表达式调度
