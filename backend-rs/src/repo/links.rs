@@ -1,59 +1,89 @@
-//! Node soft-link queries (sqlx; spec .work/features/note-links.md).
+//! Node soft-link queries (spec .work/features/note-links.md).
 //!
 //! A link row = one extra tree position for a note whose canonical parent is
 //! nodes.parent_id. Cycle rule: the link's parent must not be the note itself
 //! or any of its descendants (checked before insert).
+//!
+//! CRUD goes through Toasty ([`NodeLink`]); the recursive cycle check and the
+//! user-wide list stay in sqlx because they need CTEs / joins that Toasty's
+//! query model does not express.
 
 use sqlx::PgPool;
+use toasty::Db;
 
-use crate::models::LinkRow;
+use crate::models::{LinkRow, NodeLink};
 
+/// Creates a link row. Unique-violation surfaces as `sqlx::Error` so callers
+/// keep their existing 409 mapping.
 pub async fn create(
-    pool: &PgPool,
+    db: &mut Db,
     id: i64,
     parent_id: i64,
     node_id: i64,
     order: i32,
     now: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO node_links (id, parent_id, node_id, \"order\", created_timestamp)
-         VALUES ($1, $2, $3, $4, $5)",
-    )
-    .bind(id)
-    .bind(parent_id)
-    .bind(node_id)
-    .bind(order)
-    .bind(now)
-    .execute(pool)
-    .await
-    .map(|_| ())
+) -> Result<(), String> {
+    NodeLink::create()
+        .id(id)
+        .parent_id(parent_id)
+        .node_id(node_id)
+        .order(order)
+        .created_timestamp(now)
+        .exec(db)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
-pub async fn delete(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
-    let res = sqlx::query("DELETE FROM node_links WHERE id = $1")
-        .bind(id)
-        .execute(pool)
-        .await?;
-    Ok(res.rows_affected() > 0)
+/// Deletes one link position; false when the row did not exist.
+pub async fn delete(db: &mut Db, id: i64) -> Result<bool, String> {
+    let existed = NodeLink::filter_by_id(id)
+        .first()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?
+        .is_some();
+    if !existed {
+        return Ok(false);
+    }
+    NodeLink::filter_by_id(id)
+        .delete()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
-pub async fn get_by_id(pool: &PgPool, id: i64) -> Result<Option<LinkRow>, sqlx::Error> {
-    sqlx::query_as::<_, LinkRow>(
-        "SELECT id, parent_id, node_id, created_timestamp, \"order\" FROM node_links WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await
+pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<LinkRow>, String> {
+    let row = NodeLink::filter_by_id(id)
+        .first()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(row.map(|r| LinkRow {
+        id: r.id,
+        parent_id: r.parent_id,
+        node_id: r.node_id,
+        created_timestamp: r.created_timestamp,
+        order: r.order,
+    }))
 }
 
-pub async fn links_of_node(pool: &PgPool, node_id: i64) -> Result<Vec<LinkRow>, sqlx::Error> {
-    sqlx::query_as::<_, LinkRow>(
-        "SELECT id, parent_id, node_id, created_timestamp, \"order\" FROM node_links WHERE node_id = $1",
-    )
-    .bind(node_id)
-    .fetch_all(pool)
-    .await
+pub async fn links_of_node(db: &mut Db, node_id: i64) -> Result<Vec<LinkRow>, String> {
+    let rows = NodeLink::filter_by_node_id(node_id)
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|r| LinkRow {
+            id: r.id,
+            parent_id: r.parent_id,
+            node_id: r.node_id,
+            created_timestamp: r.created_timestamp,
+            order: r.order,
+        })
+        .collect())
 }
 
 /// All link rows anchored on the user's own nodes (v1 scope: private tree;

@@ -274,6 +274,62 @@ pub struct Session {
     pub logout_timestamp: i64,
 }
 
+/// Soft-link row (spec note-links.md): one extra tree position for a note.
+/// Mapped to Toasty for the CRUD paths; the recursive cycle check stays in
+/// sqlx (CTEs are outside Toasty's query model).
+#[derive(Debug, Model, Serialize, Deserialize)]
+#[table = "node_links"]
+pub struct NodeLink {
+    /// Application-assigned Snowflake (no `#[auto]`).
+    #[key]
+    #[column("id")]
+    #[serde(with = "sf")]
+    pub id: i64,
+
+    #[index]
+    #[column("parent_id")]
+    #[serde(with = "sf")]
+    pub parent_id: i64,
+
+    #[index]
+    #[column("node_id")]
+    #[serde(with = "sf")]
+    pub node_id: i64,
+
+    /// Reserved-word column; mapped explicitly.
+    #[column("order")]
+    pub order: i32,
+
+    #[column("created_timestamp")]
+    pub created_timestamp: i64,
+}
+
+/// Explicit node permission grant (1 view / 2 write / 3 admin).
+#[derive(Debug, Model, Serialize, Deserialize)]
+#[table = "permissions"]
+pub struct Permission {
+    #[key]
+    #[column("id")]
+    #[serde(with = "sf")]
+    pub id: i64,
+
+    #[index]
+    #[column("node_id")]
+    #[serde(with = "sf")]
+    pub node_id: i64,
+
+    #[index]
+    #[column("user_id")]
+    #[serde(with = "sf")]
+    pub user_id: i64,
+
+    #[column("permission")]
+    pub permission: i32,
+
+    #[column("created_timestamp")]
+    pub created_timestamp: i64,
+}
+
 /// TOTP backup/recovery codes (8-digit, bcrypt-hashed; Go parity).
 #[derive(Debug, Model)]
 #[table = "user_totp_recovery_codes"]

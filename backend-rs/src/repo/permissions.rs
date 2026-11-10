@@ -1,18 +1,28 @@
-//! Permission + invitation queries (sqlx; Go repositories/permission.repository.go
-//! parity, PostgreSQL dialect).
+//! Permission + invitation queries (Go repositories/permission.repository.go
+//! parity, PostgreSQL dialect). Permission CRUD goes through Toasty
+//! (`Permission`); the subtree-recursive grant query and invitation access
+//! stay in sqlx (CTE / composite tuples).
 
 use sqlx::PgPool;
+use toasty::Db;
 
-use crate::models::{NodeRow, PermissionRow};
+use crate::models::{NodeRow, Permission, PermissionRow};
 
-pub async fn get_by_node(pool: &PgPool, node_id: i64) -> Result<Vec<PermissionRow>, sqlx::Error> {
-    sqlx::query_as::<_, PermissionRow>(
-        "SELECT id, node_id, user_id, permission, created_timestamp
-         FROM permissions WHERE node_id = $1",
-    )
-    .bind(node_id)
-    .fetch_all(pool)
-    .await
+pub async fn get_by_node(db: &mut Db, node_id: i64) -> Result<Vec<PermissionRow>, String> {
+    let rows = Permission::filter_by_node_id(node_id)
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|r| PermissionRow {
+            id: r.id,
+            node_id: r.node_id,
+            user_id: r.user_id,
+            permission: r.permission,
+            created_timestamp: r.created_timestamp,
+        })
+        .collect())
 }
 
 pub async fn get_by_node_recursive(
@@ -37,68 +47,83 @@ pub async fn get_by_node_recursive(
     .await
 }
 
-pub async fn get_by_id(pool: &PgPool, id: i64) -> Result<Option<PermissionRow>, sqlx::Error> {
-    sqlx::query_as::<_, PermissionRow>(
-        "SELECT id, node_id, user_id, permission, created_timestamp
-         FROM permissions WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await
+pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<PermissionRow>, String> {
+    let row = Permission::filter_by_id(id)
+        .first()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(row.map(|r| PermissionRow {
+        id: r.id,
+        node_id: r.node_id,
+        user_id: r.user_id,
+        permission: r.permission,
+        created_timestamp: r.created_timestamp,
+    }))
 }
 
 pub async fn get_by_node_and_user(
-    pool: &PgPool,
+    db: &mut Db,
     node_id: i64,
     user_id: i64,
-) -> Result<Option<PermissionRow>, sqlx::Error> {
-    sqlx::query_as::<_, PermissionRow>(
-        "SELECT id, node_id, user_id, permission, created_timestamp
-         FROM permissions WHERE node_id = $1 AND user_id = $2",
-    )
-    .bind(node_id)
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await
+) -> Result<Option<PermissionRow>, String> {
+    let row = Permission::filter_by_node_id(node_id)
+        .filter_by_user_id(user_id)
+        .first()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(row.map(|r| PermissionRow {
+        id: r.id,
+        node_id: r.node_id,
+        user_id: r.user_id,
+        permission: r.permission,
+        created_timestamp: r.created_timestamp,
+    }))
 }
 
 pub async fn create(
-    pool: &PgPool,
+    db: &mut Db,
     id: i64,
     node_id: i64,
     user_id: i64,
     permission: i32,
     now: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO permissions (id, node_id, user_id, permission, created_timestamp)
-         VALUES ($1, $2, $3, $4, $5)",
-    )
-    .bind(id)
-    .bind(node_id)
-    .bind(user_id)
-    .bind(permission)
-    .bind(now)
-    .execute(pool)
-    .await
-    .map(|_| ())
-}
-
-pub async fn update(pool: &PgPool, id: i64, permission: i32) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE permissions SET permission = $1 WHERE id = $2")
-        .bind(permission)
-        .bind(id)
-        .execute(pool)
+) -> Result<(), String> {
+    Permission::create()
+        .id(id)
+        .node_id(node_id)
+        .user_id(user_id)
+        .permission(permission)
+        .created_timestamp(now)
+        .exec(db)
         .await
         .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
-pub async fn delete(pool: &PgPool, id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM permissions WHERE id = $1")
-        .bind(id)
-        .execute(pool)
+pub async fn update(db: &mut Db, id: i64, permission: i32) -> Result<(), String> {
+    let mut row = Permission::filter_by_id(id)
+        .first()
+        .exec(db)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "permission not found".to_string())?;
+    row.update()
+        .permission(permission)
+        .exec(db)
         .await
         .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+pub async fn delete(db: &mut Db, id: i64) -> Result<(), String> {
+    Permission::filter_by_id(id)
+        .delete()
+        .exec(db)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 pub async fn get_invitation_by_id(

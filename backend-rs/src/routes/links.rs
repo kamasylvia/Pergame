@@ -16,6 +16,12 @@ use crate::error::ApiError;
 use crate::models::LinkRow;
 use crate::repo::links as link_repo;
 use crate::response::ApiOk;
+
+/// Toasty errors arrive as plain strings (the repo layer does not depend on
+/// ApiError); map them to the envelope here.
+fn toasty_err(e: String) -> ApiError {
+    ApiError::Internal(Box::new(std::io::Error::other(e)))
+}
 use crate::types::Snowflake;
 
 fn resolve(param: &str) -> Result<Snowflake, ApiError> {
@@ -68,8 +74,9 @@ pub async fn create_link(
     }
 
     let id = state.snowflake.generate().as_i64();
+    let mut tdb = state.toasty.clone();
     link_repo::create(
-        &state.db,
+        &mut tdb,
         id,
         parent,
         node,
@@ -82,12 +89,12 @@ pub async fn create_link(
         if msg.contains("duplicate key") || msg.contains("23505") {
             return ApiError::Conflict("link already exists in that folder".into());
         }
-        ApiError::from(e)
+        toasty_err(e)
     })?;
 
-    let row = link_repo::get_by_id(&state.db, id)
+    let row = link_repo::get_by_id(&mut tdb, id)
         .await
-        .map_err(ApiError::from)?
+        .map_err(toasty_err)?
         .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
             "created link missing",
         ))))?;
@@ -110,9 +117,10 @@ pub async fn delete_link(
         .await
         .ok_or(ApiError::NotFound("node not found".into()))?;
     // Position removal needs write on the note or write on the parent folder.
-    let row = link_repo::get_by_id(&state.db, link)
+    let mut tdb = state.toasty.clone();
+    let row = link_repo::get_by_id(&mut tdb, link)
         .await
-        .map_err(ApiError::from)?
+        .map_err(toasty_err)?
         .ok_or(ApiError::NotFound("link not found".into()))?;
     let note_ok = guard::check_node_action(&state.db, &actor, &note_row, NodeAction::Update)
         .await
@@ -128,9 +136,10 @@ pub async fn delete_link(
         return Err(ApiError::Forbidden("forbidden".into()));
     }
 
-    let deleted = link_repo::delete(&state.db, link)
+    let mut tdb = state.toasty.clone();
+    let deleted = link_repo::delete(&mut tdb, link)
         .await
-        .map_err(ApiError::from)?;
+        .map_err(toasty_err)?;
     if !deleted {
         return Err(ApiError::NotFound("link not found".into()));
     }
@@ -146,9 +155,10 @@ pub async fn get_links(
     let actor: Actor = auth.into();
     let node = resolve(&node_id)?.as_i64();
     let _ = guard::require_node_action(&state.db, &actor, node, NodeAction::Read).await?;
-    let rows = link_repo::links_of_node(&state.db, node)
+    let mut tdb = state.toasty.clone();
+    let rows = link_repo::links_of_node(&mut tdb, node)
         .await
-        .map_err(ApiError::from)?;
+        .map_err(toasty_err)?;
     Ok(ApiOk::ok(rows))
 }
 

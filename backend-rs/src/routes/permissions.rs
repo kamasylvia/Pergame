@@ -12,6 +12,11 @@ use crate::auth::guard::{self, Actor, NodeAction};
 use crate::error::ApiError;
 use crate::repo::permissions as perm_repo;
 use crate::response::ApiOk;
+
+/// Toasty repo functions return plain error strings; map them to the envelope.
+fn toasty_err(e: String) -> ApiError {
+    ApiError::Internal(Box::new(std::io::Error::other(e)))
+}
 use crate::types::Snowflake;
 
 pub const PERM_READ: i32 = 1;
@@ -104,7 +109,10 @@ pub async fn get_node_permissions(
     let perms = if q.recursive == "true" {
         perm_repo::get_by_node_recursive(&state.db, id).await?
     } else {
-        perm_repo::get_by_node(&state.db, id).await?
+        let mut tdb = state.toasty.clone();
+        perm_repo::get_by_node(&mut tdb, id)
+            .await
+            .map_err(toasty_err)?
     };
     Ok(ApiOk::ok(perms))
 }
@@ -136,8 +144,9 @@ pub async fn create_permission(
         .as_i64();
 
     let id = state.snowflake.generate().as_i64();
+    let mut tdb = state.toasty.clone();
     perm_repo::create(
-        &state.db,
+        &mut tdb,
         id,
         node,
         user,
@@ -145,11 +154,11 @@ pub async fn create_permission(
         crate::auth::service::now_ms(),
     )
     .await
-    .map_err(ApiError::from)?;
+    .map_err(toasty_err)?;
 
-    let created = perm_repo::get_by_id(&state.db, id)
+    let created = perm_repo::get_by_id(&mut tdb, id)
         .await
-        .map_err(ApiError::from)?
+        .map_err(toasty_err)?
         .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
             "created permission missing",
         ))))?;
@@ -177,9 +186,10 @@ pub async fn update_permission(
 
     let mut db = state.toasty.clone();
     let _ = &mut db;
-    let existing = perm_repo::get_by_id(&state.db, perm)
+    let mut tdb = state.toasty.clone();
+    let existing = perm_repo::get_by_id(&mut tdb, perm)
         .await
-        .map_err(ApiError::from)?
+        .map_err(toasty_err)?
         .ok_or(ApiError::NotFound("not found".into()))?;
 
     let actor: Actor = auth.into();
@@ -191,9 +201,10 @@ pub async fn update_permission(
     )
     .await?;
 
-    perm_repo::update(&state.db, perm, body.permission)
+    let mut tdb = state.toasty.clone();
+    perm_repo::update(&mut tdb, perm, body.permission)
         .await
-        .map_err(ApiError::from)?;
+        .map_err(toasty_err)?;
     Ok(ApiOk::ok(json!("Permission updated")))
 }
 
@@ -208,9 +219,10 @@ pub async fn delete_permission(
     let actor: Actor = auth.into();
     let perm = resolve(&perm_id)?.as_i64();
 
-    let existing = perm_repo::get_by_id(&state.db, perm)
+    let mut tdb = state.toasty.clone();
+    let existing = perm_repo::get_by_id(&mut tdb, perm)
         .await
-        .map_err(ApiError::from)?
+        .map_err(toasty_err)?
         .ok_or(ApiError::NotFound("not found".into()))?;
 
     let guard_ok = guard::require_node_action(
@@ -224,9 +236,10 @@ pub async fn delete_permission(
         return Err(ApiError::Forbidden("forbidden".into()));
     }
 
-    perm_repo::delete(&state.db, perm)
+    let mut tdb = state.toasty.clone();
+    perm_repo::delete(&mut tdb, perm)
         .await
-        .map_err(ApiError::from)?;
+        .map_err(toasty_err)?;
     Ok(ApiOk::ok(json!("Permission deleted")))
 }
 
@@ -351,16 +364,18 @@ pub async fn join_invitation(
         .map_err(ApiError::from)?
         .ok_or(ApiError::NotFound("not found".into()))?;
 
-    let existing = perm_repo::get_by_node_and_user(&state.db, node_id, actor.user_id)
+    let mut tdb = state.toasty.clone();
+    let existing = perm_repo::get_by_node_and_user(&mut tdb, node_id, actor.user_id)
         .await
-        .map_err(ApiError::from)?;
+        .map_err(toasty_err)?;
 
     let perm = match existing {
         Some(p) if p.permission >= level => p,
         Some(p) => {
-            perm_repo::update(&state.db, p.id, level)
+            let mut tdb = state.toasty.clone();
+            perm_repo::update(&mut tdb, p.id, level)
                 .await
-                .map_err(ApiError::from)?;
+                .map_err(toasty_err)?;
             crate::models::PermissionRow {
                 id: p.id,
                 node_id: p.node_id,
@@ -372,7 +387,7 @@ pub async fn join_invitation(
         None => {
             let pid = state.snowflake.generate().as_i64();
             perm_repo::create(
-                &state.db,
+                &mut tdb,
                 pid,
                 node_id,
                 actor.user_id,
@@ -380,7 +395,7 @@ pub async fn join_invitation(
                 crate::auth::service::now_ms(),
             )
             .await
-            .map_err(ApiError::from)?;
+            .map_err(toasty_err)?;
             crate::models::PermissionRow {
                 id: pid,
                 node_id,
