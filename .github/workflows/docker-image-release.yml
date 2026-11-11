@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Image version tag, e.g. 8.15.0 (published as v8.15.0 and v8.15.0-<ref-sha7> alias nowhere: images carry the version plus latest)"
+        description: "Pergame version tag, e.g. 0.0.1 (published as v0.0.1 plus latest)"
         required: true
       ref:
         description: "Git ref to build from (tag name, branch, or full 40-char SHA). Leave empty to build the repository default branch."
@@ -34,7 +34,7 @@ jobs:
       packages: write
 
     steps:
-      # Image tags are semantic versions only (v8.15.0 + latest). The git ref
+      # Image tags are Pergame versions only (v0.0.1 + latest). The git ref
       # used for checkout is a separate concern: a release builds its own tag,
       # a dispatch builds whatever ref was given.
       - name: Resolve version and ref
@@ -47,13 +47,13 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
             REF="${{ github.event.inputs.ref }}"
           fi
-          # Normalise to a leading v so both "8.15.0" and "v8.15.0" work.
+          # Normalise to a leading v so both "0.0.1" and "v0.0.1" work.
           case "$VERSION" in
             v*) ;;
             *) VERSION="v$VERSION" ;;
           esac
           if [ -z "$VERSION" ] || [ "$VERSION" = "v" ]; then
-            echo "::error::version is required (e.g. 8.15.0)"
+            echo "::error::version is required (e.g. 0.0.1)"
             exit 1
           fi
           if [ -z "$REF" ]; then
