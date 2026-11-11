@@ -91,6 +91,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # The sidecar's pg_dump major must match the pg server major
+          # (scripts/Dockerfile.sidecar base image), so it also gets
+          # pg<major>-prefixed tags the compose files reference.
           tags: |
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:latest
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-${{ steps.tag.outputs.tag }}

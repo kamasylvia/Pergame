@@ -12,8 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
-    networks:
-      - pergame-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       timeout: 10s
@@ -36,8 +34,6 @@ services:
     volumes:
       - rustfs_data:/data
       - rustfs_logs:/logs
-    networks:
-      - pergame-network
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 9000 || exit 1"]
       interval: 30s
@@ -120,8 +116,6 @@ services:
         condition: service_healthy
       rustfs:
         condition: service_healthy
-    networks:
-      - pergame-network
 
   # Pergame Frontend
   frontend:
@@ -149,14 +143,15 @@ services:
       - "${FRONTEND_EXTERNAL_PORT:-8200}:8200"
     depends_on:
       - backend
-    networks:
-      - pergame-network
 
   # Instance DR sidecar (spec backup-restore.md §10): executes dr-backup.sh
   # jobs handed over by the backend through the shared volumes. Optional -
   # remove this service (and the backend's /conf,/jobs mounts) to disable.
   dr-backup:
-    image: ghcr.io/kamasylvia/pergame-dr-backup:${PERGAME_TAG:-latest}
+    # 版本跟随它要 dump 的 pg 大版本:pg18 镜像里的 pg_dump 只能导出
+    # <= 18 的服务器(见 scripts/Dockerfile.sidecar)。pg 升大版本时
+    # 同步改这里的 tag。workflow 会同时发布 <tag> 与 pg18-<tag>。
+    image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-latest
     container_name: pergame-dr-backup
     restart: unless-stopped
     environment:
@@ -165,12 +160,12 @@ services:
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
-    networks:
-      - pergame-network
 
+# The compose default network, explicitly named so the deployment is
+# independent of the directory the compose file lives in.
 networks:
-  pergame-network:
-    driver: bridge
+  default:
+    name: pergame
 
 volumes:
   postgres_data:

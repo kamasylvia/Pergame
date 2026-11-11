@@ -82,11 +82,10 @@ services:
       SMTP_PASSWORD: ""
 
     # No published port: the browser reaches the API through the frontend's
-    # same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET below). For direct
-    # access during debugging, temporarily re-add:
-    #   ports: ["8201:8201"]
-    expose:
-      - "8201"
+    # same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET below). `expose` would
+    # be pure documentation here (same-network containers can reach every
+    # port regardless), so it is omitted. For direct access during debugging,
+    # temporarily re-add: ports: ["8201:8201"]
     # S3 是宿主机原生服务:把 host.docker.internal 指到宿主机网关
     # (Linux 必需,不加此映射 host.docker.internal 无法解析)
     extra_hosts:
@@ -95,7 +94,7 @@ services:
       - dr_conf:/conf
       - dr_jobs:/jobs
     networks:
-      - pergame
+      - default   # 应用网络(top-level 里改名为 pergame)
       - postgres
 
   # --------------------------------------------------------------- frontend
@@ -127,14 +126,14 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - backend
-    networks:
-      - pergame
 
   # --------------------------------------------------------------- dr-backup
   # 实例 DR sidecar:执行 backend 通过共享卷交付的 pg_dump 任务。
   # 不需要实例级备份就删掉本服务 + backend 的 /conf,/jobs 挂载。
   dr-backup:
-    image: ghcr.io/kamasylvia/pergame-dr-backup:latest
+    # 版本跟随它要 dump 的 pg 大版本:pg18 镜像里的 pg_dump 只能导出
+    # <= 18 的服务器。pg 升大版本时必须同步改这里的 tag。
+    image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-latest
     container_name: pergame-dr-backup
     restart: unless-stopped
     environment:
@@ -149,13 +148,14 @@ services:
       - dr_conf:/conf
       - dr_jobs:/jobs
     networks:
-      - pergame
+      - default
       - postgres   # sidecar 要连 pg 做 dump
 
 networks:
-  # 应用内部网络(本 compose 自建)
-  pergame:
-    driver: bridge
+  # 应用内部网络 = compose 的 default 网络,显式改名为 pergame。
+  # 未在服务里声明 networks 的服务自动加入它;声明了的要显式带上 default。
+  default:
+    name: pergame
   # 已有的外部网络,pg 容器在其中;compose 不创建也不删除它
   postgres:
     external: true
