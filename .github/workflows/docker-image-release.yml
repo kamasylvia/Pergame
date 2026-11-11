@@ -86,9 +86,12 @@ jobs:
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
 
-      # Instance DR sidecar (pinned postgres:18.2 base so pg_dump matches the
-      # server). No floating tags: pg_dump behavior must be reproducible per
-      # release, so the compose files reference pg18-<release-tag> exactly.
+      # Instance DR sidecar (pinned postgres base so pg_dump matches the
+      # server). The pg18-<tag> alias is the one compose files should pin:
+      # pg_dump behavior must be reproducible per release. `latest` is
+      # published too, otherwise it keeps pointing at an old build forever
+      # (2026-11-11: it still resolved to a dual-arch image from the previous
+      # day, so anyone pulling `latest` on arm64 got a mismatched sidecar).
       - name: Build and push DR sidecar image
         uses: docker/build-push-action@v6
         with:
@@ -99,5 +102,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.tag }}
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-${{ steps.tag.outputs.tag }}
