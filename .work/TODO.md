@@ -31,13 +31,14 @@
 > **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。
 > 后端 80 路由 / 18.5k 行 Rust / 218 Vue / 7 migration;61 单测 + 10 集成全绿;
 > 认证/2FA/OIDC/节点/软链接/回收站/快照/还原/fan-out/只读锁均已对真实 pg + 对象存储活测。
-> 部署步骤与 12 步 smoke 清单 = 思源 `01-CS/02-NAS/00-Docker/Pergame 自托管部署指南`(id 20261110160718-8g1wsp1)。
+> 部署步骤 = 思源 `Pergame 外部基础设施部署指南`(id 20261111085400-74zeey6);旧版指南已删。
 
 **三个拦验收不拦测试的缺口:**
 
 1. **`docker compose` 从未真正跑起来过**(最大未知)——全部验证都是 `cargo run` + `bun dev` 直连 NAS 的 pg/对象存储;镜像构建、6 服务编排(含 dr-backup sidecar)、卷挂载、healthcheck 依赖全为纸面设计。**测这个优先**。
 2. **dr-backup 真实备份从未跑成**——本机无 `pg_dump`/`rclone`,只验到 job 协议 + 脚本被调用 + 错误回传;真实 dump→上传→`-l`→`-R` 一次未走。
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
+4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 
 **明确未实现(按批次,非 bug)**:批次 A 全部(媒体播放器 / Joplin md 特性 / Obsidian 语法兼容)、MCP server、目录索引、Dataview、插件系统、Pergamena 改名。
 

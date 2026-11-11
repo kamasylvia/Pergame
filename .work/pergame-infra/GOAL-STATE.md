@@ -76,6 +76,8 @@
 
 ### 最近完成的批次(供考古)
 
+- **compose 环境变量精简 + DR env bug(2026-11-11)**:`docker-compose.external.yml` 按「有代码默认值就不写」精简(170→135 行)——删 `BACKEND_PORT`(默认 8201)/`GIN_MODE`(Go 残留,Rust 版不读)/`COOKIE_DOMAIN`(默认 host-only,同源正好)/`FRONTEND_URL`(同源模式 CORS 不需要;配 SMTP 时须设,docs 已注)/`CONFIG_DISABLE_*`(默认 false)/`DATABASE_PORT/NAME`(默认 5432/pergame)/`S3_SECURE`(endpoint 带 scheme 时不参与)/`S3_BUCKET`(默认 pergame)/快照回收站 SMTP 四组(默认同效)/frontend 的 `NUXT_PUBLIC_BASE_API/BASE_CDN/CDN_ENDPOINT/BASE_URL/CONFIG_DISABLE_*`(nuxt.config 默认)/dr-backup 整块 env(镜像 ENV 自带默认)。**修真 bug**:两版 compose 的 backend 都挂 dr_conf/dr_jobs 卷但没设 `DR_CONF_DIR/DR_JOBS_DIR` → DR admin API 永远报 "sidecar not deployed",两版同补。docs `6.configurations-list.md` 补齐全量参数参考(快照/回收站节、同源反代与 frontend flags 节、DR sidecar 节、host-native S3 注记;删死变量 `API_URL`);TODO 记 frontend flags 断链缺口(`CONFIG_HIDE_NATIVE_LOGIN` 等 .env 有名 compose 未接)。
+
 - **示例地址改 Tailscale 域名 + 部署笔记同步(2026-11-11)**:`docker-compose.external.yml` 三处示例地址(`FRONTEND_URL`/`S3_PUBLIC_URL`/`NUXT_PUBLIC_BASE_URL`)由占位 LAN IP `192.168.1.10` 改为 Tailscale 域名 `qnap.elf-balance.ts.net`;思源 external 部署笔记(20261111085400-74zeey6)的 compose 代码块以仓库文件全文重写 + 必改清单表行同步;GOAL-STATE 本条 smoke 指针从旧笔记(.env 模型)改指新笔记。旧笔记(20261110165052-x8mgczs)经用户确认删除(思源回收站可恢复)。
 
 - **Siyuan issue #15 借鉴批次 E(2026-11-10)**:①`namespace` 作用域(`migration 0008`,并入 store prefix,创建后不可改)②`refs/owner.json` 归属认领(`INSTANCE_ID` 实例身份,写路径拒绝异主,`take-ownership` 显式接管)③保存前连接测试门禁(`probe-draft` + `connection_token` 服务端重算比对)。**判定不做**:还原身份重置——Pergame 快照按 user 隔离且不含实例身份/凭据,无作用对象。spec §14;两实例共用一桶的实机验证待人工。

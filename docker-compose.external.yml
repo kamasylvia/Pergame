@@ -28,58 +28,33 @@ services:
     container_name: pergame-backend
     restart: unless-stopped
     environment:
-      BACKEND_PORT: 8201
-      GIN_MODE: release
-
-      # ---------- 认证:必须改 ----------
+      # 只列无默认值或与环境强相关的变量;其余全有安全默认
+      # (快照/回收站/SMTP/注册开关等),全量参考:
+      # docs/content/6.deploy/6.configurations-list.md
       # 改 JWT_SECRET = 所有会话失效。生成:openssl rand -hex 32
       JWT_SECRET: "CHANGE-ME-openssl-rand-hex-32"
-      # 只填主机名,不带协议不带端口。带端口会产生非法 Cookie Domain,
-      # 浏览器静默丢弃认证 cookie(症状:登录成功但所有操作 401)
-      COOKIE_DOMAIN: "pergame.example.com"
-      # 浏览器访问前端的地址,用于 CORS 白名单与邮件链接
-      FRONTEND_URL: "http://qnap.elf-balance.ts.net:8200"
-      # 无 HTTPS 时 true;上 HTTPS 后改 false
+      # 无 HTTPS 时必须显式 true:默认走 secure cookie,HTTP 下浏览器拒收
       ALLOW_UNSECURE: "true"
-      CONFIG_DISABLE_SIGNUP: "false"
-      CONFIG_DISABLE_NATIVE_LOGIN: "false"
 
-      # ---------- 外部 PostgreSQL:必须改 ----------
-      # DATABASE_HOST = pg 容器在 postgres 网络里的名字(不是 IP、不是域名)
+      # ---------- 外部 PostgreSQL ----------
+      # pg 容器在 postgres 网络里的名字(不是 IP、不是域名)
       DATABASE_HOST: "pg18"
-      DATABASE_PORT: 5432
-      DATABASE_NAME: "pergame"
       DATABASE_USER: "postgres"
       DATABASE_PASSWORD: "CHANGE-ME-pg-password"
 
-      # ---------- 外部对象存储:必须改 ----------
+      # ---------- 外部对象存储 ----------
       # S3 是宿主机上的原生服务(非容器),经 host.docker.internal 访问
-      # (由下方 extra_hosts 映射到宿主机网关,Linux 上 host.docker.internal
-      #  默认不可用,必须显式声明)。
+      # (由下方 extra_hosts 映射到宿主机网关,Linux 上必须显式声明)。
       S3_ENDPOINT: "http://host.docker.internal:8010"
-      # S3_PUBLIC_URL 是**浏览器**能访问到的地址(附件直链走它)
+      # 浏览器能访问到的地址(附件直链走它)
       S3_PUBLIC_URL: "http://qnap.elf-balance.ts.net:8010"
-      # S3 走 HTTPS 时填 true
-      S3_SECURE: "false"
       S3_ACCESSKEY: "CHANGE-ME-s3-access-key"
       S3_SECRETKEY: "CHANGE-ME-s3-secret-key"
-      # 建议用独立空桶:backend 启动会给整个桶设公共读策略
-      S3_BUCKET: "pergame"
 
-      # ---------- 快照与回收站 ----------
-      # 每 N 小时自动为所有用户建快照;0 = 关闭
-      SNAPSHOT_INTERVAL_HOURS: "0"
-      # 快照端到端加密口令。设了务必存密码管理器,丢了加密快照永久不可解
-      PERGAME_SNAPSHOT_PASSPHRASE: ""
-      # 回收站保留天数;0 = 永不自动清理
-      TRASH_RETENTION_DAYS: "30"
-      TRASH_SWEEP_INTERVAL_HOURS: "24"
-
-      # ---------- 邮件(可选,不填则密码重置不可用)----------
-      SMTP_HOST: ""
-      SMTP_MAIL: ""
-      SMTP_MAIL_FROM: ""
-      SMTP_PASSWORD: ""
+      # ---------- DR sidecar 共享卷 ----------
+      # 与下方 dr_conf/dr_jobs 挂载对应;不部署 DR 就连这两行带卷一起删
+      DR_CONF_DIR: "/conf"
+      DR_JOBS_DIR: "/jobs"
 
     # No published port: the browser reaches the API through the frontend's
     # same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET below). `expose` would
@@ -104,21 +79,14 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8200
-      NUXT_PUBLIC_CONFIG_DISABLE_SIGNUP_PAGE: "false"
-      NUXT_PUBLIC_CONFIG_DISABLE_LANDING_PAGE: "false"
       # ---- 同源反代模式(推荐):浏览器只访问前端端口 ----
-      # BASE_API/BASE_CDN 留空 = 走相对路径,由 Nitro 中间件转发:
-      #   /api/**        → NUXT_PUBLIC_API_PROXY_TARGET (backend 容器)
-      #   /pergame/**    → NUXT_PUBLIC_CDN_PROXY_TARGET (对象存储)
-      NUXT_PUBLIC_BASE_API: ""
-      NUXT_PUBLIC_BASE_CDN: ""
-      NUXT_PUBLIC_CDN_ENDPOINT: "/pergame/"
+      # BASE_API/BASE_CDN 留空(默认)走相对路径,由 Nitro 中间件转发:
+      #   /api/**      → NUXT_PUBLIC_API_PROXY_TARGET(backend 容器)
+      #   /pergame/**  → NUXT_PUBLIC_CDN_PROXY_TARGET(对象存储)
       # backend 服务在本 compose 的 pergame 网络内,直接用服务名
       NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
       # S3 内网地址:宿主机原生服务,经 host.docker.internal 访问(见 backend extra_hosts)
       NUXT_PUBLIC_CDN_PROXY_TARGET: "http://host.docker.internal:8010"
-      # 前端自身访问地址(浏览器地址栏)
-      NUXT_PUBLIC_BASE_URL: "http://qnap.elf-balance.ts.net:8200"
     ports:
       - "8200:8200"
     # frontend 的 CDN 代理同样要访问宿主机上的原生 S3
@@ -136,11 +104,9 @@ services:
     image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-latest
     container_name: pergame-dr-backup
     restart: unless-stopped
-    environment:
-      # 全局定时 pg_dump 间隔(小时);0 = 仅手动。
-      # 推荐用 UI 里的目标级 cron(更灵活),此项留 0 即可。
-      SCHEDULE_HOURS: "0"
-      SCAN_INTERVAL_SECONDS: "2"
+    # 镜像自带全部默认值(SCHEDULE_HOURS=0 仅手动 / SCAN_INTERVAL_SECONDS=2 /
+    # JOBS_DIR=/jobs / CONF_DIR=/conf);要定时 dump 或改路径时才需要显式 env
+    # (见 docs/content/6.deploy/6.configurations-list.md 的 DR sidecar 节)。
     # rclone 目的地若指向宿主机上的 S3,同样需要 host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
