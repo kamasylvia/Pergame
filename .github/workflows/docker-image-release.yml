@@ -6,9 +6,13 @@ on:
 
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Full 40-char commit SHA or tag name to build (short SHAs fail checkout: actions/checkout treats them as branch names)"
+      version:
+        description: "Image version tag, e.g. 8.15.0 (published as v8.15.0 and v8.15.0-<ref-sha7> alias nowhere: images carry the version plus latest)"
         required: true
+      ref:
+        description: "Git ref to build from (tag name, branch, or full 40-char SHA). Leave empty to build the repository default branch."
+        required: false
+        default: ""
 
 # All three images build for linux/amd64 only.
 #
@@ -30,19 +34,39 @@ jobs:
       packages: write
 
     steps:
-      - name: Resolve tag
+      # Image tags are semantic versions only (v8.15.0 + latest). The git ref
+      # used for checkout is a separate concern: a release builds its own tag,
+      # a dispatch builds whatever ref was given.
+      - name: Resolve version and ref
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.release.tag_name }}"
+            REF="${{ github.event.release.tag_name }}"
           else
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.version }}"
+            REF="${{ github.event.inputs.ref }}"
           fi
+          # Normalise to a leading v so both "8.15.0" and "v8.15.0" work.
+          case "$VERSION" in
+            v*) ;;
+            *) VERSION="v$VERSION" ;;
+          esac
+          if [ -z "$VERSION" ] || [ "$VERSION" = "v" ]; then
+            echo "::error::version is required (e.g. 8.15.0)"
+            exit 1
+          fi
+          if [ -z "$REF" ]; then
+            REF="${{ github.event.repository.default_branch }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+          echo "Building version $VERSION from ref $REF"
 
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ steps.tag.outputs.tag }}
+          ref: ${{ steps.tag.outputs.ref }}
 
       - name: Set lowercase repository name
         id: repo
@@ -69,8 +93,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:${{ steps.tag.outputs.version }}
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:latest
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:${{ steps.tag.outputs.tag }}
 
       # Frontend is amd64-only like the rest of the pipeline; see the
       # platform note at the top of this file for the measurement.
@@ -83,8 +107,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.version }}
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
 
       # Instance DR sidecar (pinned postgres base so pg_dump matches the
       # server). The pg18-<tag> alias is the one compose files should pin:
@@ -102,6 +126,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.version }}
+            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-${{ steps.tag.outputs.version }}
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:latest
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.tag }}
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-${{ steps.tag.outputs.tag }}
