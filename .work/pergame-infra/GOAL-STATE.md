@@ -59,7 +59,7 @@
 ### 下一步动作(按序)
 
 1. ~~**回收站机制**~~ ✅ **已完成(2026-11-09)**:`migration 0005` + repo 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + 前端 `/dashboard/trash` + 保留期 sweeper(`TRASH_RETENTION_DAYS` 默认 30)。spec = `features/trash.md`。**待活环境验证**:集成用例 `trash_lifecycle`(`cargo test --test integration -- --ignored`)。
-2. **镜像发布 → NAS 部署**(2026-11-10 定型的部署模型):镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`,双架构),**NAS 只 pull 不 build**。**前置**:必须先在 GitHub 打一个 Release 触发 workflow,否则 `docker compose pull` 拉不到镜像(当前 GHCR 上还没有这三镜像)。
+2. **镜像发布 → NAS 部署**(2026-11-10 定型的部署模型):镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`;backend/sidecar 双架构,frontend 仅 amd64,见最近批次),**NAS 只 pull 不 build**。**前置**:必须先在 GitHub 打一个 Release 触发 workflow,否则 `docker compose pull` 拉不到镜像(当前 GHCR 上还没有这三镜像)。
    - 已验证:backend 镜像本地构建后在真 compose 栈(pg+rustfs)里跑通 migration/建桶/health/注册登录/快照/portable zip 下载/还原。
    - **未验证**:前端镜像(GHCR 上不存在,本机 `bun install`+`nuxt build` 构建超时未完成)、dr-backup sidecar 镜像(同)。
 3. 部署 smoke:按思源笔记 `Pergame 外部基础设施部署指南`(id `20261111085400-74zeey6`)的清单执行;NAS 上只需 `docker-compose.external.yml`(配置全内联,不需要 .env,不需要 clone 仓库)。旧版指南(id `20261110165052-x8mgczs`,自包含 5 服务 + .env 模型)已过时,2026-11-11 经用户确认删除。
@@ -76,7 +76,7 @@
 
 ### 最近完成的批次(供考古)
 
-- **dr-backup 钉版 + 首次 Release v8.15.0(2026-11-11)**:实测活库(QNAP pg18 容器,经 Tailscale psql `SELECT version()`)= **PostgreSQL 18.2** → sidecar 基底钉 `postgres:18.2-alpine`,workflow 弃 `latest`/`pg18-latest` 浮动 tag(只发 `<tag>` + `pg18-<tag>`),两 compose 引用钉 `pg18-v8.15.0`(`588731c3`)。发布走 GitHub REST API(gh CLI 缺 workflow scope;凭据 = Infisical `GITHUB_CLASSIC_PAT`,**键名不是 GITHUB_PAT**,`PORTAINER_ACCESS_TOKEN` 存在但当前 key 全 endpoint 401 待查)。Release id 441192752,构建 run 42951029301。**NAS pull 注意**:GHCR package 首次发布默认 private,compose pull 前需在 GitHub package settings 设 public 或 docker login ghcr.io。
+- **前端镜像改 amd64-only(2026-11-11,`1de5dfd2`)**:QEMU 模拟 arm64 下 `bun run build`(Nuxt bundling)永久卡死——两轮实测 amd64 ~1 分钟 DONE,arm64 在 "Bundling app" 空转 2.5h(run 42951029301)/6h(run 42932797492)后手工 cancel。workflow 里 "缓存损坏致 hang" 的旧判断是误判,`no_frontend_cache` 逃生开关一并删除(卡的是构建进程本身,不是 cache restore)。frontend 步骤只打 `linux/amd64`,backend/sidecar 保持双架构;arm64 恢复须走原生 arm64 runner,永不 QEMU。新构建 run 42991020525。
 
 - **TZ 时区支持(2026-11-11,SiYuan fork UTC 显示教训移植)**:target cron 调度从硬编码 UTC 改为按进程时区匹配(`TZ` 环境变量,chrono Local 解码;不设 = UTC 容器默认)——`CronSpec::matches_utc` → `matches`(核心 `matches_in(ts, offset)` 可测,+8 时区语义单测;59 单测 + clippy 0)。两镜像补 tzdata(backend-rs Debian slim / sidecar alpine,否则 IANA 名解析不了静默回落 UTC);sidecar job `finished_at` 弃 `date -u` 改 `date -Iseconds`(跟 TZ,显示性质不动排序);DR 备份 stamp 目录本就 `date`(无 -u)跟 TZ,不动。存储层保持 UTC:`rfc3339_now()`(manifest)、快照 id(now_ms)、前端快照列表走 `last_modified` epoch → 浏览器本地,均不动(SiYuan 口径:标识符/存储格式不动,显示层跟时区)。docs `6.configurations-list.md` backend + sidecar 节各补 `TZ` 行;external compose 两处 TZ 提示注释。
 
