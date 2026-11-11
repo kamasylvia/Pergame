@@ -103,13 +103,14 @@ async function refreshAccessToken(): Promise<void> {
     } catch (error) {
       console.warn('[auth] Refresh failed, logging out.', error);
 
-      // Clear user state
+      // Clear user state, then rethrow. Deliberately no redirect here: this
+      // helper runs for every 401, including background polls of endpoints a
+      // visitor may legitimately not have access to (an anonymous visitor
+      // probing an admin-only URLs would otherwise be bounced to /login from
+      // any page, including the signup form). Navigation is the router
+      // middleware's job — it already redirects /dashboard/* when
+      // `isLoggedIn` is absent.
       useUserStore().post_logout();
-
-      // Redirect to login (client-side only)
-      if (import.meta.client) {
-        navigateTo('/login', { replace: true });
-      }
 
       throw new Error('Refresh token invalid', { cause: error });
     } finally {

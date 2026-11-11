@@ -12,11 +12,19 @@
  * tells the user instead of letting them lose an edit.
  */
 const { t } = useI18nT();
+const userStore = useUserStore();
 const readOnly = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 async function poll() {
-  // Admin-only endpoint; non-admin sessions simply keep it false.
+  // Admin-only endpoint. Polling it while anonymous would earn a 401 on every
+  // tick, so stay silent unless an admin session is present; non-admins keep
+  // the banner hidden because they cannot be told about instance maintenance
+  // anyway.
+  if (userStore.user?.role !== 2) {
+    readOnly.value = false;
+    return;
+  }
   const res = await makeRequest<{ read_only: boolean }>('admin/dr-backup/status', 'GET', {});
   readOnly.value = res.status === 'success' ? Boolean(res.result?.read_only) : false;
 }
