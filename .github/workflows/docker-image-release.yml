@@ -9,6 +9,13 @@ on:
       tag:
         description: "Tag Git to build"
         required: true
+      # Escape hatch: a corrupted GHA cache entry can make the buildx restore
+      # hang (observed 2026-11-11: two runs wedged >2.5h on the frontend
+      # step). Dispatch with this checked to build it cacheless.
+      no_frontend_cache:
+        description: "Skip buildx GHA cache for the frontend image"
+        type: boolean
+        default: false
 
 jobs:
   build-and-push:
@@ -69,6 +76,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_frontend_cache == true }}
           tags: |
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
