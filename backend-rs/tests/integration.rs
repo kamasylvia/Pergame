@@ -226,6 +226,21 @@ async fn auth_and_user_lifecycle() {
     // Signup + login + @me.
     let (user_id, _username) = signup_and_login_tagged(&client, "auth").await;
 
+    // Token refresh must accept POST (the contract the frontend and upstream
+    // Go use). Registering GET only made every refresh answer 405, and the
+    // client's error path then redirected authenticated pages to /login.
+    let resp = client
+        .http
+        .post(format!("{BASE_URL}/auth/refresh"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status().as_u16(),
+        200,
+        "POST /auth/refresh must succeed for a logged-in client"
+    );
+
     // Get user by ID.
     let (status, r) = get(&client, &format!("/users/{user_id}")).await;
     assert_eq!(status, 200);

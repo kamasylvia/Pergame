@@ -138,7 +138,15 @@ async fn main() {
             get(routes::admin_dr::lock_status),
         )
         .route("/api/auth", post(routes::auth::login))
-        .route("/api/auth/refresh", get(routes::auth::refresh))
+        // POST is the contract (upstream Go registers `POST /refresh` and the
+        // frontend refreshes with POST). GET remains as a harmless alias: the
+        // Rust port registered GET only, so every token refresh answered 405
+        // and the client's error path redirected to /login — which surfaced
+        // as "the signup page bounces back to login after a couple of seconds".
+        .route(
+            "/api/auth/refresh",
+            get(routes::auth::refresh).post(routes::auth::refresh),
+        )
         .route("/api/auth/logout", post(routes::auth::logout))
         .route(
             "/api/auth/2fa/request",
