@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag Git to build"
+        description: "Full 40-char commit SHA or tag name to build (short SHAs fail checkout: actions/checkout treats them as branch names)"
         required: true
 
 jobs:
