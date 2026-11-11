@@ -53,10 +53,10 @@ services:
       DATABASE_PASSWORD: "CHANGE-ME-pg-password"
 
       # ---------- 外部对象存储:必须改 ----------
-      # S3_ENDPOINT 是**容器内**能访问到的地址;若 S3 监听宿主机端口,
-      # 容器内用 172.17.0.1(docker0 网关)或 host.docker.internal。
-      # 填 localhost 会指向容器自身,必然失败。
-      S3_ENDPOINT: "http://172.17.0.1:8010"
+      # S3 是宿主机上的原生服务(非容器),经 host.docker.internal 访问
+      # (由下方 extra_hosts 映射到宿主机网关,Linux 上 host.docker.internal
+      #  默认不可用,必须显式声明)。
+      S3_ENDPOINT: "http://host.docker.internal:8010"
       # S3_PUBLIC_URL 是**浏览器**能访问到的地址(附件直链走它)
       S3_PUBLIC_URL: "http://192.168.1.10:8010"
       # S3 走 HTTPS 时填 true
@@ -87,6 +87,10 @@ services:
     #   ports: ["8201:8201"]
     expose:
       - "8201"
+    # S3 是宿主机原生服务:把 host.docker.internal 指到宿主机网关
+    # (Linux 必需,不加此映射 host.docker.internal 无法解析)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
@@ -112,12 +116,15 @@ services:
       NUXT_PUBLIC_CDN_ENDPOINT: "/pergame/"
       # backend 服务在本 compose 的 pergame 网络内,直接用服务名
       NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
-      # S3 内网地址:容器内访问宿主机端口用 172.17.0.1(填 localhost 会指向容器自身)
-      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://172.17.0.1:8010"
+      # S3 内网地址:宿主机原生服务,经 host.docker.internal 访问(见 backend extra_hosts)
+      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://host.docker.internal:8010"
       # 前端自身访问地址(浏览器地址栏)
       NUXT_PUBLIC_BASE_URL: "http://192.168.1.10:8200"
     ports:
       - "8200:8200"
+    # frontend 的 CDN 代理同样要访问宿主机上的原生 S3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
     networks:
@@ -135,6 +142,9 @@ services:
       # 推荐用 UI 里的目标级 cron(更灵活),此项留 0 即可。
       SCHEDULE_HOURS: "0"
       SCAN_INTERVAL_SECONDS: "2"
+    # rclone 目的地若指向宿主机上的 S3,同样需要 host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - dr_conf:/conf
       - dr_jobs:/jobs
@@ -150,6 +160,10 @@ networks:
   postgres:
     external: true
 
+# 卷名显式固定:compose 默认会加「目录名_」前缀,目录改名/移动后
+# 会生成一套全新的空卷(旧数据还在但容器挂的是新卷)。显式命名避免这种漂移。
 volumes:
   dr_conf:
+    name: pergame-dr-conf
   dr_jobs:
+    name: pergame-dr-jobs
