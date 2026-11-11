@@ -9,13 +9,6 @@ on:
       tag:
         description: "Tag Git to build"
         required: true
-      # Escape hatch: a corrupted GHA cache entry can make the buildx restore
-      # hang (observed 2026-11-11: two runs wedged >2.5h on the frontend
-      # step). Dispatch with this checked to build it cacheless.
-      no_frontend_cache:
-        description: "Skip buildx GHA cache for the frontend image"
-        type: boolean
-        default: false
 
 jobs:
   build-and-push:
@@ -68,15 +61,18 @@ jobs:
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:${{ steps.tag.outputs.tag }}
 
+      # Frontend is amd64-only: the arm64 leg runs under QEMU emulation and
+      # `bun run build` (Nuxt bundling) hangs there indefinitely (2026-11-11:
+      # amd64 done in ~1min, arm64 wedged at "Bundling app" for 2.5h/6h over
+      # two runs). Restore arm64 via a native arm64 runner, never QEMU.
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_frontend_cache == true }}
           tags: |
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
