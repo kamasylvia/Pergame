@@ -235,8 +235,10 @@ pub async fn fetch_user_from_target(
 
 /// Per-target cron scheduler (fork §4 parity): ticks every minute, asks each
 /// enabled target whether its `schedule` matched the elapsed minute, and runs
-/// a full fan-out for that target's users. Missed minutes are not replayed
-/// (standard cron), and a tick is skipped while a backup/restore lock is held.
+/// a full fan-out for that target's users. Expressions are evaluated in the
+/// process timezone (`TZ` env var; UTC in containers by default). Missed
+/// minutes are not replayed (standard cron), and a tick is skipped while a
+/// backup/restore lock is held.
 pub fn spawn_target_scheduler(pool: sqlx::PgPool, storage: S3Storage) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
@@ -273,7 +275,7 @@ pub fn spawn_target_scheduler(pool: sqlx::PgPool, storage: S3Storage) {
                     tracing::warn!(target = %name, expr, "target scheduler: bad cron expression");
                     continue;
                 };
-                if !spec.matches_utc(minute) {
+                if !spec.matches(minute) {
                     continue;
                 }
                 let Ok(row) = repo::get_target(&pool, id).await else {

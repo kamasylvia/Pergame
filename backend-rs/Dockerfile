@@ -31,16 +31,17 @@ COPY config.toml ./config.toml
 COPY emails ./emails
 RUN touch src/main.rs && cargo build --release
 
-# Production stage — glibc + CA certs, non-root.
+# Production stage — glibc + CA certs + tzdata, non-root.
 #
 # Runtime base must match the builder's Debian release: rust:1.95-slim is
 # trixie (glibc 2.41), so a bookworm runtime (glibc 2.36) fails at startup
 # with "GLIBC_2.38/2.39 not found". ca-certificates is required for the
-# S3/Postgres TLS handshakes.
+# S3/Postgres TLS handshakes; tzdata lets the TZ env var select an IANA
+# zone (cron schedules and wall-clock timestamps follow it, UTC if unset).
 FROM debian:trixie-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 65532 --create-home pergame
 

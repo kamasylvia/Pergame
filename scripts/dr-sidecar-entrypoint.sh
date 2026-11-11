@@ -52,8 +52,10 @@ write_done() {
   tail="$(tail -c "$TAIL_BYTES" "$outfile" 2>/dev/null || true)"
   escaped="$(json_escape "$tail")"
   tmp="$JOBS_DIR/done/.${id}.tmp"
+  # finished_at follows the container timezone (TZ env var, UTC if unset) —
+  # it is display-only; job identity/ordering never depends on it.
   printf '{"id":"%s","action":"%s","exit":%s,"output_tail":"%s","finished_at":"%s"}' \
-    "$id" "$action" "$exit" "$escaped" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$tmp"
+    "$id" "$action" "$exit" "$escaped" "$(date -Iseconds)" >"$tmp"
   mv "$tmp" "$JOBS_DIR/done/${id}.json"
 }
 

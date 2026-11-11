@@ -10,7 +10,9 @@
 # negotiation between pg_dump and a newer server.
 FROM postgres:18-alpine
 
-RUN apk add --no-cache rclone bash coreutils
+# tzdata: busybox date needs it to resolve IANA zone names, so the TZ env
+# var can move the sidecar's backup stamps and scheduled runs off UTC.
+RUN apk add --no-cache rclone bash coreutils tzdata
 
 COPY dr-backup.sh /opt/dr/dr-backup.sh
 COPY dr-sidecar-entrypoint.sh /opt/dr/dr-sidecar-entrypoint.sh

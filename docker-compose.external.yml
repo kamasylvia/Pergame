@@ -55,6 +55,9 @@ services:
       # 与下方 dr_conf/dr_jobs 挂载对应;不部署 DR 就连这两行带卷一起删
       DR_CONF_DIR: "/conf"
       DR_JOBS_DIR: "/jobs"
+      # 时区:影响 target cron 调度与日志墙钟(镜像含 tzdata)。
+      # 不设 = UTC;要按本地墙钟跑 `0 2 * * *` 这类调度就解开注释
+      # TZ: "Asia/Shanghai"
 
     # No published port: the browser reaches the API through the frontend's
     # same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET below). `expose` would
@@ -107,6 +110,7 @@ services:
     # 镜像自带全部默认值(SCHEDULE_HOURS=0 仅手动 / SCAN_INTERVAL_SECONDS=2 /
     # JOBS_DIR=/jobs / CONF_DIR=/conf);要定时 dump 或改路径时才需要显式 env
     # (见 docs/content/6.deploy/6.configurations-list.md 的 DR sidecar 节)。
+    # 备份 stamp 目录与 job 时间戳跟 TZ 环境变量走,不设 = UTC。
     # rclone 目的地若指向宿主机上的 S3,同样需要 host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -3,11 +3,16 @@
 //! day-of-week. Supports `*`, `*/n`, `a-b`, `a-b/n` and comma lists; day-of-
 //! week accepts 0-7 (both 0 and 7 = Sunday).
 //!
+//! Matching happens in the process timezone (`TZ` environment variable,
+//! decoded by the images' tzdata; containers default to UTC), so an operator
+//! writing `0 2 * * *` means 02:00 at the deployment's wall clock, not UTC.
+//!
 //! The scheduler ticks every minute and asks "was this target due in the last
 //! window?", so a missed minute (process asleep) does not replay: standard
 //! cron semantics, matching the fork's "skip, do not catch up" rule.
 
 use serde::{Deserialize, Serialize};
+use time::UtcOffset;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CronSpec {
@@ -49,10 +54,20 @@ impl CronSpec {
         })
     }
 
-    /// True when `ts` (unix seconds, UTC) matches this spec.
-    pub fn matches_utc(&self, ts: i64) -> bool {
+    /// True when `ts` (unix seconds) matches this spec in the process
+    /// timezone (`TZ` env var; UTC when unset, which is the container
+    /// default).
+    pub fn matches(&self, ts: i64) -> bool {
+        self.matches_in(ts, local_offset())
+    }
+
+    /// True when `ts` matches this spec at the given fixed offset.
+    /// The offset form is the testable core; `matches` feeds it the process
+    /// timezone. DST-observing zones degrade to their current fixed offset
+    /// (good enough for minute/hour schedules across the daylight switch).
+    pub fn matches_in(&self, ts: i64, offset: UtcOffset) -> bool {
         let dt = match time::OffsetDateTime::from_unix_timestamp(ts) {
-            Ok(v) => v,
+            Ok(v) => v.to_offset(offset),
             Err(_) => return false,
         };
         let minute = dt.minute() as u32;
@@ -77,6 +92,14 @@ impl CronSpec {
             (false, false) => true,
         }
     }
+}
+
+/// The process timezone as a fixed offset, read through chrono's `Local`
+/// (which decodes the `TZ` environment variable against the tzdata shipped
+/// in the image). Falls back to UTC if the offset cannot be determined.
+fn local_offset() -> UtcOffset {
+    let secs = chrono::Local::now().offset().local_minus_utc();
+    UtcOffset::from_whole_seconds(secs).unwrap_or(UtcOffset::UTC)
 }
 
 fn dedup(mut v: Vec<u32>) -> Vec<u32> {
@@ -131,6 +154,7 @@ fn parse_field(field: &str, min: u32, max: u32) -> Result<Vec<u32>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use time::macros::offset;
 
     // 2026-11-10T03:30:00Z
     const TS_0330: i64 = 1794281400;
@@ -138,31 +162,47 @@ mod tests {
     #[test]
     fn parses_and_matches_basic() {
         let spec = CronSpec::parse("30 3 * * *").expect("parse");
-        assert!(spec.matches_utc(TS_0330));
-        assert!(!spec.matches_utc(TS_0330 + 60));
+        assert!(spec.matches_in(TS_0330, offset!(UTC)));
+        assert!(!spec.matches_in(TS_0330 + 60, offset!(UTC)));
+    }
+
+    #[test]
+    fn timezone_offset_shifts_the_wall_clock() {
+        let spec = CronSpec::parse("30 3 * * *").unwrap();
+        // UTC+8: local 03:30 happens at 19:30Z the previous UTC day.
+        let ts_local_0330 = TS_0330 - 8 * 3600;
+        assert!(
+            spec.matches_in(ts_local_0330, offset!(+8)),
+            "03:30 wall clock in UTC+8 must match"
+        );
+        assert!(
+            !spec.matches_in(TS_0330, offset!(+8)),
+            "UTC 03:30 is 11:30 local in UTC+8 and must not match"
+        );
     }
 
     #[test]
     fn supports_steps_ranges_lists() {
+        let utc = offset!(UTC);
         assert!(
             CronSpec::parse("*/15 * * * *")
                 .unwrap()
-                .matches_utc(TS_0330)
+                .matches_in(TS_0330, utc)
         );
         assert!(
             CronSpec::parse("0-59/30 3 * * *")
                 .unwrap()
-                .matches_utc(TS_0330)
+                .matches_in(TS_0330, utc)
         );
         assert!(
             CronSpec::parse("0,30 3 * * *")
                 .unwrap()
-                .matches_utc(TS_0330)
+                .matches_in(TS_0330, utc)
         );
         assert!(
             !CronSpec::parse("5,10 3 * * *")
                 .unwrap()
-                .matches_utc(TS_0330)
+                .matches_in(TS_0330, utc)
         );
     }
 
@@ -170,9 +210,9 @@ mod tests {
     fn dow_accepts_seven_as_sunday() {
         // 2026-11-10 is a Tuesday (dow=2).
         let tue = CronSpec::parse("30 3 * * 2").unwrap();
-        assert!(tue.matches_utc(TS_0330));
+        assert!(tue.matches_in(TS_0330, offset!(UTC)));
         let wrong = CronSpec::parse("30 3 * * 3").unwrap();
-        assert!(!wrong.matches_utc(TS_0330));
+        assert!(!wrong.matches_in(TS_0330, offset!(UTC)));
     }
 
     #[test]
@@ -193,8 +233,8 @@ mod tests {
     fn dom_and_dow_are_ored_when_both_restricted() {
         // 10th of the month OR any Tuesday: 2026-11-10 matches both.
         let spec = CronSpec::parse("30 3 10 * 2").unwrap();
-        assert!(spec.matches_utc(TS_0330));
+        assert!(spec.matches_in(TS_0330, offset!(UTC)));
         // 11th (Wednesday) matches neither.
-        assert!(!spec.matches_utc(TS_0330 + 86_400));
+        assert!(!spec.matches_in(TS_0330 + 86_400, offset!(UTC)));
     }
 }
