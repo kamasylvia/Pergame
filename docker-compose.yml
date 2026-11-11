@@ -101,6 +101,12 @@ services:
       SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
 
+      # DR sidecar shared volumes — must match the dr_conf/dr_jobs mounts
+      # below; without these the backend's DR admin API always reports
+      # "sidecar not deployed" even though the volumes are mounted.
+      DR_CONF_DIR: /conf
+      DR_JOBS_DIR: /jobs
+
     # No published port by default: browsers reach the API through the
     # frontend's same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET). Set
     # BACKEND_DIRECT_PORT in .env to publish it for debugging.
