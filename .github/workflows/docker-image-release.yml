@@ -81,7 +81,9 @@ jobs:
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-frontend:${{ steps.tag.outputs.tag }}
 
-      # Instance DR sidecar (postgres:17 base so pg_dump matches the server).
+      # Instance DR sidecar (pinned postgres:18.2 base so pg_dump matches the
+      # server). No floating tags: pg_dump behavior must be reproducible per
+      # release, so the compose files reference pg18-<release-tag> exactly.
       - name: Build and push DR sidecar image
         uses: docker/build-push-action@v6
         with:
@@ -91,11 +93,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # The sidecar's pg_dump major must match the pg server major
-          # (scripts/Dockerfile.sidecar base image), so it also gets
-          # pg<major>-prefixed tags the compose files reference.
           tags: |
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:latest
-            ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:${{ steps.tag.outputs.tag }}
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-dr-backup:pg18-${{ steps.tag.outputs.tag }}

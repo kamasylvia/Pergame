@@ -4,11 +4,12 @@
 #
 # pg_dump cannot read a database newer than its own major version, so this
 # base image's tag IS a compatibility constraint: it must be >= the PostgreSQL
-# server major version being dumped. The tag below matches the server this
-# deployment targets (18). Upgrading the database past this major version
-# requires bumping the tag here and rebuilding — there is no runtime
-# negotiation between pg_dump and a newer server.
-FROM postgres:18-alpine
+# server version being dumped. The tag below pins the exact minor the live
+# deployment runs (PostgreSQL 18.2 on the QNAP) — no floating tag, because a
+# silently newer pg_dump minor still writes dump formats the operator did not
+# verify. Upgrading the database requires bumping the tag here and rebuilding;
+# there is no runtime negotiation between pg_dump and a newer server.
+FROM postgres:18.2-alpine
 
 # tzdata: busybox date needs it to resolve IANA zone names, so the TZ env
 # var can move the sidecar's backup stamps and scheduled runs off UTC.

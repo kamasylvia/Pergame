@@ -153,10 +153,11 @@ services:
   # jobs handed over by the backend through the shared volumes. Optional -
   # remove this service (and the backend's /conf,/jobs mounts) to disable.
   dr-backup:
-    # 版本跟随它要 dump 的 pg 大版本:pg18 镜像里的 pg_dump 只能导出
-    # <= 18 的服务器(见 scripts/Dockerfile.sidecar)。pg 升大版本时
-    # 同步改这里的 tag。workflow 会同时发布 <tag> 与 pg18-<tag>。
-    image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-latest
+    # 版本钉死,不用浮动 tag:pg_dump 行为必须按 release 可复现。当前钉
+    # pg18-v8.15.0(基底 postgres:18.2-alpine,匹配活库 PostgreSQL 18.2)。
+    # pg 升级或 fork 升版时手动改这里的 tag。workflow 只发布
+    # <tag> 与 pg18-<tag>,不再有 latest/pg18-latest。
+    image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-v8.15.0
     container_name: pergame-dr-backup
     restart: unless-stopped
     environment:
