@@ -21,10 +21,15 @@
 # 启动:
 #   docker compose -f docker-compose.external.yml up -d
 # ==============================================================================
+# 镜像源说明:用 ghcr.nju.edu.cn(南京大学 GHCR 反代)代替 ghcr.io。
+# 本机直连 ghcr.io 拉取经常超时(实测 36MB 层 30 分钟未完成),镜像站 2 秒完成。
+# 若该站不可用,把 ghcr.nju.edu.cn 换回 ghcr.io 即可(内容一致,同一 digest)。
+# 备选:ghcr.1ms.run(Portainer > Registries 里已配置,同样可用)。
+
 services:
   # ---------------------------------------------------------------- backend
   backend:
-    image: ghcr.io/kamasylvia/pergame-backend:latest
+    image: ghcr.nju.edu.cn/kamasylvia/pergame-backend:v0.0.3
     container_name: pergame-backend
     restart: unless-stopped
     environment:
@@ -77,7 +82,7 @@ services:
 
   # --------------------------------------------------------------- frontend
   frontend:
-    image: ghcr.io/kamasylvia/pergame-frontend:latest
+    image: ghcr.nju.edu.cn/kamasylvia/pergame-frontend:v0.0.3
     container_name: pergame-frontend
     restart: unless-stopped
     environment:
@@ -105,7 +110,7 @@ services:
     # 版本钉死,不用浮动 tag:pg_dump 行为必须按 release 可复现。
     # 当前钉 pg18-v8.15.0(基底 postgres:18.2-alpine,匹配活库 PostgreSQL
     # 18.2)。pg 升级或 fork 升版时手动改这里的 tag。
-    image: ghcr.io/kamasylvia/pergame-dr-backup:pg18-v8.15.0
+    image: ghcr.nju.edu.cn/kamasylvia/pergame-dr-backup:v0.0.3
     container_name: pergame-dr-backup
     restart: unless-stopped
     # 镜像自带全部默认值(SCHEDULE_HOURS=0 仅手动 / SCAN_INTERVAL_SECONDS=2 /
