@@ -38,7 +38,7 @@ services:
       # 浏览器静默丢弃认证 cookie(症状:登录成功但所有操作 401)
       COOKIE_DOMAIN: "pergame.example.com"
       # 浏览器访问前端的地址,用于 CORS 白名单与邮件链接
-      FRONTEND_URL: "http://192.168.1.10:8200"
+      FRONTEND_URL: "http://qnap.elf-balance.ts.net:8200"
       # 无 HTTPS 时 true;上 HTTPS 后改 false
       ALLOW_UNSECURE: "true"
       CONFIG_DISABLE_SIGNUP: "false"
@@ -58,7 +58,7 @@ services:
       #  默认不可用,必须显式声明)。
       S3_ENDPOINT: "http://host.docker.internal:8010"
       # S3_PUBLIC_URL 是**浏览器**能访问到的地址(附件直链走它)
-      S3_PUBLIC_URL: "http://192.168.1.10:8010"
+      S3_PUBLIC_URL: "http://qnap.elf-balance.ts.net:8010"
       # S3 走 HTTPS 时填 true
       S3_SECURE: "false"
       S3_ACCESSKEY: "CHANGE-ME-s3-access-key"
@@ -118,7 +118,7 @@ services:
       # S3 内网地址:宿主机原生服务,经 host.docker.internal 访问(见 backend extra_hosts)
       NUXT_PUBLIC_CDN_PROXY_TARGET: "http://host.docker.internal:8010"
       # 前端自身访问地址(浏览器地址栏)
-      NUXT_PUBLIC_BASE_URL: "http://192.168.1.10:8200"
+      NUXT_PUBLIC_BASE_URL: "http://qnap.elf-balance.ts.net:8200"
     ports:
       - "8200:8200"
     # frontend 的 CDN 代理同样要访问宿主机上的原生 S3

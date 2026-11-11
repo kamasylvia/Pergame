@@ -62,7 +62,7 @@
 2. **镜像发布 → NAS 部署**(2026-11-10 定型的部署模型):镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`,双架构),**NAS 只 pull 不 build**。**前置**:必须先在 GitHub 打一个 Release 触发 workflow,否则 `docker compose pull` 拉不到镜像(当前 GHCR 上还没有这三镜像)。
    - 已验证:backend 镜像本地构建后在真 compose 栈(pg+rustfs)里跑通 migration/建桶/health/注册登录/快照/portable zip 下载/还原。
    - **未验证**:前端镜像(GHCR 上不存在,本机 `bun install`+`nuxt build` 构建超时未完成)、dr-backup sidecar 镜像(同)。
-3. 部署 smoke:按思源笔记 `Pergame 自托管部署指南(NAS / GHCR)`(id `20261110165052-x8mgczs`)的 12 步清单执行;NAS 上只需 `docker-compose.yml` + `.env`,不需要 clone 仓库。
+3. 部署 smoke:按思源笔记 `Pergame 外部基础设施部署指南`(id `20261111085400-74zeey6`)的清单执行;NAS 上只需 `docker-compose.external.yml`(配置全内联,不需要 .env,不需要 clone 仓库)。旧版指南(id `20261110165052-x8mgczs`,自包含 5 服务 + .env 模型)已过时,仅存档。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
 5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
 
@@ -75,6 +75,8 @@
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **示例地址改 Tailscale 域名 + 部署笔记同步(2026-11-11)**:`docker-compose.external.yml` 三处示例地址(`FRONTEND_URL`/`S3_PUBLIC_URL`/`NUXT_PUBLIC_BASE_URL`)由占位 LAN IP `192.168.1.10` 改为 Tailscale 域名 `qnap.elf-balance.ts.net`;思源 external 部署笔记(20261111085400-74zeey6)的 compose 代码块以仓库文件全文重写 + 必改清单表行同步;GOAL-STATE 本条 smoke 指针从旧笔记(.env 模型)改指新笔记。旧笔记(20261110165052-x8mgczs)按存档保留未动,其内仍含旧 IP。
 
 - **Siyuan issue #15 借鉴批次 E(2026-11-10)**:①`namespace` 作用域(`migration 0008`,并入 store prefix,创建后不可改)②`refs/owner.json` 归属认领(`INSTANCE_ID` 实例身份,写路径拒绝异主,`take-ownership` 显式接管)③保存前连接测试门禁(`probe-draft` + `connection_token` 服务端重算比对)。**判定不做**:还原身份重置——Pergame 快照按 user 隔离且不含实例身份/凭据,无作用对象。spec §14;两实例共用一桶的实机验证待人工。
 
