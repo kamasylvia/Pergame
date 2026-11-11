@@ -10,6 +10,17 @@ on:
         description: "Full 40-char commit SHA or tag name to build (short SHAs fail checkout: actions/checkout treats them as branch names)"
         required: true
 
+# All three images build for linux/amd64 only.
+#
+# Decision (2026-11-11): the whole pipeline is amd64-only, not just the
+# frontend. The arm64 legs of backend and sidecar compile under QEMU
+# emulation, which is slow and — for `bun run build` in the frontend — hangs
+# indefinitely (measured: amd64 ~1min vs arm64 wedged at "Bundling app" for
+# 2.5h and 6h across two runs, both needing manual cancellation and blocking
+# every later step). Emulated cross-builds also carry a silent risk of
+# producing subtly wrong artifacts, so the rule is: no QEMU in this pipeline.
+# To ship arm64 later, add a native arm64 runner job (runs-on: ubuntu-24.04-arm)
+# and merge the manifests — never re-enable QEMU emulation here.
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -54,17 +65,15 @@ jobs:
         with:
           context: ./backend-rs
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:latest
             ghcr.io/${{ steps.repo.outputs.repo_lc }}-backend:${{ steps.tag.outputs.tag }}
 
-      # Frontend is amd64-only: the arm64 leg runs under QEMU emulation and
-      # `bun run build` (Nuxt bundling) hangs there indefinitely (2026-11-11:
-      # amd64 done in ~1min, arm64 wedged at "Bundling app" for 2.5h/6h over
-      # two runs). Restore arm64 via a native arm64 runner, never QEMU.
+      # Frontend is amd64-only like the rest of the pipeline; see the
+      # platform note at the top of this file for the measurement.
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
@@ -86,7 +95,7 @@ jobs:
           context: ./scripts
           file: ./scripts/Dockerfile.sidecar
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
