@@ -67,7 +67,7 @@
       <LoaderSpinner v-if="isProcessing" />
       <!-- Progress Section -->
       <div v-if="currentJob" class="progress-section">
-        <div class="progress-header">
+        <div v-if="currentJob.status !== 'completed'" class="progress-header">
           <span class="status-badge" :class="currentJob.status">
             {{ statusLabel }}
           </span>

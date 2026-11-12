@@ -130,26 +130,47 @@ pub async fn cancel_backup(
     ))
 }
 
-/// GET /backup/:jobId/download — one-shot download of a zero-target
+/// GET /backup/:jobId/download?token=... — one-shot download of a zero-target
 /// snapshot zip (fork §4 "save zip locally"). The bytes are removed on
 /// first successful read; re-download requires a fresh snapshot.
+/// Authorized by the token alone (no session needed): links stay valid
+/// across access-token expiry. The user id comes from the session when
+/// present, else from the job id (`user-{uid}-*`); a mismatched pair
+/// simply misses the sidecar and 404s.
 pub async fn download_job_zip(
     State(state): State<AppState>,
-    auth: AuthUser,
+    auth: Option<AuthUser>,
     Path(job_id): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<axum::response::Response, ApiError> {
     use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
     use axum::response::IntoResponse;
     if job_id.is_empty() {
         return Err(ApiError::BadRequest("job ID is required".into()));
     }
+    let token = query.get("token").map(|s| s.as_str()).unwrap_or("");
+    if token.is_empty() {
+        return Err(ApiError::NotFound(
+            "snapshot zip expired or already downloaded".into(),
+        ));
+    }
+    let user_id = match auth {
+        Some(a) => a.user_id(),
+        None => job_id
+            .strip_prefix("user-")
+            .and_then(|s| s.rsplit_once('-'))
+            .and_then(|(uid, _)| uuid::Uuid::parse_str(uid).ok())
+            .ok_or(ApiError::NotFound(
+                "snapshot zip expired or already downloaded".into(),
+            ))?,
+    };
     let storage = state
         .storage
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let bytes = state
         .backups
-        .take_inline_zip(&storage, auth.user_id(), &job_id)
+        .take_inline_zip(&storage, user_id, &job_id, token)
         .await?;
     let disposition = format!("attachment; filename=\"pergame-snapshot-{job_id}.zip\"");
     Ok((

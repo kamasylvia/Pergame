@@ -262,7 +262,8 @@ impl BackupStore {
 
     /// Stores a zero-target snapshot zip in the main bucket
     /// (`{uid}/inline-zips/{job_id}.zip` + `.json` expiry sidecar).
-    /// Returns the expiry instant (epoch ms) so the job row can advertise it.
+    /// Returns (expiry_ms, download_token). The token authorizes one
+    /// download without a session cookie (links outlive access tokens).
     pub async fn put_inline_zip(
         &self,
         storage: &crate::storage::S3Storage,
@@ -270,8 +271,14 @@ impl BackupStore {
         job_id: &str,
         bytes: Vec<u8>,
         ttl_ms: i64,
-    ) -> i64 {
+    ) -> (i64, String) {
+        use rand::RngExt;
         let expires_at = crate::auth::service::now_ms() + ttl_ms;
+        let token: String = rand::rng()
+            .sample_iter(&rand::distr::Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect();
         let base = format!("inline-zips/{job_id}");
         if storage
             .put_user_object(
@@ -283,42 +290,55 @@ impl BackupStore {
             .await
             .is_err()
         {
-            return 0;
+            return (0, String::new());
         }
         let _ = storage
             .put_user_object(
                 user_id,
                 &format!("{base}.json"),
-                serde_json::to_vec(&serde_json::json!({ "expires_at": expires_at }))
-                    .unwrap_or_default(),
+                serde_json::to_vec(&serde_json::json!({
+                    "expires_at": expires_at,
+                    "token": token,
+                }))
+                .unwrap_or_default(),
                 Some("application/json"),
             )
             .await;
-        expires_at
+        (expires_at, token)
     }
 
-    /// Takes (and removes) a stored zip; ownership-checked against the job.
+    /// Takes (and removes) a stored zip. Authorized by the download token
+    /// (no session needed — links outlive access tokens). The token is a
+    /// 32-char secret in the sidecar; wrong/missing token = 404 (no
+    /// distinction from expired, to avoid user-id enumeration).
     /// Expired entries behave as missing (and are cleaned up).
     pub async fn take_inline_zip(
         &self,
         storage: &crate::storage::S3Storage,
         user_id: Uuid,
         job_id: &str,
+        token: &str,
     ) -> Result<Vec<u8>, crate::error::ApiError> {
         use crate::error::ApiError;
-        // Ownership first: the zip belongs to whoever owns the job row.
-        self.get(user_id, job_id).await?;
+        let not_found = || ApiError::NotFound("snapshot zip expired or already downloaded".into());
         let base = format!("inline-zips/{job_id}");
-        let expired = match storage
+        let sidecar: serde_json::Value = storage
             .get_user_object(user_id, &format!("{base}.json"))
             .await
-        {
-            Ok(raw) => serde_json::from_slice::<serde_json::Value>(&raw)
-                .ok()
-                .and_then(|v| v.get("expires_at").and_then(|n| n.as_i64()))
-                .is_some_and(|exp| exp <= crate::auth::service::now_ms()),
-            Err(_) => false, // no sidecar (old zip): allow one download
-        };
+            .ok()
+            .and_then(|raw| serde_json::from_slice(&raw).ok())
+            .ok_or_else(not_found)?;
+        let token_ok = sidecar
+            .get("token")
+            .and_then(|v| v.as_str())
+            .is_some_and(|t| !t.is_empty() && t == token);
+        if !token_ok {
+            return Err(not_found());
+        }
+        let expired = sidecar
+            .get("expires_at")
+            .and_then(|n| n.as_i64())
+            .is_some_and(|exp| exp <= crate::auth::service::now_ms());
         let bytes = storage
             .get_user_object(user_id, &format!("{base}.zip"))
             .await
@@ -810,7 +830,7 @@ pub async fn run_backup(
             &file_payloads,
         ) {
             Ok(zip) if zip.len() <= MAX_INLINE_ZIP_BYTES => {
-                let expires_ms = store
+                let (expires_ms, token) = store
                     .put_inline_zip(&storage, user_id, &job_id, zip, zip_ttl_ms)
                     .await;
                 store
@@ -818,7 +838,8 @@ pub async fn run_backup(
                         j.progress = 100;
                         j.message =
                             "Snapshot packaged for download (no targets configured).".into();
-                        j.download_url = Some(format!("/api/backup/{job_id}/download"));
+                        j.download_url =
+                            Some(format!("/api/backup/{job_id}/download?token={token}"));
                         j.expires_at = Some(expires_ms.to_string());
                     })
                     .await;
