@@ -25,6 +25,28 @@ export default {
     title: 'Розширені',
   },
 
+  apiTokens: {
+    copy: 'Копіювати',
+    create: 'Створити токен',
+    created: 'Створено {date}',
+    createdTitle: 'Токен створено',
+    createFailed: 'Не вдалося створити токен',
+    dismiss: 'Закрити',
+    empty: 'Токенів ще немає.',
+    endpointHint: 'Підключіть MCP-клієнт до',
+    lastUsed: 'Останнє використання {date}',
+    loadFailed: 'Не вдалося завантажити токени',
+    mintedHint: 'Він показується один раз і зберігається лише як хеш — пізніше отримати його неможливо.',
+    mintedTitle: 'Скопіюйте токен зараз',
+    namePlaceholder: 'Назва токена (напр. laptop-claude)',
+    neverUsed: 'Не використовувався',
+    revoke: 'Відкликати',
+    revokedTitle: 'Токен відкликано',
+    revokeFailed: 'Не вдалося відкликати токен',
+    subtitle: 'Особисті токени для MCP-клієнтів (Claude, Cursor, скрипти). Токен діє від вашого імені за звичайними правилами доступу і може бути відкликаний у будь-який момент.',
+    title: 'API-токени',
+  },
+
   appearance: {
     chooseAccentColor: 'Вибрати акцентний колір',
     displayFeatureTags: 'Показувати позначки функцій',
@@ -235,6 +257,7 @@ export default {
   pages: {
     about: 'Деталі',
     advanced: 'Розширені',
+    apiTokens: 'API-токени',
     appearance: 'Зовнішній вигляд',
     backup: 'Резервна копія',
     documents: 'Документи',

@@ -25,6 +25,28 @@ export default {
     title: '고급',
   },
 
+  apiTokens: {
+    copy: '복사',
+    create: '토큰 생성',
+    created: '생성 {date}',
+    createdTitle: '토큰 생성됨',
+    createFailed: '토큰을 생성하지 못했습니다',
+    dismiss: '닫기',
+    empty: '아직 토큰이 없습니다.',
+    endpointHint: 'MCP 클라이언트 연결 주소',
+    lastUsed: '마지막 사용 {date}',
+    loadFailed: '토큰을 불러오지 못했습니다',
+    mintedHint: '한 번만 표시되며 해시로만 저장됩니다 — 나중에 다시 가져올 수 없습니다.',
+    mintedTitle: '지금 토큰을 복사하세요',
+    namePlaceholder: '토큰 이름(예: laptop-claude)',
+    neverUsed: '사용 안 함',
+    revoke: '폐기',
+    revokedTitle: '토큰 폐기됨',
+    revokeFailed: '토큰을 폐기하지 못했습니다',
+    subtitle: 'MCP 클라이언트(Claude, Cursor, 스크립트)용 개인 토큰입니다. 토큰은 기존 권한 규칙에 따라 사용자로 동작하며 언제든지 폐기할 수 있습니다.',
+    title: 'API 토큰',
+  },
+
   appearance: {
     chooseAccentColor: '강조 색상 선택',
     displayFeatureTags: '기능 배지 표시',
@@ -234,6 +256,7 @@ export default {
   pages: {
     about: '정보',
     advanced: '고급',
+    apiTokens: 'API 토큰',
     appearance: '외관',
     backup: '백업',
     documents: '문서',

@@ -26,6 +26,28 @@ export default {
     title: 'Avancé',
   },
 
+  apiTokens: {
+    copy: 'Copier',
+    create: 'Créer un jeton',
+    created: 'Créé le {date}',
+    createdTitle: 'Jeton créé',
+    createFailed: 'Impossible de créer le jeton',
+    dismiss: 'Fermer',
+    empty: 'Aucun jeton pour le moment.',
+    endpointHint: 'Connectez votre client MCP à',
+    lastUsed: 'Dernière utilisation {date}',
+    loadFailed: 'Impossible de charger les jetons',
+    mintedHint: 'Il n’est affiché qu’une fois et stocké sous forme de hachage — impossible de le récupérer ensuite.',
+    mintedTitle: 'Copiez ce jeton maintenant',
+    namePlaceholder: 'Nom du jeton (ex. portable-claude)',
+    neverUsed: 'Jamais utilisé',
+    revoke: 'Révoquer',
+    revokedTitle: 'Jeton révoqué',
+    revokeFailed: 'Impossible de révoquer le jeton',
+    subtitle: 'Jetons personnels pour les clients MCP (Claude, Cursor, scripts). Un jeton agit en votre nom selon les règles d’autorisation habituelles et peut être révoqué à tout moment.',
+    title: 'Jetons API',
+  },
+
   appearance: {
     chooseAccentColor: "Choisir la couleur d'accent",
     displayFeatureTags: 'Afficher les badges de fonctionnalité',
@@ -236,6 +258,7 @@ export default {
   pages: {
     about: 'À propos',
     advanced: 'Avancé',
+    apiTokens: 'Jetons API',
     appearance: 'Apparence',
     backup: 'Sauvegarde',
     documents: 'Documents',

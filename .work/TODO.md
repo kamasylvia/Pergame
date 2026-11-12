@@ -12,7 +12,7 @@
 
 - [ ] **Rust 后端重写 + PostgreSQL**:issue #1;db 层 = Toasty + sqlx 逃逸层(P1 spike 验证不过则回退 sqlx 为主);全新空库;pg GIN + tsvector。**P0 前置已完成(2026-11-08,见 `rust-migration/RESEARCH.md` §8)**;下一步 = P1(骨架 + Toasty spike),待开工令。
   - [ ] P0 集成测试运行时验证(待人工:需 mysql + minio + 活后端;`go test ./tests/...`)
-- [ ] **MCP server**:issue #3;读写全量、streamable HTTP `/api/mcp`、rmcp、每用户 API token;spec = `features/mcp-server.md`。
+- [~] **MCP server**:issue #3;spec = `features/mcp-server.md`(实现定稿已落盘)。**已实现待验证**:`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具(create/update/move/delete + search/list/read)+ `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens`。剩:活环境跑 `mcp_token_lifecycle_and_tools` 集成用例。
 - [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
 - [ ] **Dataview 查询引擎**:issue #5;DQL 子集、内置字段+metadata JSONB、`POST /api/nodes/query`、前端容器块;spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。

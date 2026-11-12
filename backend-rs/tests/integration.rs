@@ -1396,3 +1396,382 @@ async fn resource_file_download_matrix() {
     cleanup_user(&user_id).await;
     cleanup_user(&stranger_id).await;
 }
+
+// ---------------------------------------------------------------- MCP
+
+/// One JSON-RPC request against `/api/mcp`, tolerating both wire shapes the
+/// streamable HTTP transport may use (plain JSON or SSE frames). Returns the
+/// HTTP status, the JSON-RPC messages, and the `mcp-session-id` header.
+async fn mcp_rpc(
+    http: &reqwest::Client,
+    token: &str,
+    session_id: Option<&str>,
+    body: Value,
+) -> (u16, Vec<Value>, Option<String>) {
+    let mut request = http
+        .post(format!("{BASE_URL}/mcp"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .json(&body);
+    if let Some(sid) = session_id {
+        request = request.header("mcp-session-id", sid);
+    }
+    let resp = request.send().await.expect("mcp request");
+    let status = resp.status().as_u16();
+    let sid = resp
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let text = resp.text().await.unwrap_or_default();
+
+    // The transport may answer with a bare JSON object or with an SSE stream.
+    // An SSE frame does not always open with `event:` (the initialize reply
+    // starts with `data: ` / `id:` / `retry:` lines), so sniff the first byte
+    // instead of the prefix.
+    let messages: Vec<Value> = if text.trim_start().starts_with('{') {
+        serde_json::from_str::<Value>(&text)
+            .map(|v| vec![v])
+            .unwrap_or_default()
+    } else {
+        let mut out = Vec::new();
+        for line in text.lines() {
+            if let Some(data) = line.strip_prefix("data: ")
+                && let Ok(v) = serde_json::from_str::<Value>(data)
+            {
+                out.push(v);
+            }
+        }
+        out
+    };
+    (status, messages, sid)
+}
+
+fn rpc_result(messages: &[Value]) -> &Value {
+    messages
+        .iter()
+        .find(|m| m.get("result").is_some())
+        .and_then(|m| m.get("result"))
+        .expect("json-rpc result present")
+}
+
+fn rpc_error_code(messages: &[Value]) -> i64 {
+    messages
+        .iter()
+        .find(|m| m.get("error").is_some())
+        .and_then(|m| m["error"]["code"].as_i64())
+        .expect("json-rpc error present")
+}
+
+async fn mcp_session(http: &reqwest::Client, token: &str) -> String {
+    let (status, messages, sid) = mcp_rpc(
+        http,
+        token,
+        None,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "pergame-integration", "version": "0" }
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "initialize failed: {messages:?}");
+    let sid = sid.expect("mcp-session-id header");
+    // notifications/initialized completes the legacy handshake.
+    let _ = mcp_rpc(
+        http,
+        token,
+        Some(&sid),
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+    )
+    .await;
+    sid
+}
+
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn mcp_token_lifecycle_and_tools() {
+    let client = Client::new();
+    let (user_id, _username) = signup_and_login_tagged(&client, "mcp").await;
+
+    // Mint a token (session-authenticated; the plaintext comes back once).
+    let (status, r) = post_json(
+        &client,
+        "/users/@me/api-tokens",
+        &json!({ "name": "integration" }),
+    )
+    .await;
+    assert_eq!(status, 201, "create token failed: {:?}", r.message);
+    let token = r.result["token"].as_str().expect("plaintext").to_string();
+    let token_id = result_id_string(&r);
+    assert!(token.starts_with("pgm_"), "prefixed token: {token}");
+
+    // The list never returns the secret.
+    let (_, listed) = get(&client, "/users/@me/api-tokens").await;
+    let rows = listed.result.as_array().expect("token list");
+    assert_eq!(rows.len(), 1);
+    assert!(
+        rows[0].get("token").is_none(),
+        "hash/plaintext must not leak"
+    );
+
+    // No token, wrong token, and a cookie-only client are all 401.
+    let anon = reqwest::Client::builder().no_proxy().build().unwrap();
+    let (status, _, _) = mcp_rpc(
+        &anon,
+        "pgm_not-a-real-token",
+        None,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+    )
+    .await;
+    assert_eq!(status, 401, "bad token must be rejected before MCP");
+
+    let mcp = reqwest::Client::builder().no_proxy().build().unwrap();
+    let sid = mcp_session(&mcp, &token).await;
+
+    // tools/list: exactly the seven tools the spec promises.
+    let (status, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let mut names: Vec<String> = rpc_result(&messages)["tools"]
+        .as_array()
+        .expect("tools array")
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(str::to_string))
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        vec![
+            "create_note",
+            "delete_node",
+            "list_children",
+            "move_node",
+            "read_note",
+            "search_notes",
+            "update_note"
+        ]
+    );
+
+    // create_note → read_note
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": { "name": "create_note", "arguments": {
+                "name": "MCP integration note",
+                "content": "# hello\n\nwritten over mcp",
+            }}
+        }),
+    )
+    .await;
+    let created: Value = serde_json::from_str(
+        rpc_result(&messages)["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .expect("create_note payload");
+    let note_id = created["id"].as_str().unwrap().to_string();
+
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+            "params": { "name": "read_note", "arguments": { "id": note_id } }
+        }),
+    )
+    .await;
+    let note: Value = serde_json::from_str(
+        rpc_result(&messages)["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .expect("read_note payload");
+    assert_eq!(note["content"], "# hello\n\nwritten over mcp");
+    assert_eq!(note["role"], 3);
+
+    // update_note replaces the markdown.
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+            "params": { "name": "update_note", "arguments": {
+                "id": note_id, "content": "# hello\n\nedited over mcp"
+            }}
+        }),
+    )
+    .await;
+    assert_eq!(rpc_result(&messages)["isError"], false, "update ok");
+
+    // search_notes finds it by content.
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+            "params": { "name": "search_notes", "arguments": { "query": "edited" } }
+        }),
+    )
+    .await;
+    let hits = rpc_result(&messages)["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(hits.contains(&note_id), "search hits the note: {hits}");
+
+    // list_children at the top level includes the note.
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "params": { "name": "list_children", "arguments": {} }
+        }),
+    )
+    .await;
+    let listed = rpc_result(&messages)["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(listed.contains(&note_id), "root listing: {listed}");
+
+    // A second note moves under the first, then refusals are checked.
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+            "params": { "name": "create_note", "arguments": { "name": "child note" } }
+        }),
+    )
+    .await;
+    let child: Value = serde_json::from_str(
+        rpc_result(&messages)["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .expect("child payload");
+    let child_id = child["id"].as_str().unwrap().to_string();
+
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 9, "method": "tools/call",
+            "params": { "name": "move_node", "arguments": {
+                "id": child_id, "new_folder_id": note_id
+            }}
+        }),
+    )
+    .await;
+    assert_eq!(rpc_result(&messages)["isError"], false, "move ok");
+
+    // Moving a node into itself is refused (-32602).
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+            "params": { "name": "move_node", "arguments": {
+                "id": note_id, "new_folder_id": child_id
+            }}
+        }),
+    )
+    .await;
+    assert_eq!(rpc_error_code(&messages), -32602, "cycle refused");
+
+    // A stranger's token can read neither note (-32003).
+    let stranger_client = Client::new();
+    let (stranger_id, _) = signup_and_login_tagged(&stranger_client, "mcpx").await;
+    let (status, r) = post_json(
+        &stranger_client,
+        "/users/@me/api-tokens",
+        &json!({ "name": "stranger" }),
+    )
+    .await;
+    assert_eq!(status, 201);
+    let stranger_token = r.result["token"].as_str().unwrap().to_string();
+    let stranger_mcp = reqwest::Client::builder().no_proxy().build().unwrap();
+    let stranger_sid = mcp_session(&stranger_mcp, &stranger_token).await;
+    let (_, messages, _) = mcp_rpc(
+        &stranger_mcp,
+        &stranger_token,
+        Some(&stranger_sid),
+        json!({
+            "jsonrpc": "2.0", "id": 11, "method": "tools/call",
+            "params": { "name": "read_note", "arguments": { "id": note_id } }
+        }),
+    )
+    .await;
+    assert_eq!(rpc_error_code(&messages), -32003, "stranger forbidden");
+
+    // delete_node is a soft delete: the node lands in the trash.
+    let (_, messages, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({
+            "jsonrpc": "2.0", "id": 12, "method": "tools/call",
+            "params": { "name": "delete_node", "arguments": { "id": note_id } }
+        }),
+    )
+    .await;
+    let deleted: Value = serde_json::from_str(
+        rpc_result(&messages)["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .expect("delete payload");
+    assert!(
+        deleted["nodes"].as_i64().unwrap_or(0) >= 2,
+        "subtree trashed"
+    );
+    let (_, trashed) = get(&client, "/trash").await;
+    let trash = trashed.result.as_array().expect("trash list");
+    assert!(
+        trash
+            .iter()
+            .any(|n| n["id"].as_str() == Some(note_id.as_str())),
+        "note is restorable from the trash"
+    );
+
+    // Revocation kills the token immediately.
+    let resp = client
+        .http
+        .delete(format!("{BASE_URL}/users/@me/api-tokens/{token_id}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200, "revoke ok");
+    let (status, _, _) = mcp_rpc(
+        &mcp,
+        &token,
+        Some(&sid),
+        json!({"jsonrpc": "2.0", "id": 13, "method": "tools/list"}),
+    )
+    .await;
+    assert_eq!(status, 401, "revoked token rejected");
+
+    cleanup_user(&user_id).await;
+    cleanup_user(&stranger_id).await;
+}

@@ -8,6 +8,7 @@ mod extract;
 mod locks;
 mod logger;
 mod mail;
+mod mcp;
 mod models;
 mod oidc;
 mod repo;
@@ -375,6 +376,16 @@ async fn main() {
         .route("/api/trash/{nodeId}", delete(routes::trash::purge_node))
         .route("/api/users", post(routes::users::create_user))
         .route("/api/users/@me", get(routes::users::get_me))
+        // MCP API tokens (spec features/mcp-server.md): session-authenticated
+        // management for bearer tokens used by the /api/mcp endpoint.
+        .route(
+            "/api/users/@me/api-tokens",
+            get(routes::api_tokens::list_tokens).post(routes::api_tokens::create_token),
+        )
+        .route(
+            "/api/users/@me/api-tokens/{id}",
+            delete(routes::api_tokens::delete_token),
+        )
         .route("/api/users/{id}", get(routes::users::get_user))
         .route("/api/users/{id}", patch(routes::users_patch::update_user))
         .route("/api/users/{id}", delete(routes::users::delete_user))
@@ -402,7 +413,11 @@ async fn main() {
             "/pergame/{user_id}/{file}",
             get(routes::resources::download_legacy),
         )
-        .with_state(state)
+        .with_state(state.clone())
+        // MCP: streamable HTTP at /api/mcp, behind its own bearer layer.
+        // Every MCP request authenticates with `Authorization: Bearer pgm_…`;
+        // the session cookie is never consulted on this path.
+        .merge(mcp::app(state))
         .layer(axum::middleware::from_fn(locks::read_only_middleware))
         .layer(cors_layer())
         .layer(tower_http::trace::TraceLayer::new_for_http());

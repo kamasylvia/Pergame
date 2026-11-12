@@ -25,6 +25,28 @@ export default {
     title: '高级',
   },
 
+  apiTokens: {
+    copy: '复制',
+    create: '创建令牌',
+    created: '创建于 {date}',
+    createdTitle: '令牌已创建',
+    createFailed: '创建令牌失败',
+    dismiss: '关闭',
+    empty: '暂无令牌。',
+    endpointHint: 'MCP 客户端连接地址',
+    lastUsed: '最后使用 {date}',
+    loadFailed: '加载令牌失败',
+    mintedHint: '令牌只显示这一次,库中只存哈希——之后无法再取回。',
+    mintedTitle: '请立即复制该令牌',
+    namePlaceholder: '令牌名称(如 laptop-claude)',
+    neverUsed: '从未使用',
+    revoke: '吊销',
+    revokedTitle: '令牌已吊销',
+    revokeFailed: '吊销令牌失败',
+    subtitle: '供 MCP 客户端(Claude、Cursor、脚本)使用的个人令牌。令牌以你的身份按既有权限规则行事,可随时吊销。',
+    title: 'API 令牌',
+  },
+
   appearance: {
     chooseAccentColor: '选择强调色',
     displayFeatureTags: '显示功能标记',
@@ -234,6 +256,7 @@ export default {
   pages: {
     about: '关于',
     advanced: '高级',
+    apiTokens: 'API 令牌',
     appearance: '外观',
     backup: '备份',
     documents: '文档',

@@ -165,10 +165,16 @@ fn is_exempt(path: &str) -> bool {
     // Fork §4 parity: setting writes are NOT exempt — a setting changed
     // mid-backup would silently miss the snapshot. GETs pass via
     // is_read_method, so dropping /api/users/@me only blocks writes.
+    //
+    // /api/mcp is exempt at this layer because every MCP call is a POST,
+    // reads included; the MCP service gates its *write tools* on the same
+    // lock itself (spec features/mcp-server.md), so the read-only window
+    // still stops content changes while staying legible to an agent.
     path.starts_with("/api/backup")
         || path.starts_with("/api/admin/dr-backup")
         || path == "/api/health"
         || path.starts_with("/api/auth")
+        || path.starts_with("/api/mcp")
         || path == "/api/admin/dr-backup/status"
 }
 

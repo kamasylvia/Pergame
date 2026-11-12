@@ -1,6 +1,6 @@
 # Feature Spec — MCP Server
 
-> 状态:待实施(随 Rust 重写)。跟踪:issue #3。需求源:用户 2026-11-07。
+> 状态:**已实现(2026-11-12)**,活环境验证见 `.work/TODO.md`。跟踪:issue #3。需求源:用户 2026-11-07。
 
 ## 需求
 
@@ -38,18 +38,18 @@
 | actor 注入 | middleware 验 token → 查 `api_tokens` → `req.extensions_mut().insert(McpActor{user_id, role, token_id})`;tool 内 `ctx.extensions.get::<http::request::Parts>()` 再取 `McpActor`(rmcp 官方注入路径,tower.rs `// inject request part to extensions`) |
 | token 形态 | 不透明随机串 `pgm_` + base64url(32B),**库中只存 `sha256_hex`(对应 `token_hash`)**;明文仅生成时返回一次;格式校验失败 → 查库前直接 401(与 JWT `"Bad access token."` 同文案) |
 | token 管理端点 | `GET/POST /api/users/@me/api-tokens`(列表脱敏/创建返明文),`DELETE /api/users/@me/api-tokens/{id}`;走 cookie `AuthUser`,**不受 MCP 鉴权**;创建/吊销 + 每次 MCP 工具写操作记 `logs`(`mcp.token.*` / `mcp.tool.*`) |
-| 锁语义 | 复用全局锁:`/api/mcp` **不加入 `is_exempt`**;读工具(GET 语义但走 POST)→ middleware 层已放写请求进 rmcp,故**服务内自行判断**:`create/update/move/delete` 四工具先调 `locks::global().is_read_only()` → 423 JSON(`reason: backup_in_progress`,与 middleware 同 payload);三读工具直通 |
+| 锁语义 | 复用全局锁,**`/api/mcp` 加入 `locks::is_exempt`**(实现时修正:middleware 只按 HTTP method 判读,而 MCP 全部是 POST,不豁免会把只读工具也挡掉)→ 守卫下沉到服务内:`create/update/move/delete` 四工具先调 `locks::global().is_read_only()` → MCP 错误 `-32023` + `data.reason=backup_in_progress`(与 middleware 同语义,不同载体:JSON-RPC error 而非 HTTP 423);三读工具直通 |
 | delete 语义 | `delete_node` = 软删进回收站(`soft_delete_subtree`,与 REST DELETE 同唯一写路径),无二次确认参数——可恢复性即安全网,响应回 `deleted_at` + `nodes` 计数 |
-| move 语义 | `update(parent_id)` 复用 `update_node` 的 safe_parent 门(目标父需 Update 权限否则落根);非 owner 禁改 parent(同 REST 语义);**不做环校验**——单 parent_id 树,环只能来自并发竞态,REST 同样无校验,保持一致 |
+| move 语义 | 复用 `update_node` 的 safe_parent 门(目标父需 Update 权限否则落根);非 owner **显式拒绝**(-32003,而非 REST 的静默保留旧父——显式请求被静默忽略对 agent 更糟);**加环校验**(实现时补):目标父 == 自身或 ∈ `subtree_ids(自身)` → -32602。REST 无此校验,因为它只改字段;MCP 暴露了「移动」这一显式动作给 LLM,静默造出不可达子树不值得省这 3 行 |
 | search 范围 | 复用 `repo::search`(仅 role=3 + `deleted_at IS NULL`,owner 域);`include_content=true` 固定(给 snippet) |
 | read 范围 | `require_node_action(..., Read)` 放行即读,`content` 原样返(含 role 1/2/4,不限 document);不存在/无权限 → JSON-RPC -32002(404)/-32003(403)(见下映射) |
-| list_children | `parent_id` 为空 = 根;owner 域 + `list_shared` 合并(REST `get_user_nodes` + `get_shared_nodes` 同款),每项 `{id,name,role,updated_timestamp,access}`;无权限子项由 guard 逐项过滤 |
-| create 默认 | `role=3 document`,`content_compiled=None`(编辑器下次打开重渲染;REST 同策略,前端产 HTML);name 必填空则 -32602 |
+| list_children | `parent_id` 为空 = 根;owner 域 + `list_shared` 合并(REST `get_user_nodes` + `get_shared_nodes` 同款),每项 `{id,name,role,updated_timestamp,access}`。**不逐项 guard**:两个来源本身已按可见性过滤(owned 树 + 被授权的树),逐项 `check_node_action` 只会变成 N+1;给定 `folder_id` 时先对父做一次 Read guard |
+| create 默认 | `role=3 document`, `content_compiled=None`(REST 由前端产 HTML;MCP 无渲染器,置空让编辑器下次打开重编译);name 必填空则 -32602。`update_note` 改 content 时同样把 `content_compiled` 置 None——否则会渲染旧文本直到手动重开 |
 | 错误映射 | `ApiError::BadRequest→-32602`,`Unauthorized→-32001`,`Forbidden→-32003`,`NotFound→-32002`,`Conflict→-32009`,锁 423→`-32023`(message 含 `reason: backup_in_progress`),`Internal→-32603`;message 原样透传 ApiError 文案 |
 | 速率限制 | **P1 不做**(单用户/家庭实例,token 即能力;滥用面 = token 泄露 → 靠吊销);审计靠 logs 行 |
 | 前端 | settings 新 `_views/api-tokens.vue`(`?p=apiTokens`,Security 邻位):生成(命名+复制一次)/列表(last_used/created)/吊销;复用 `snapshot-targets.vue` 的掩码 + 复制交互 |
-| migration | `0007_api_tokens.sql`(顺延当前最大 0006):`api_tokens(id UUIDv7 PK, user_id FK CASCADE, name TEXT NOT NULL, token_hash TEXT UNIQUE NOT NULL, created_timestamp, last_used_timestamp NULL)` + `idx_api_tokens_user` + `idx_api_tokens_hash`;last_used 每次鉴权成功 UPDATE(与 sessions.last_refresh 同策略) |
-| 测试 | 单测:token 哈希往返(明文不可逆查)/错误映射表/锁门(写工具 423,读工具放行);集成(`tests/integration.rs` 新用例,串行套件):token 生命周期 + 七工具全链 + 越权 403 + 吊销后 401 |
+| migration | `0007_api_tokens.sql`(顺延当前最大 0006):`api_tokens(id UUIDv7 PK, user_id FK CASCADE, name TEXT NOT NULL, token_hash TEXT UNIQUE NOT NULL, created_timestamp, last_used_timestamp NULL)` + `idx_api_tokens_user`(UNIQUE 已自带 hash 索引,不另建);last_used 每次鉴权成功 UPDATE(与 sessions.last_refresh 同策略) |
+| 测试 | 单测:token 形态与哈希稳定性/错误码映射表/bearer 前缀解析;集成(`tests/integration.rs` 新用例,串行套件):token 生命周期 + 七工具全链 + 越权 403 + 吊销后 401 |
 
 证据链(2026-11-12 实测):
 
@@ -57,7 +57,7 @@
 - rmcp `examples/servers/src/simple_auth_streamhttp.rs`:bearer middleware + `nest_service` 同款组合,直接对标本 spec 鉴权决策。
 - rmcp `tower.rs:2216-2222` + `1450-1480` 文档:transport 把 `http::request::Parts` 注入 `RequestContext.extensions`,axum `Extension`/middleware 塞的 state 经 `parts.extensions` 可取——actor 注入有官方路径,无需 patch rmcp。
 - `cargo add rmcp@3.9.0 --features transport-streamable-http-server --dry-run` 解析干净(11 features,无版本冲突)。
-- `locks.rs:164-173`:middleware 豁免表无 `/api/mcp`;写工具锁门放服务内是唯一不改全局 middleware 的做法(改豁免表反而影响 REST 面)。
+- `locks.rs:164-173`:middleware 只放行 GET/HEAD/OPTIONS,而 MCP 全走 POST → 必须把 `/api/mcp` 加入豁免表,锁门下沉到四个写工具(见「锁语义」行)。
 - `routes/nodes.rs:367-382`:REST DELETE 已是软删唯一写路径,MCP 跟随即零新语义。
 
 ## 开放问题(2026-11-12 已裁决,见上表)

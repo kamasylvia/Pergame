@@ -25,6 +25,28 @@ export default {
     title: 'Advanced',
   },
 
+  apiTokens: {
+    copy: 'Copy',
+    create: 'Create token',
+    created: 'Created {date}',
+    createdTitle: 'Token created',
+    createFailed: 'Could not create token',
+    dismiss: 'Dismiss',
+    empty: 'No tokens yet.',
+    endpointHint: 'Point your MCP client at',
+    lastUsed: 'Last used {date}',
+    loadFailed: 'Failed to load tokens',
+    mintedHint: 'It is shown once and stored only as a hash — you cannot retrieve it later.',
+    mintedTitle: 'Copy this token now',
+    namePlaceholder: 'Token name (e.g. laptop-claude)',
+    neverUsed: 'Never used',
+    revoke: 'Revoke',
+    revokedTitle: 'Token revoked',
+    revokeFailed: 'Could not revoke token',
+    subtitle: 'Personal tokens for MCP clients (Claude, Cursor, scripts). A token acts as you under the normal permission rules and can be revoked at any time.',
+    title: 'API tokens',
+  },
+
   appearance: {
     chooseAccentColor: 'Choose accent color',
     displayFeatureTags: 'Show feature tags',
@@ -235,6 +257,7 @@ export default {
   pages: {
     about: 'About',
     advanced: 'Advanced',
+    apiTokens: 'API tokens',
     appearance: 'Appearance',
     backup: 'Backup',
     documents: 'Documents',

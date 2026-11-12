@@ -25,6 +25,28 @@ export default {
     title: '進階',
   },
 
+  apiTokens: {
+    copy: '複製',
+    create: '建立權杖',
+    created: '建立於 {date}',
+    createdTitle: '權杖已建立',
+    createFailed: '建立權杖失敗',
+    dismiss: '關閉',
+    empty: '尚無權杖。',
+    endpointHint: 'MCP 用戶端連線位址',
+    lastUsed: '最後使用 {date}',
+    loadFailed: '載入權杖失敗',
+    mintedHint: '權杖只顯示這一次,資料庫僅存雜湊——之後無法再取回。',
+    mintedTitle: '請立即複製此權杖',
+    namePlaceholder: '權杖名稱(如 laptop-claude)',
+    neverUsed: '從未使用',
+    revoke: '撤銷',
+    revokedTitle: '權杖已撤銷',
+    revokeFailed: '撤銷權杖失敗',
+    subtitle: '供 MCP 用戶端(Claude、Cursor、腳本)使用的個人權杖。權杖以你的身分依既有權限規則行事,可隨時撤銷。',
+    title: 'API 權杖',
+  },
+
   appearance: {
     chooseAccentColor: '選擇強調色',
     displayFeatureTags: '顯示功能標記',
@@ -234,6 +256,7 @@ export default {
   pages: {
     about: '關於',
     advanced: '進階',
+    apiTokens: 'API 權杖',
     appearance: '外觀',
     backup: '備份',
     documents: '文件',

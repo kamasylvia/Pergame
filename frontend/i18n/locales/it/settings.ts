@@ -27,6 +27,28 @@ export default {
     title: 'Avanzate',
   },
 
+  apiTokens: {
+    copy: 'Copia',
+    create: 'Crea token',
+    created: 'Creato il {date}',
+    createdTitle: 'Token creato',
+    createFailed: 'Impossibile creare il token',
+    dismiss: 'Chiudi',
+    empty: 'Nessun token.',
+    endpointHint: 'Collega il client MCP a',
+    lastUsed: 'Ultimo uso {date}',
+    loadFailed: 'Impossibile caricare i token',
+    mintedHint: 'Viene mostrato una sola volta ed è memorizzato solo come hash — non sarà più recuperabile.',
+    mintedTitle: 'Copia subito il token',
+    namePlaceholder: 'Nome del token (es. laptop-claude)',
+    neverUsed: 'Mai usato',
+    revoke: 'Revoca',
+    revokedTitle: 'Token revocato',
+    revokeFailed: 'Impossibile revocare il token',
+    subtitle: 'Token personali per i client MCP (Claude, Cursor, script). Un token agisce a tuo nome secondo le normali regole di autorizzazione e può essere revocato in qualsiasi momento.',
+    title: 'Token API',
+  },
+
   appearance: {
     chooseAccentColor: "Scegli il colore d'accento",
     displayFeatureTags: 'Mostra badge delle funzionalità',
@@ -237,6 +259,7 @@ export default {
   pages: {
     about: 'Informazioni',
     advanced: 'Avanzate',
+    apiTokens: 'Token API',
     appearance: 'Aspetto',
     backup: 'Backup',
     documents: 'Documenti',

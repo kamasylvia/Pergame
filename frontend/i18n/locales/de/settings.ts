@@ -26,6 +26,28 @@ export default {
     title: 'Erweitert',
   },
 
+  apiTokens: {
+    copy: 'Kopieren',
+    create: 'Token erstellen',
+    created: 'Erstellt {date}',
+    createdTitle: 'Token erstellt',
+    createFailed: 'Token konnte nicht erstellt werden',
+    dismiss: 'Schließen',
+    empty: 'Noch keine Token.',
+    endpointHint: 'MCP-Client verbinden mit',
+    lastUsed: 'Zuletzt verwendet {date}',
+    loadFailed: 'Token konnten nicht geladen werden',
+    mintedHint: 'Er wird nur einmal angezeigt und nur als Hash gespeichert — später nicht mehr abrufbar.',
+    mintedTitle: 'Token jetzt kopieren',
+    namePlaceholder: 'Token-Name (z. B. laptop-claude)',
+    neverUsed: 'Nie verwendet',
+    revoke: 'Widerrufen',
+    revokedTitle: 'Token widerrufen',
+    revokeFailed: 'Token konnte nicht widerrufen werden',
+    subtitle: 'Persönliche Token für MCP-Clients (Claude, Cursor, Skripte). Ein Token handelt unter deiner Identität nach den normalen Berechtigungsregeln und kann jederzeit widerrufen werden.',
+    title: 'API-Token',
+  },
+
   appearance: {
     chooseAccentColor: 'Akzentfarbe wählen',
     displayFeatureTags: 'Funktions-Badges anzeigen',
@@ -237,6 +259,7 @@ export default {
   pages: {
     about: 'Über',
     advanced: 'Erweitert',
+    apiTokens: 'API-Token',
     appearance: 'Erscheinungsbild',
     backup: 'Backup',
     documents: 'Dokumente',

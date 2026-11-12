@@ -81,3 +81,13 @@
 - **`APIResult.result` 是 optional**:`makeRequest<T>` 成功也可能无 result,赋值给非空 ref 必须 `&& plan.result` 守卫。360/385 行用 `?.` 属同类已安全写法。
 - **CI 只在 backend-rs/** 变更时跑 Rust 门**:fmt/clippy 红只在碰 Rust 文件的 push 上暴露;`drop(non-Drop)` warning 在 `-D warnings` 下即失败。本地门 = `cargo fmt --check && cargo clippy --all-targets && cargo test`。
 - **`set_public_policy` 随 CDN 鉴权读失去存在理由**:桶保持 Private,启动时调 PutBucketPolicy 在 QuObjects 上每启一 warn。删函数 + docs 同批改(CDN_PROXY_TARGET 指向 backend)。
+
+## 2026-11-12 MCP server 落地(rmcp 3.9 + axum)
+
+- **rmcp 的 derive 需要 `schemars` 是直接依赖**:`#[derive(rmcp::schemars::JsonSchema)]` 展开后引用绝对路径 `schemars::…`,只靠 `rmcp::schemars` 重导出编译不过(E0433 ×7)。`cargo add schemars@1` 即可(rmcp 本身已用 1.2.x,无冲突)。
+- **`#[tool_handler]` 生成的 `call_tool` 不读 `tool_router` 字段**:照抄 counter 例把 `ToolRouter<Self>` 存进 struct 会得 dead_code(clippy `-D warnings` 直接红)。只留 state 字段,`Self::tool_router()` 由宏自行调用。
+- **读锁中间件只看 HTTP method**:MCP 全部是 POST,若不把 `/api/mcp` 加进 `locks::is_exempt`,备份期间连 `read_note` 都会被 423 挡掉。正确分层 = 中间件豁免 + 四个写工具自己查 `is_read_only()` 返回 JSON-RPC `-32023`。**判断「某 middleware 是否适用于新端点」先看它按什么条件放行**。
+- **streamable HTTP 的 SSE 响应不一定以 `event:` 开头**:`initialize` 的帧是 `data: ` / `id: 0` / `retry: 3000` 打头。客户端解析要按「首个非空字节是否 `{`」判断裸 JSON vs SSE,不能按 `event:` 前缀。
+- **`CallToolResult.isError` 总是序列化**(`false` 也在),断言「没有 isError」会假红;该断言 `== false`。
+- **活体验证的最小隔离法**:NAS pg 上 `CREATE DATABASE pergame_mcp_test` + 本地二进制跑 migration + `--ignored` 单用例 + 用完 DROP DATABASE。生产桶名可复用(MCP 不落对象);**绝不复用生产库**——trash sweeper 会按保留期真删行。凭据走 `~/.agents/config.toml` 的 Infisical Machine Identity,本机需把 `PG_HOST`/`QUOBJECT_ENDPOINT` 的容器名换成 `qnap.elf-balance.ts.net`。
+- **审计落点**:`logs` 表此前只有 schema 没有写入方;MCP 的 token 创建/吊销与四个写工具是第一批生产者,活测 SQL 可核(`mcp.tool.*` / `mcp.token.*`)。
