@@ -78,6 +78,18 @@
 
 ### 最近完成的批次(供考古)
 
+- **全备份重构(2026-11-12,commits `3f5009cc`→`06a30906`,7 个提交)**:
+  - **UUIDv7 全统一**:三选一裁决(UUIDv7;Snowflake 出局)。全表 id→UUID,migration 压缩(0006 吸 0007/0008,文件删除),snowflake/sf 删除,`Uuid::now_v7()` 唯一生成器。前端零改(除 target users 传 string)。pg+S3 全清(`users` 2 行/`pergame-backups` 120 对象),`_sqlx_migrations` 清空当新库跑。
+  - **直写**:快照落用户 targets 全写,服务桶零备份;零 target=内存 zip 一次性下载;fan-out/fetch 删除;scheduler 改直写。
+  - **全量导出/还原**:permissions(用户名)/invitations/trash/profile 六成员 + preview 计数 + force 门。附带修 safety_snapshot 从未执行 bug。
+  - **用户密码**:口令传参,后端不存;定时 fallback env。
+  - **Target 下放** + PG 删除 + 启动不建 backups 桶。
+  - **删账户**:补缺失 DELETE handler + 快照门禁 + 防删最后一个 admin。
+  - **锁对齐**:target 重入拒绝 + 只读收紧(@me 写禁) + 删除锁。
+  - **dr-backup 删除**:~3800 行消失;失去整库单事务一致性点(多用户实例注意)。
+  - **前端**:targets 搬迁 + 口令/force/encrypted/空态。
+  - 验证:check/clippy/fmt 0,38 单测绿;活测待跑(backend+pg+S3+targets)。
+
 - **品牌收口 v0.0.4 + 首发 Portainer 部署(2026-11-12,`2ee12817`/`1fc7b477`,release `v0.0.4`)**:
   - **`IconApp.vue` 换标**:此前只换了 `public/Logo/*` 与 `/icons/*`,应用内联的仍是上游 A path(hero/about/sidebar/登录/import/footer 全中招)。改为同一 evenodd P path + 紧贴 viewBox(`140 88 226 336`),调用方仍按 width 定尺寸;默认宽 50→32 保持侧栏 header 原光学尺寸,`fill` 默认 `var(--text-body)`、两个 hero 仍显式 white。
   - **favicon 重造**:`favicon.ico`(白圆角底 + accent P,16–128 共 6 帧)、`favicon-dark.ico`(透明底白 P,16–256 共 7 帧)、`docs/public/favicon.ico` 同白底;`apple-icon-180.png`(旧 A、零引用)删除。Pillow 写 ICO 的坑:`sizes` 里超过底图像素的一律 skip,`append_images` 在不传 `sizes` 时会被默认尺寸表过滤 → 走默认尺寸表 + 足够大的底图才拿到多帧。
