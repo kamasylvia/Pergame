@@ -1,6 +1,6 @@
 [package]
 name = "pergame-rs"
-version = "0.0.9"
+version = "0.0.10"
 edition = "2024"
 description = "Pergame backend (Rust rewrite)"
 
