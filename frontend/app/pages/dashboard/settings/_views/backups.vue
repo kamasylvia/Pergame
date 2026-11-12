@@ -798,7 +798,7 @@ input[type='text'] {
 
 .upload-restore {
   margin-top: 1rem;
-  text-align: center;
+  text-align: left;
 }
 
 .hidden-input {

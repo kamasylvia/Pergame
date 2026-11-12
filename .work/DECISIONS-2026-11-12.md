@@ -56,3 +56,13 @@
 
 - `S3Target::has` 有 404→false 映射(之前修过),但 `get` 没有:空桶读 owner.json 直接硬错,导致首个备份认领失败、整 job 失败。
 - 同一文件内两个函数行为不一致,review 漏了。以后 Store trait 实现要逐个对齐错误语义。
+
+## 12. BackupJob 缺 status 字段(用户上报,v0.0.8 修)
+
+- 现象:零 target 点备份,右下角弹窗成功,但下载区不出现。根因:`BackupJob` 从来没有 `status` 字段,前端 `currentJob.status === 'completed'` 永假。这是 P0 时代遗留——旧流程靠 `progress>=100` 判断,前端却查 status,两边一直对不上,只是之前 download_url 也没置所以没人发现。
+- 修法:加 `status` 字段,在 `update()` 里派生(error→failed,>=100→completed,>0→processing,否则 pending)。
+
+## 13. WebDAV probe 双 prefix(活测抓到,v0.0.8 修)
+
+- `TargetConn::probe` 把 scoped prefix 传给 `WebdavTarget::list`,而 `url_for` 又拼一遍 prefix → 请求打到 `<prefix>/<prefix>`。S3 没这 bug(`probe()` 不走 list)。修:list("")。
+- 另:容器内连不上 `qnap.elf-balance.ts.net`,WebDAV endpoint 要填 `host.docker.internal:5007`。这是部署知识,已记;不是 bug。

@@ -78,18 +78,19 @@ impl WebdavTarget {
         for part in &parts {
             acc = format!("{acc}/{part}");
             let url = format!("{}/{}", self.url, acc.trim_start_matches('/'));
-            if let Err(e) = self
+            let resp = self
                 .request(
                     reqwest::Method::from_bytes(b"MKCOL").expect("valid method"),
                     &url,
                 )
                 .send()
                 .await
-            {
-                let msg = e.to_string();
-                if !msg.contains("405") && !msg.contains("already") {
-                    return Err(internal(format!("webdav mkcol {acc}: {msg}")));
-                }
+                .map_err(|e| internal(format!("webdav mkcol {acc}: {e}")))?;
+            // 2xx = created; 405/409 = already exists (server-dependent);
+            // anything else (401/403/507/…) is a real failure.
+            let code = resp.status().as_u16();
+            if !(resp.status().is_success() || code == 405 || code == 409) {
+                return Err(internal(format!("webdav mkcol {acc}: status {code}")));
             }
         }
         Ok(())

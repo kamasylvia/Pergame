@@ -1,13 +1,15 @@
 <template>
-  <button :class="[type, { large, small }]" @click="onClick">
+  <button :class="[type, { large, small }]" :disabled="disabled" @click="onClick">
     <slot />
   </button>
 </template>
 
 <script setup lang="ts">
-defineProps<{ type: 'primary' | 'secondary' | 'success' | 'link' | 'danger'; large?: boolean; small?: boolean }>();
+const props = defineProps<{ type: 'primary' | 'secondary' | 'success' | 'link' | 'danger'; large?: boolean; small?: boolean; disabled?: boolean }>();
 const emit = defineEmits(['click']);
-const onClick = () => emit('click');
+const onClick = () => {
+  if (!props.disabled) emit('click');
+};
 </script>
 
 <style scoped lang="scss">

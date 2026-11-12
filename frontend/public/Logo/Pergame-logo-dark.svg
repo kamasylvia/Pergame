@@ -15,7 +15,7 @@
     lens. Everything else follows from the proportions:
       · stem top flush with the bowl's top — a protruding head reads as a
         "D with a stick";
-      · the stem runs on well below the bowl — equal heights read as a thorn
+      · the stem foot ends at 482 (bottom curve to 512): shorter than the in-bowl span, visually balanced since the channel hides the in-bowl stem — equal heights read as a thorn
         or a rho;
       · the counter stays closed and rounded — opened to the right the glyph
         turns into a thorn.
@@ -29,8 +29,8 @@
   <path fill-rule="evenodd" fill="#4a7aff"
         d="M150 128
            A30 30 0 0 1 210 128
-           L210 384
-           A30 30 0 0 1 150 384
+           L210 452
+           A30 30 0 0 1 150 452
            Z
            M178 98
            C288 98 356 136 356 205
