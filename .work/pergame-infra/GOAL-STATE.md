@@ -78,6 +78,8 @@
 
 ### 最近完成的批次(供考古)
 
+- **v0.0.5 发版中(2026-11-12,release `v0.0.5`)**:全备份重构后的首个镜像。workflow `43160746394` 构建中(backend/frontend,无 sidecar)。部署计划:Portainer stack 42 换新 compose(2 服务,钉 v0.0.5) → 删孤儿 dr-backup 容器 + `pergame-dr-conf/jobs` 卷 → 健康验证。本条待部署完成翻账。
+
 - **全备份重构(2026-11-12,commits `3f5009cc`→`06a30906`,7 个提交)**:
   - **UUIDv7 全统一**:三选一裁决(UUIDv7;Snowflake 出局)。全表 id→UUID,migration 压缩(0006 吸 0007/0008,文件删除),snowflake/sf 删除,`Uuid::now_v7()` 唯一生成器。前端零改(除 target users 传 string)。pg+S3 全清(`users` 2 行/`pergame-backups` 120 对象),`_sqlx_migrations` 清空当新库跑。
   - **直写**:快照落用户 targets 全写,服务桶零备份;零 target=内存 zip 一次性下载;fan-out/fetch 删除;scheduler 改直写。

@@ -366,13 +366,13 @@ pub async fn upsert_target(
                 ));
             }
             assert_identity_unique(pool, &candidate, None).await?;
-            let id = Uuid::new_v4();
+            let id = Uuid::now_v7();
             candidate.id = id;
             sqlx::query(
                 "INSERT INTO backup_targets (id, kind, name, endpoint, bucket, prefix, access_key, \
                  secret_key, secure, region, provider, keep_last, max_age_days, enabled, users, \
                  schedule, last_result, created_at, updated_at, namespace) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'',$17,$17,$18)",
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'',$18,$18,$17)",
             )
             .bind(candidate.id)
             .bind(&candidate.kind)
