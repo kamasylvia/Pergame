@@ -200,6 +200,16 @@ impl BackupStore {
         if let Some(entry) = jobs.get_mut(job_id) {
             f(&mut entry.job);
             entry.job.updated_at = rfc3339_now();
+            // Single derivation point: every status read sees a consistent value.
+            entry.job.status = if entry.job.error.is_some() {
+                "failed".into()
+            } else if entry.job.progress >= 100 {
+                "completed".into()
+            } else if entry.job.progress > 0 {
+                "processing".into()
+            } else {
+                "pending".into()
+            };
         }
     }
 

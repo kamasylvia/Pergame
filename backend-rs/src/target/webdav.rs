@@ -129,9 +129,24 @@ impl WebdavTarget {
             }
             let href = rest.split('<').next().unwrap_or("");
             let tail = href_tail(href);
-            if tail.is_empty() || tail == path.rsplit('/').next().unwrap_or("") {
+            // Skip the collection itself: its href tail equals the last
+            // non-empty segment of the listed path (trailing slashes
+            // trimmed on both sides — the old rsplit compared against an
+            // empty string whenever path ended with '/').
+            let listed = path.trim_matches('/');
+            let listed_tail = listed.rsplit('/').next().unwrap_or("");
+            if tail.is_empty() || tail == listed_tail {
                 continue; // the collection itself
             }
+            // Return the store-relative key (path + tail), NOT the bare tail:
+            // callers feed list results straight back into get/delete, and
+            // S3's list returns full keys. Bare tails would resolve against
+            // the wrong directory.
+            let key = if path.trim_matches('/').is_empty() {
+                tail.clone()
+            } else {
+                format!("{}/{tail}", path.trim_matches('/'))
+            };
             // Size/mtime are parsed leniently: 0 when the server omits them.
             let size = rest
                 .split('<')
@@ -139,7 +154,7 @@ impl WebdavTarget {
                 .and_then(|seg| seg.split_once('>'))
                 .and_then(|(_, v)| v.split('<').next().and_then(|v| v.parse::<i64>().ok()))
                 .unwrap_or(0);
-            out.push((tail, size, 0));
+            out.push((key, size, 0));
         }
         Ok(out)
     }
