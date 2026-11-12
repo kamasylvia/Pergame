@@ -6,6 +6,7 @@
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::AuthUser;
@@ -15,11 +16,11 @@ use crate::models::NodeRow;
 use crate::repo::nodes as node_repo;
 use crate::response::ApiOk;
 
-fn resolve_id(param: &str) -> Result<crate::types::Snowflake, ApiError> {
+fn resolve_id(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    crate::types::Snowflake::parse(param)
+    Uuid::parse_str(param)
         .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
@@ -29,7 +30,7 @@ fn resolve_id(param: &str) -> Result<crate::types::Snowflake, ApiError> {
 async fn require_trash_node(
     state: &AppState,
     actor: &Actor,
-    node_id: i64,
+    node_id: Uuid,
 ) -> Result<(NodeRow, i64), ApiError> {
     let node = node_repo::get_by_id_any(&state.db, node_id)
         .await
@@ -65,7 +66,7 @@ pub async fn restore_node(
     Path(node_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
     let (node, deleted_at) = require_trash_node(&state, &actor, id).await?;
     let (restored, reparented) = node_repo::restore_subtree(&state.db, &node, deleted_at).await?;
     Ok(ApiOk::ok(json!({
@@ -81,7 +82,7 @@ pub async fn purge_node(
     Path(node_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
     let _ = require_trash_node(&state, &actor, id).await?;
     let removed = purge_with_storage(&state, id).await?;
     Ok(ApiOk::ok(json!({ "purged": removed })))
@@ -103,7 +104,7 @@ pub async fn empty_trash(
 
 /// Storage cleanup + physical delete of a trashed subtree. S3 failures are
 /// logged and ignored (Go parity: the DB delete still proceeds).
-async fn purge_with_storage(state: &AppState, node_id: i64) -> Result<u64, ApiError> {
+async fn purge_with_storage(state: &AppState, node_id: Uuid) -> Result<u64, ApiError> {
     if let Some(storage) = &state.storage
         && let Ok(resources) = node_repo::descendant_resources(&state.db, node_id).await
     {

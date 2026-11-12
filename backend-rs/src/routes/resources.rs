@@ -4,6 +4,7 @@
 
 use axum::extract::{Multipart, Path, State};
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::AuthUser;
@@ -193,10 +194,10 @@ pub async fn upload_file(
         ));
     };
 
-    let parent_id: Option<i64> = fields
+    let parent_id: Option<Uuid> = fields
         .get("parent_id")
-        .and_then(|v| crate::types::Snowflake::parse(v))
-        .map(|s| s.as_i64());
+        .and_then(|v| Uuid::parse_str(v))
+        .map(|s| s);
     let metadata: Option<serde_json::Value> = fields
         .get("metadata")
         .and_then(|v| serde_json::from_str(v).ok());
@@ -223,7 +224,7 @@ pub async fn upload_file(
         ));
     }
 
-    let id = state.snowflake.generate().as_i64();
+    let id = crate::types::new_id();
     let ext: String = file
         .filename
         .rsplit_once('.')
@@ -356,9 +357,8 @@ pub async fn update_file(
         .clone()
         .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
 
-    let resource_id = crate::types::Snowflake::parse(&id)
-        .ok_or(ApiError::BadRequest("invalid resource id".into()))?
-        .as_i64();
+    let resource_id = Uuid::parse_str(&id)
+        .ok_or(ApiError::BadRequest("invalid resource id".into()))?;
 
     let actor: Actor = auth.into();
     let mut file: Option<UploadedPart> = None;

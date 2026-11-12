@@ -5,6 +5,7 @@
 //! so only new content is transferred (incremental).
 
 use serde::Serialize;
+use uuid::Uuid;
 use sqlx::PgPool;
 
 use super::repo;
@@ -23,7 +24,7 @@ pub struct FanoutResult {
 /// Collects one user's snapshot objects from the local backup bucket.
 async fn collect_user_objects(
     storage: &S3Storage,
-    user_id: i64,
+    user_id: Uuid,
 ) -> Result<Vec<(String, Vec<u8>)>, crate::error::ApiError> {
     let mut keys: Vec<String> = Vec::new();
     for (k, _, _) in storage.list_manifests(user_id).await? {
@@ -58,7 +59,7 @@ async fn collect_user_objects(
 /// Replicates one user's objects to every enabled target that lists the user.
 /// Called right after a successful snapshot (auto) and by the admin "sync now"
 /// action. Best-effort per target: a failure is recorded, others continue.
-pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: i64) -> Vec<FanoutResult> {
+pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: Uuid) -> Vec<FanoutResult> {
     let mut results = Vec::new();
     let targets = match repo::list_targets(pool).await {
         Ok(t) => t,
@@ -156,7 +157,7 @@ async fn prune_target(
     keep_last: i32,
 ) -> Result<usize, crate::error::ApiError> {
     let keep = keep_last.max(1) as usize;
-    let objects = conn.list(conn.list_prefix(prefix)).await?;
+    let objects = conn.list(conn.list_prefix()).await?;
     let mut manifests: Vec<String> = objects
         .iter()
         .filter(|(k, _, _)| k.contains("/manifests/"))
@@ -175,7 +176,7 @@ async fn prune_target(
     }
     // Blob GC: keep only hashes referenced by surviving manifests.
     let mut referenced = std::collections::HashSet::new();
-    for (k, _, _) in conn.list(conn.list_prefix(prefix)).await? {
+    for (k, _, _) in conn.list(conn.list_prefix()).await? {
         if !k.contains("/manifests/") {
             continue;
         }
@@ -190,7 +191,7 @@ async fn prune_target(
             }
         }
     }
-    for (k, _, _) in conn.list(conn.list_prefix(prefix)).await? {
+    for (k, _, _) in conn.list(conn.list_prefix()).await? {
         if !k.contains("/blobs") {
             continue;
         }
@@ -209,12 +210,12 @@ pub async fn fetch_user_from_target(
     pool: &PgPool,
     storage: &S3Storage,
     target_id: uuid::Uuid,
-    user_id: i64,
+    user_id: Uuid,
 ) -> Result<usize, crate::error::ApiError> {
     let target = repo::get_target(pool, target_id).await?;
     let conn = target.connect().await?;
     let prefix = format!("{}/", user_id);
-    let objects = conn.list(conn.list_prefix(&target.prefix)).await?;
+    let objects = conn.list(conn.list_prefix()).await?;
     let mut fetched = 0usize;
     for (key, _, _) in objects {
         if !key.starts_with(&prefix) {

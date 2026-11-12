@@ -2,95 +2,32 @@
 //!
 //! Design (issue #1): schema ownership stays with `sqlx migrate` — Toasty
 //! never calls `push_schema`; models are declared to match the existing
-//! tables. Ids are application-assigned Snowflakes (`#[key]` without
-//! `#[auto]`), stored as BIGINT.
+//! tables. Ids are application-assigned UUIDv7 (`#[key]` without `#[auto]`),
+//! stored as UUID. On the wire they are plain JSON strings (uuid serde).
 
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use toasty::Model;
-
-/// P0 wire contract: Snowflake ids serialize as JSON strings (deserialize
-/// accepts both strings and numbers).
-pub mod sf {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(v: &i64, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(&v.to_string())
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
-        let v = serde_json::Value::deserialize(deserializer)?;
-        match v {
-            serde_json::Value::String(s) => s
-                .parse::<u64>()
-                .map(|u| u as i64)
-                .map_err(serde::de::Error::custom),
-            serde_json::Value::Number(n) => n
-                .as_u64()
-                .map(|u| u as i64)
-                .or_else(|| n.as_i64())
-                .ok_or_else(|| serde::de::Error::custom("snowflake out of range")),
-            _ => Err(serde::de::Error::custom("expected string or number")),
-        }
-    }
-}
-
-/// Option<i64> variant: None serializes as null.
-pub mod sf_opt {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(v: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error> {
-        match v {
-            Some(id) => super::sf::serialize(id, serializer),
-            None => serializer.serialize_none(),
-        }
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Option<i64>, D::Error> {
-        let v = serde_json::Value::deserialize(deserializer)?;
-        match v {
-            serde_json::Value::Null => Ok(None),
-            serde_json::Value::String(s) => s
-                .parse::<u64>()
-                .map(|u| Some(u as i64))
-                .map_err(serde::de::Error::custom),
-            serde_json::Value::Number(n) => Ok(Some(
-                n.as_u64()
-                    .map(|u| u as i64)
-                    .or_else(|| n.as_i64())
-                    .ok_or_else(|| serde::de::Error::custom("snowflake out of range"))?,
-            )),
-            _ => Err(serde::de::Error::custom("expected string or number")),
-        }
-    }
-}
+use uuid::Uuid;
 
 /// Soft-link row: one extra tree position for a note (spec note-links.md).
 #[derive(Debug, FromRow, Serialize)]
 pub struct LinkRow {
-    #[serde(with = "sf")]
-    pub id: i64,
-    #[serde(with = "sf")]
-    pub parent_id: i64,
-    #[serde(with = "sf")]
-    pub node_id: i64,
+    pub id: Uuid,
+    pub parent_id: Uuid,
+    pub node_id: Uuid,
     pub created_timestamp: i64,
     pub order: i32,
 }
 
 /// Node row for reads (sqlx escape hatch). Mirrors `models.Node` JSON tags:
-/// ids are JSON strings (Snowflake), metadata is a JSON object.
+/// ids are JSON strings (UUID), metadata is a JSON object.
 #[derive(Debug, Clone, FromRow, Serialize)]
 #[serde(default)]
 pub struct NodeRow {
-    #[serde(with = "sf")]
-    pub id: i64,
-    #[serde(with = "sf")]
-    pub user_id: i64,
-    #[serde(with = "sf_opt")]
-    pub parent_id: Option<i64>,
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub parent_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<String>,
@@ -119,12 +56,9 @@ pub struct NodeRow {
 /// (spec .work/features/trash.md §3.1).
 #[derive(Debug, FromRow, Serialize)]
 pub struct TrashRow {
-    #[serde(with = "sf")]
-    pub id: i64,
-    #[serde(with = "sf")]
-    pub user_id: i64,
-    #[serde(with = "sf_opt")]
-    pub parent_id: Option<i64>,
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub parent_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<String>,
@@ -141,12 +75,9 @@ pub struct TrashRow {
 /// Permission row (reads only; permission CRUD is the P3.5 domain).
 #[derive(Debug, FromRow, Serialize)]
 pub struct PermissionRow {
-    #[serde(with = "sf")]
-    pub id: i64,
-    #[serde(with = "sf")]
-    pub node_id: i64,
-    #[serde(with = "sf")]
-    pub user_id: i64,
+    pub id: Uuid,
+    pub node_id: Uuid,
+    pub user_id: Uuid,
     pub permission: i32,
     pub created_timestamp: i64,
 }
@@ -154,12 +85,9 @@ pub struct PermissionRow {
 /// Search hit (Go NodeSearchResult; content_snippet omitted when absent).
 #[derive(Debug, FromRow, Serialize)]
 pub struct NodeSearchRow {
-    #[serde(with = "sf")]
-    pub id: i64,
-    #[serde(with = "sf")]
-    pub user_id: i64,
-    #[serde(with = "sf_opt")]
-    pub parent_id: Option<i64>,
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub parent_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<String>,
@@ -176,11 +104,10 @@ pub struct NodeSearchRow {
 #[derive(Debug, Model, Serialize, Deserialize)]
 #[table = "users"]
 pub struct User {
-    /// Application-assigned Snowflake (no `#[auto]` — not a DB sequence).
+    /// Application-assigned UUIDv7 (no `#[auto]` — not a DB sequence).
     #[key]
     #[column("id")]
-    #[serde(with = "sf")]
-    pub id: i64,
+    pub id: Uuid,
 
     #[column("username")]
     #[unique]
@@ -234,11 +161,11 @@ pub struct User {
 pub struct Session {
     #[key]
     #[column("id")]
-    pub id: i64,
+    pub id: Uuid,
 
     #[index]
     #[column("user_id")]
-    pub user_id: i64,
+    pub user_id: Uuid,
 
     #[unique]
     #[column("refresh_token")]
@@ -280,21 +207,18 @@ pub struct Session {
 #[derive(Debug, Model, Serialize, Deserialize)]
 #[table = "node_links"]
 pub struct NodeLink {
-    /// Application-assigned Snowflake (no `#[auto]`).
+    /// Application-assigned UUIDv7 (no `#[auto]`).
     #[key]
     #[column("id")]
-    #[serde(with = "sf")]
-    pub id: i64,
+    pub id: Uuid,
 
     #[index]
     #[column("parent_id")]
-    #[serde(with = "sf")]
-    pub parent_id: i64,
+    pub parent_id: Uuid,
 
     #[index]
     #[column("node_id")]
-    #[serde(with = "sf")]
-    pub node_id: i64,
+    pub node_id: Uuid,
 
     /// Reserved-word column; mapped explicitly.
     #[column("order")]
@@ -310,18 +234,15 @@ pub struct NodeLink {
 pub struct Permission {
     #[key]
     #[column("id")]
-    #[serde(with = "sf")]
-    pub id: i64,
+    pub id: Uuid,
 
     #[index]
     #[column("node_id")]
-    #[serde(with = "sf")]
-    pub node_id: i64,
+    pub node_id: Uuid,
 
     #[index]
     #[column("user_id")]
-    #[serde(with = "sf")]
-    pub user_id: i64,
+    pub user_id: Uuid,
 
     #[column("permission")]
     pub permission: i32,
@@ -336,11 +257,11 @@ pub struct Permission {
 pub struct RecoveryCode {
     #[key]
     #[column("id")]
-    pub id: i64,
+    pub id: Uuid,
 
     #[index]
     #[column("user_id")]
-    pub user_id: i64,
+    pub user_id: Uuid,
 
     /// bcrypt hash of the 8-digit code.
     #[column("code")]
@@ -358,15 +279,16 @@ pub struct RecoveryCode {
 /// live PostgreSQL.
 #[allow(dead_code)]
 async fn spike_compile(db: &mut toasty::Db) -> toasty::Result<()> {
+    let uid = Uuid::nil();
     // Read by primary key.
-    let _user = User::filter_by_id(42i64).first().exec(db).await?;
+    let _user = User::filter_by_id(uid).first().exec(db).await?;
 
     // Filter by a unique column.
     let _by_name = User::filter_by_username("someone").first().exec(db).await?;
 
     // Create: builder requires every non-default field (ids are app-assigned).
     let _created = User::create()
-        .id(1_234_567_890i64)
+        .id(uid)
         .username("someone")
         .role(1)
         .user_type(0)
@@ -378,27 +300,27 @@ async fn spike_compile(db: &mut toasty::Db) -> toasty::Result<()> {
         .await?;
 
     // Update via query.
-    User::filter_by_id(42i64)
+    User::filter_by_id(uid)
         .update()
         .username("renamed")
         .exec(db)
         .await?;
 
     // Delete.
-    User::filter_by_id(42i64).delete().exec(db).await?;
+    User::filter_by_id(uid).delete().exec(db).await?;
 
     // Session lookups used by the auth domain.
     let _session = Session::filter_by_refresh_token("abc")
         .first()
         .exec(db)
         .await?;
-    let _by_user = Session::filter_by_user_id(1i64).exec(db).await?;
+    let _by_user = Session::filter_by_user_id(uid).exec(db).await?;
 
     // Recovery codes used by the TOTP domain.
-    let _codes = RecoveryCode::filter_by_user_id(1i64).exec(db).await?;
+    let _codes = RecoveryCode::filter_by_user_id(uid).exec(db).await?;
     let _rc = RecoveryCode::create()
-        .id(1i64)
-        .user_id(1i64)
+        .id(uid)
+        .user_id(uid)
         .code("$2a$10$hash")
         .used(false)
         .created_timestamp(1)

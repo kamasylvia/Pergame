@@ -4,11 +4,12 @@
 //! stay in sqlx (CTE / composite tuples).
 
 use sqlx::PgPool;
+use uuid::Uuid;
 use toasty::Db;
 
 use crate::models::{NodeRow, Permission, PermissionRow};
 
-pub async fn get_by_node(db: &mut Db, node_id: i64) -> Result<Vec<PermissionRow>, String> {
+pub async fn get_by_node(db: &mut Db, node_id: Uuid) -> Result<Vec<PermissionRow>, String> {
     let rows = Permission::filter_by_node_id(node_id)
         .exec(db)
         .await
@@ -27,7 +28,7 @@ pub async fn get_by_node(db: &mut Db, node_id: i64) -> Result<Vec<PermissionRow>
 
 pub async fn get_by_node_recursive(
     pool: &PgPool,
-    node_id: i64,
+    node_id: Uuid,
 ) -> Result<Vec<PermissionRow>, sqlx::Error> {
     sqlx::query_as::<_, PermissionRow>(
         r#"
@@ -47,7 +48,7 @@ pub async fn get_by_node_recursive(
     .await
 }
 
-pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<PermissionRow>, String> {
+pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<PermissionRow>, String> {
     let row = Permission::filter_by_id(id)
         .first()
         .exec(db)
@@ -64,8 +65,8 @@ pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<PermissionRow>, St
 
 pub async fn get_by_node_and_user(
     db: &mut Db,
-    node_id: i64,
-    user_id: i64,
+    node_id: Uuid,
+    user_id: Uuid,
 ) -> Result<Option<PermissionRow>, String> {
     let row = Permission::filter_by_node_id(node_id)
         .filter_by_user_id(user_id)
@@ -84,9 +85,9 @@ pub async fn get_by_node_and_user(
 
 pub async fn create(
     db: &mut Db,
-    id: i64,
-    node_id: i64,
-    user_id: i64,
+    id: Uuid,
+    node_id: Uuid,
+    user_id: Uuid,
     permission: i32,
     now: i64,
 ) -> Result<(), String> {
@@ -102,7 +103,7 @@ pub async fn create(
         .map_err(|e| e.to_string())
 }
 
-pub async fn update(db: &mut Db, id: i64, permission: i32) -> Result<(), String> {
+pub async fn update(db: &mut Db, id: Uuid, permission: i32) -> Result<(), String> {
     let mut row = Permission::filter_by_id(id)
         .first()
         .exec(db)
@@ -117,7 +118,7 @@ pub async fn update(db: &mut Db, id: i64, permission: i32) -> Result<(), String>
         .map_err(|e| e.to_string())
 }
 
-pub async fn delete(db: &mut Db, id: i64) -> Result<(), String> {
+pub async fn delete(db: &mut Db, id: Uuid) -> Result<(), String> {
     Permission::filter_by_id(id)
         .delete()
         .exec(db)
@@ -128,8 +129,8 @@ pub async fn delete(db: &mut Db, id: i64) -> Result<(), String> {
 
 pub async fn get_invitation_by_id(
     pool: &PgPool,
-    id: i64,
-) -> Result<Option<(i64, String, i32, i64, i64)>, sqlx::Error> {
+    id: Uuid,
+) -> Result<Option<(Uuid, String, i32, Uuid, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, invitation_code, permission_level, node_id, created_timestamp
          FROM node_invitations WHERE id = $1",
@@ -142,7 +143,7 @@ pub async fn get_invitation_by_id(
 pub async fn get_invitation_by_code(
     pool: &PgPool,
     code: &str,
-) -> Result<Option<(i64, String, i32, i64, i64)>, sqlx::Error> {
+) -> Result<Option<(Uuid, String, i32, Uuid, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, invitation_code, permission_level, node_id, created_timestamp
          FROM node_invitations WHERE invitation_code = $1",
@@ -154,8 +155,8 @@ pub async fn get_invitation_by_code(
 
 pub async fn invitations_by_node(
     pool: &PgPool,
-    node_id: i64,
-) -> Result<Vec<(i64, String, i32, i64, i64)>, sqlx::Error> {
+    node_id: Uuid,
+) -> Result<Vec<(Uuid, String, i32, Uuid, i64)>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, invitation_code, permission_level, node_id, created_timestamp
          FROM node_invitations WHERE node_id = $1",
@@ -167,10 +168,10 @@ pub async fn invitations_by_node(
 
 pub async fn create_invitation(
     pool: &PgPool,
-    id: i64,
+    id: Uuid,
     code: &str,
     level: i32,
-    node_id: i64,
+    node_id: Uuid,
     now: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
@@ -187,7 +188,7 @@ pub async fn create_invitation(
     .map(|_| ())
 }
 
-pub async fn delete_invitation(pool: &PgPool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_invitation(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM node_invitations WHERE id = $1")
         .bind(id)
         .execute(pool)
@@ -196,6 +197,6 @@ pub async fn delete_invitation(pool: &PgPool, id: i64) -> Result<(), sqlx::Error
 }
 
 /// Node row projection used by the join flow (id/user_id/name/parent_id).
-pub async fn node_brief(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, sqlx::Error> {
+pub async fn node_brief(pool: &PgPool, node_id: Uuid) -> Result<Option<NodeRow>, sqlx::Error> {
     crate::repo::nodes::get_by_id(pool, node_id).await
 }

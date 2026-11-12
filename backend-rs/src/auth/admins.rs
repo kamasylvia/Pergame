@@ -1,12 +1,13 @@
 //! Startup admin-role reconciliation (Go `userService.LoadAppAdmins` parity).
 //!
-//! `ADMIN_ACCOUNTS` (comma-separated Snowflake strings) is the source of truth:
+//! `ADMIN_ACCOUNTS` (comma-separated UUID strings) is the source of truth:
 //! existing admins not on the list are demoted to the regular role (1), listed
 //! users are promoted to admin (2). Bit-flag values mirror
 //! `permissions/constants.go`: RoleNone = 1<<0 = 1, RoleAdministrator = 1<<1 = 2.
 
 use sqlx::PgPool;
 use toasty::Db;
+use uuid::Uuid;
 
 const ROLE_NONE: i32 = 1; // 1 << 0
 const ROLE_ADMIN: i32 = 2; // 1 << 1
@@ -23,7 +24,7 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
 
     // Demote existing admins that are not in the current list (sqlx escape
     // hatch: toasty 0.11 lacks a generic list-by-field query surface).
-    let rows = sqlx::query_as::<_, (i64, String)>("SELECT id, username FROM users WHERE role = $1")
+    let rows = sqlx::query_as::<_, (Uuid, String)>("SELECT id, username FROM users WHERE role = $1")
         .bind(ROLE_ADMIN)
         .fetch_all(sql)
         .await;
@@ -48,11 +49,11 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
 
     // Promote users listed in ADMIN_ACCOUNTS.
     for id_str in &admin_ids {
-        let Some(id) = crate::types::Snowflake::parse(id_str) else {
+        let Ok(id) = Uuid::parse_str(id_str) else {
             tracing::warn!(%id_str, "app-admins: invalid admin user ID");
             continue;
         };
-        match crate::models::User::filter_by_id(id.as_i64())
+        match crate::models::User::filter_by_id(id)
             .first()
             .exec(db)
             .await

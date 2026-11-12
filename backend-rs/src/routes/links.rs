@@ -22,13 +22,13 @@ use crate::response::ApiOk;
 fn toasty_err(e: String) -> ApiError {
     ApiError::Internal(Box::new(std::io::Error::other(e)))
 }
-use crate::types::Snowflake;
+use uuid::Uuid;
 
-fn resolve(param: &str) -> Result<Snowflake, ApiError> {
+fn resolve(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Snowflake::parse(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,11 +47,11 @@ pub async fn create_link(
     Json(body): Json<CreateLinkBody>,
 ) -> Result<ApiOk<LinkRow>, ApiError> {
     let actor: Actor = auth.into();
-    let node = resolve(&node_id)?.as_i64();
+    let node = resolve(&node_id)?;
 
-    let parent = crate::types::Snowflake::parse(&body.parent_id)
+    let parent = Uuid::parse_str(&body.parent_id)
         .ok_or(ApiError::BadRequest("invalid parent_id".into()))?
-        .as_i64();
+        ;
     if parent == node {
         return Err(ApiError::BadRequest(
             "cannot link a note into itself".into(),
@@ -73,7 +73,7 @@ pub async fn create_link(
         ));
     }
 
-    let id = state.snowflake.generate().as_i64();
+    let id = crate::types::new_id();
     let mut tdb = state.toasty.clone();
     link_repo::create(
         &mut tdb,
@@ -110,8 +110,8 @@ pub async fn delete_link(
     Path((node_id, link_id)): Path<(String, String)>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let actor: Actor = auth.into();
-    let node = resolve(&node_id)?.as_i64();
-    let link = resolve(&link_id)?.as_i64();
+    let node = resolve(&node_id)?;
+    let link = resolve(&link_id)?;
 
     let note_row = node_repo_get(&state.db, node)
         .await
@@ -153,7 +153,7 @@ pub async fn get_links(
     Path(node_id): Path<String>,
 ) -> Result<ApiOk<Vec<LinkRow>>, ApiError> {
     let actor: Actor = auth.into();
-    let node = resolve(&node_id)?.as_i64();
+    let node = resolve(&node_id)?;
     let _ = guard::require_node_action(&state.db, &actor, node, NodeAction::Read).await?;
     let mut tdb = state.toasty.clone();
     let rows = link_repo::links_of_node(&mut tdb, node)
@@ -162,7 +162,7 @@ pub async fn get_links(
     Ok(ApiOk::ok(rows))
 }
 
-async fn node_repo_get(pool: &sqlx::PgPool, id: i64) -> Option<crate::models::NodeRow> {
+async fn node_repo_get(pool: &sqlx::PgPool, id: Uuid) -> Option<crate::models::NodeRow> {
     crate::repo::nodes::get_by_id(pool, id).await.ok().flatten()
 }
 

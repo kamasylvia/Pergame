@@ -8,7 +8,6 @@ pub mod config;
 pub mod cron;
 pub mod fanout;
 pub mod owner;
-pub mod pg;
 pub mod repo;
 pub mod s3;
 pub mod webdav;
@@ -27,7 +26,6 @@ pub struct Fingerprint(pub String);
 pub enum TargetKind {
     S3,
     WebDav,
-    Pg,
 }
 
 impl TargetKind {
@@ -35,7 +33,6 @@ impl TargetKind {
         match self {
             Self::S3 => "s3",
             Self::WebDav => "webdav",
-            Self::Pg => "pg",
         }
     }
 }
@@ -63,14 +60,6 @@ pub struct WebdavStoreParams {
     pub prefix: String,
 }
 
-pub struct PgStoreParams {
-    /// Full connection string (built from endpoint + credentials upstream).
-    pub dsn: String,
-    pub schema: String,
-    /// Object namespace (siyuan #15 §1): PG has no prefix concept, so the
-    /// namespace is applied as an extra key segment by the store itself.
-    pub namespace: String,
-}
 
 /// Normalized identity string pieces (joined into a Fingerprint upstream).
 pub fn s3_identity(endpoint: &str, bucket: &str) -> String {
@@ -91,15 +80,6 @@ pub fn webdav_identity(url: &str, claimed_hash: &str) -> String {
             claimed_hash
         )
     }
-}
-
-pub fn pg_identity(system_identifier: &str, database: &str, schema: &str) -> String {
-    format!(
-        "{}|{}|{}",
-        system_identifier.trim(),
-        database.trim().to_lowercase(),
-        schema.trim().to_lowercase()
-    )
 }
 
 fn normalize_endpoint(endpoint: &str) -> String {

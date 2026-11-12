@@ -83,12 +83,10 @@ async fn main() {
         None
     };
 
-    let snowflake = std::sync::Arc::new(types::SnowflakeGenerator::new(types::SNOWFLAKE_EPOCH_MS));
     let _ = APP_DB.set(pool.clone());
     let state = AppState {
         db: pool,
         toasty: toasty_db,
-        snowflake,
         storage,
         oidc: oidc_manager,
         backups: std::sync::Arc::new(backup::BackupStore::default()),
@@ -294,6 +292,44 @@ async fn main() {
         .route(
             "/api/admin/dr-backup/targets/{id}/export/{snapshotId}",
             get(routes::admin_dr::export_target_snapshot),
+        )
+        // Per-user targets: same store, ownership-scoped (users manage only
+        // targets that list them; admins keep the routes above for the rest).
+        .route(
+            "/api/backup/targets",
+            get(routes::user_targets::list_targets).post(routes::user_targets::create_target),
+        )
+        .route(
+            "/api/backup/targets/{id}",
+            put(routes::user_targets::update_target).delete(routes::user_targets::delete_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/delete-check",
+            post(routes::user_targets::delete_check_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/test",
+            post(routes::user_targets::test_target),
+        )
+        .route(
+            "/api/backup/targets/probe-draft",
+            post(routes::user_targets::probe_draft_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/empty",
+            post(routes::user_targets::empty_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/sync",
+            post(routes::user_targets::sync_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/fetch",
+            post(routes::user_targets::fetch_target),
+        )
+        .route(
+            "/api/backup/targets/{id}/export/{snapshotId}",
+            get(routes::user_targets::export_target_snapshot),
         )
         .route("/api/nodes/links", get(routes::links::list_user_links))
         .route("/api/nodes/{nodeId}/links", get(routes::links::get_links))

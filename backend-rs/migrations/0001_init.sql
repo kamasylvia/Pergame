@@ -1,9 +1,10 @@
 -- ==============================================================================
--- 0001_init — PostgreSQL baseline schema (fresh-database decision 2026-11-07).
+-- 0001_init — PostgreSQL baseline schema (fresh-database decision 2026-11-07;
+-- UUIDv7 id unification 2026-11-12, pre-launch rewrite with zero live rows).
 --
 -- End-state union of the Go backend's MySQL migration chain (000001..000021),
--- rewritten in pg dialect. Original Snowflake ids are generated application-side
--- (backend-rs SnowflakeGenerator); no AUTO_INCREMENT. Timestamps are epoch
+-- rewritten in pg dialect. All entity ids are UUIDv7, generated
+-- application-side (Uuid::now_v7); no AUTO_INCREMENT. Timestamps are epoch
 -- milliseconds (bigint), matching the Go models.
 --
 -- Full-text search (replaces MySQL FULLTEXT, research §3): generated tsvector
@@ -13,7 +14,7 @@
 
 -- ---------------------------------------------------------------- users
 CREATE TABLE users (
-    id               BIGINT PRIMARY KEY,
+    id               UUID PRIMARY KEY,   -- UUIDv7, application-generated
     username         VARCHAR(30)  NOT NULL UNIQUE,
     firstname        TEXT,
     lastname         TEXT,
@@ -31,8 +32,8 @@ CREATE TABLE users (
 
 -- ------------------------------------------------------- user oidc providers
 CREATE TABLE user_oidc_providers (
-    id                BIGINT PRIMARY KEY,
-    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id                UUID PRIMARY KEY,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider_name     TEXT   NOT NULL,
     provider_user_id  TEXT   NOT NULL,
     created_timestamp BIGINT NOT NULL,
@@ -43,7 +44,7 @@ CREATE INDEX idx_oidc_providers_user ON user_oidc_providers (user_id);
 
 -- ------------------------------------------------------------- user settings
 CREATE TABLE user_settings (
-    user_id  BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id  UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     general  JSONB NOT NULL DEFAULT '{}',
     editor   JSONB NOT NULL DEFAULT '{}',
     advanced JSONB NOT NULL DEFAULT '{}'
@@ -51,8 +52,8 @@ CREATE TABLE user_settings (
 
 -- ------------------------------------------------- totp recovery codes
 CREATE TABLE user_totp_recovery_codes (
-    id                BIGINT PRIMARY KEY,
-    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id                UUID PRIMARY KEY,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code              TEXT   NOT NULL,                 -- bcrypt hash of the code
     used              BOOLEAN NOT NULL DEFAULT FALSE,
     created_timestamp BIGINT NOT NULL
@@ -61,8 +62,8 @@ CREATE INDEX idx_recovery_codes_user ON user_totp_recovery_codes (user_id);
 
 -- ------------------------------------------------------------------ sessions
 CREATE TABLE sessions (
-    id                      BIGINT PRIMARY KEY,
-    user_id                 BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id                      UUID PRIMARY KEY,
+    user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     refresh_token           TEXT   NOT NULL,
     expire_token            BIGINT NOT NULL,
     last_refresh_timestamp  BIGINT NOT NULL DEFAULT 0,
@@ -81,9 +82,9 @@ CREATE INDEX idx_sessions_ip ON sessions (ip_addr);
 -- --------------------------------------------------------------------- nodes
 -- role: 1 workspace, 2 category, 3 document, 4 file/resource.
 CREATE TABLE nodes (
-    id                BIGINT PRIMARY KEY,
-    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    parent_id         BIGINT REFERENCES nodes(id) ON DELETE CASCADE,
+    id                UUID PRIMARY KEY,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    parent_id         UUID REFERENCES nodes(id) ON DELETE CASCADE,
     name              VARCHAR(50) NOT NULL,
     description       VARCHAR(250),
     tags              VARCHAR(250),
@@ -120,9 +121,9 @@ CREATE INDEX idx_nodes_search_fts   ON nodes USING GIN (search_tsv);
 
 -- --------------------------------------------------------------- permissions
 CREATE TABLE permissions (
-    id                BIGINT PRIMARY KEY,
-    node_id           BIGINT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id                UUID PRIMARY KEY,
+    node_id           UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     permission        INT    NOT NULL,   -- 1 view, 2 write, 3 admin
     created_timestamp BIGINT NOT NULL,
     UNIQUE (node_id, user_id)
@@ -132,10 +133,10 @@ CREATE INDEX idx_permissions_user ON permissions (user_id);
 
 -- ---------------------------------------------------------- node invitations
 CREATE TABLE node_invitations (
-    id                BIGINT PRIMARY KEY,
+    id                UUID PRIMARY KEY,
     invitation_code   TEXT   NOT NULL UNIQUE,
     permission_level  INT    NOT NULL CHECK (permission_level BETWEEN 1 AND 3),
-    node_id           BIGINT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    node_id           UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     created_timestamp BIGINT NOT NULL
 );
 CREATE INDEX idx_invitations_node ON node_invitations (node_id);
@@ -144,8 +145,8 @@ CREATE INDEX idx_invitations_node ON node_invitations (node_id);
 -- P2 note: align field set with backend/repositories/log.repository.go when
 -- the logging domain is ported.
 CREATE TABLE logs (
-    id                BIGINT PRIMARY KEY,
-    user_id           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    id                UUID PRIMARY KEY,
+    user_id           UUID REFERENCES users(id) ON DELETE SET NULL,
     action            TEXT NOT NULL,
     message           TEXT,
     ip_addr           TEXT,

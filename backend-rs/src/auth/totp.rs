@@ -8,7 +8,7 @@ use totp_rs::{Algorithm, Secret, Totp};
 
 use crate::error::ApiError;
 use crate::models::{RecoveryCode, User};
-use crate::types::SnowflakeGenerator;
+use uuid::Uuid;
 
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -104,8 +104,7 @@ pub async fn validate_code(db: &mut Db, user: &User, code: &str) -> bool {
 /// codes, marks the user enabled with the secret. Returns the plain codes.
 pub async fn enable_totp(
     db: &mut Db,
-    generator: &SnowflakeGenerator,
-    user_id: i64,
+    user_id: Uuid,
     secret: &str,
     code: &str,
 ) -> Result<Vec<String>, ApiError> {
@@ -120,7 +119,7 @@ pub async fn enable_totp(
         let hash = bcrypt::hash(plain, bcrypt::DEFAULT_COST)
             .map_err(|_| ApiError::BadRequest("failed to create backup codes".into()))?;
         RecoveryCode::create()
-            .id(generator.generate().as_i64())
+            .id(crate::types::new_id())
             .user_id(user_id)
             .code(hash)
             .used(false)
@@ -149,7 +148,7 @@ pub async fn enable_totp(
 
 /// Disables TOTP: validates the code, clears the secret/flag, deletes the
 /// user's backup codes.
-pub async fn disable_totp(db: &mut Db, user_id: i64, code: &str) -> Result<(), ApiError> {
+pub async fn disable_totp(db: &mut Db, user_id: Uuid, code: &str) -> Result<(), ApiError> {
     let user = User::filter_by_id(user_id)
         .first()
         .exec(db)
@@ -192,7 +191,7 @@ pub async fn verify_pre_auth_and_user(
     let user_id = super::jwt::verify_pre_auth_token(pre_auth_token)
         .map_err(|_| ApiError::Unauthorized("invalid pre-authentication token".into()))?;
 
-    let user = User::filter_by_id(user_id as i64)
+    let user = User::filter_by_id(user_id)
         .first()
         .exec(db)
         .await
@@ -209,19 +208,17 @@ pub async fn verify_pre_auth_and_user(
 /// Shared session-row creation for login / TOTP-verify / OIDC paths.
 pub async fn create_login_session(
     db: &mut Db,
-    generator: &SnowflakeGenerator,
-    user_id: i64,
+    user_id: Uuid,
     ip: &str,
     user_agent: &str,
 ) -> Result<String, ApiError> {
-    create_login_session_type(db, generator, user_id, ip, user_agent, "login").await
+    create_login_session_type(db, user_id, ip, user_agent, "login").await
 }
 
 /// Session creation with an explicit `type` column value.
 pub async fn create_login_session_type(
     db: &mut Db,
-    generator: &SnowflakeGenerator,
-    user_id: i64,
+    user_id: Uuid,
     ip: &str,
     user_agent: &str,
     session_type: &str,
@@ -230,7 +227,7 @@ pub async fn create_login_session_type(
     let refresh = super::jwt::refresh_token();
     let now = now_ms();
     Session::create()
-        .id(generator.generate().as_i64())
+        .id(crate::types::new_id())
         .user_id(user_id)
         .refresh_token(refresh.clone())
         .expire_token(now + 30 * 24 * 3600 * 1000)

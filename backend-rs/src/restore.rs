@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_json::json;
 use sqlx::PgPool;
+use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::error::ApiError;
@@ -40,6 +41,17 @@ fn as_i64(v: Option<&Value>) -> Option<i64> {
     })
 }
 
+fn as_uuid(v: Option<&Value>) -> Option<Uuid> {
+    v.and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok())
+}
+
+fn as_opt_uuid(v: Option<&Value>) -> Option<Uuid> {
+    match v {
+        Some(Value::Null) | None => None,
+        other => as_uuid(other),
+    }
+}
+
 fn as_opt_i64(v: Option<&Value>) -> Option<i64> {
     match v {
         Some(Value::Null) | None => None,
@@ -54,7 +66,7 @@ fn as_string(v: Option<&Value>) -> Option<String> {
 pub async fn restore_from_zip(
     sql: PgPool,
     storage: Option<S3Storage>,
-    user_id: i64,
+    user_id: Uuid,
     bytes: Vec<u8>,
 ) -> Result<RestoreReport, ApiError> {
     let cursor = std::io::Cursor::new(bytes);
@@ -156,7 +168,7 @@ pub async fn restore_from_zip(
     // First pass: collect ids so parent references can be validated.
     let mut node_ids = std::collections::HashSet::new();
     for n in &nodes_raw {
-        if let Some(id) = as_i64(n.get("id")) {
+        if let Some(id) = as_uuid(n.get("id")) {
             node_ids.insert(id);
         }
     }
@@ -173,12 +185,12 @@ pub async fn restore_from_zip(
 
     let mut restored_parent_fixed = 0usize;
     for n in &nodes_raw {
-        let Some(id) = as_i64(n.get("id")) else {
+        let Some(id) = as_uuid(n.get("id")) else {
             report.warnings.push("node without id skipped".into());
             continue;
         };
         // Parent must be present in the archive; orphan the node otherwise.
-        let parent = as_opt_i64(n.get("parent_id"));
+        let parent = as_opt_uuid(n.get("parent_id"));
         let parent = match parent {
             Some(p) if node_ids.contains(&p) => Some(p),
             Some(p) => {
@@ -228,11 +240,11 @@ pub async fn restore_from_zip(
 
     // ---- links: only rows whose node AND parent both live in the archive ----
     for l in &links_raw {
-        let Some(id) = as_i64(l.get("id")) else {
+        let Some(id) = as_uuid(l.get("id")) else {
             continue;
         };
         let (Some(node_id), Some(parent_id)) =
-            (as_i64(l.get("node_id")), as_i64(l.get("parent_id")))
+            (as_uuid(l.get("node_id")), as_uuid(l.get("parent_id")))
         else {
             report.links_skipped.push(format!("{id}:missing fields"));
             continue;
@@ -313,10 +325,10 @@ pub async fn restore_from_zip(
     {
         // borrow released: entries were read in a bounded scope above
         // metadata of restored nodes carries the transformed_path keys.
-        let transformed_by_id: std::collections::HashMap<i64, String> = nodes_raw
+        let transformed_by_id: std::collections::HashMap<Uuid, String> = nodes_raw
             .iter()
             .filter_map(|n| {
-                let id = as_i64(n.get("id"))?;
+                let id = as_uuid(n.get("id"))?;
                 let key = n
                     .get("metadata")
                     .and_then(|m| m.get("transformed_path"))
@@ -330,7 +342,7 @@ pub async fn restore_from_zip(
             let Some(path) = as_string(e.get("path")) else {
                 continue;
             };
-            let Some(id) = as_i64(e.get("id")) else {
+            let Some(id) = as_uuid(e.get("id")) else {
                 continue;
             };
             let mut zf = match archive.by_name(&path) {
@@ -395,7 +407,7 @@ pub struct RestorePlan {
 
 pub async fn plan_from_zip(
     sql: PgPool,
-    user_id: i64,
+    user_id: Uuid,
     bytes: Vec<u8>,
 ) -> Result<RestorePlan, ApiError> {
     let mut plan = RestorePlan::default();
@@ -459,12 +471,12 @@ pub async fn plan_from_zip(
     let mut incoming_ids = std::collections::HashSet::new();
     let mut incoming_parents_missing = 0usize;
     for n in &nodes {
-        if let Some(id) = as_i64(n.get("id")) {
+        if let Some(id) = as_uuid(n.get("id")) {
             incoming_ids.insert(id);
         }
     }
     for n in &nodes {
-        let parent = as_opt_i64(n.get("parent_id"));
+        let parent = as_opt_uuid(n.get("parent_id"));
         if let Some(p) = parent
             && !incoming_ids.contains(&p)
         {
@@ -480,7 +492,7 @@ pub async fn plan_from_zip(
 
     for l in &links {
         let (Some(node_id), Some(parent_id)) =
-            (as_i64(l.get("node_id")), as_i64(l.get("parent_id")))
+            (as_uuid(l.get("node_id")), as_uuid(l.get("parent_id")))
         else {
             plan.links_unresolvable += 1;
             continue;
@@ -499,14 +511,14 @@ pub async fn plan_from_zip(
         .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
     plan.current_nodes = current_nodes as usize;
 
-    let (current_ids,): (Vec<i64>,) =
+    let (current_ids,): (Vec<Uuid>,) =
         sqlx::query_as("SELECT COALESCE(array_agg(id), '{}') FROM nodes WHERE user_id = $1")
             .bind(user_id)
             .fetch_one(&sql)
             .await
             .map_err(ApiError::from)
             .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
-    let current_set: std::collections::HashSet<i64> = current_ids.into_iter().collect();
+    let current_set: std::collections::HashSet<Uuid> = current_ids.into_iter().collect();
     plan.nodes_replaced = incoming_ids
         .iter()
         .filter(|id| current_set.contains(id))
@@ -541,12 +553,12 @@ pub async fn plan_from_zip(
             let existing: std::collections::HashSet<String> = existing.into_iter().collect();
             // A file collides when its restored key (transformed_path of the
             // matching incoming node, else <id><ext>) is already in the store.
-            let incoming_by_id: std::collections::HashMap<i64, &Value> = nodes
+            let incoming_by_id: std::collections::HashMap<Uuid, &Value> = nodes
                 .iter()
-                .filter_map(|n| as_i64(n.get("id")).map(|i| (i, n)))
+                .filter_map(|n| as_uuid(n.get("id")).map(|i| (i, n)))
                 .collect();
             for e in &entries {
-                let Some(id) = as_i64(e.get("id")) else {
+                let Some(id) = as_uuid(e.get("id")) else {
                     continue;
                 };
                 let ext = as_string(e.get("path"))
@@ -576,13 +588,16 @@ pub async fn plan_from_zip(
 /// manifest says the snapshot is encrypted.
 pub async fn assemble_snapshot_zip(
     storage: &S3Storage,
-    user_id: i64,
+    user_id: Uuid,
     manifest: crate::backup::BackupManifest,
+    passphrase: Option<&str>,
 ) -> Result<Vec<u8>, ApiError> {
-    let passphrase = crate::snapcrypto::passphrase_from_env();
+    let passphrase = passphrase
+        .filter(|p| !p.trim().is_empty())
+        .map(|s| s.to_string());
     if manifest.encryption.is_some() && passphrase.is_none() {
         return Err(ApiError::BadRequest(
-            "snapshot is encrypted but PERGAME_SNAPSHOT_PASSPHRASE is not configured".into(),
+            "snapshot is encrypted but no passphrase was supplied".into(),
         ));
     }
     let mut archive = crate::backup::SimpleArchive::new();
@@ -674,7 +689,7 @@ pub const PORTABLE_VERSION: &str = "1";
 /// referenced hash (ciphertext preserved when the snapshot is encrypted).
 pub async fn export_portable_zip(
     storage: &S3Storage,
-    user_id: i64,
+    user_id: Uuid,
     manifest: &crate::backup::BackupManifest,
 ) -> Result<Vec<u8>, ApiError> {
     let mut archive = crate::backup::SimpleArchive::new();

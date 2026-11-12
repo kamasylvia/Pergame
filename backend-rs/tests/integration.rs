@@ -154,11 +154,11 @@ async fn cleanup_user(user_id: &str) {
         .await
     {
         let _ = sqlx::query("DELETE FROM backup_targets WHERE $1 = ANY(users)")
-            .bind(user_id.parse::<i64>().unwrap_or(0))
+            .bind(user_id.parse::<uuid::Uuid>().unwrap_or(uuid::Uuid::nil))
             .execute(&pool)
             .await;
         let _ = sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user_id.parse::<i64>().unwrap_or(0))
+            .bind(user_id.parse::<uuid::Uuid>().unwrap_or(uuid::Uuid::nil))
             .execute(&pool)
             .await;
     }
@@ -562,10 +562,10 @@ async fn user_settings_roundtrip() {
     assert_eq!(r.result.get("general"), Some(&json!({"theme": "dark"})));
 }
 
-// Snowflake ids must serialize as strings on the wire (P0 contract).
+// UUID ids must serialize as strings on the wire (P0 contract).
 #[tokio::test]
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
-async fn snowflake_ids_are_strings_on_the_wire() {
+async fn uuid_ids_are_strings_on_the_wire() {
     let client = Client::new();
     let (user_id, _) = signup_and_login_tagged(&client, "snow").await;
     let (status, r) = get(&client, "/users/@me").await;
@@ -1042,7 +1042,7 @@ async fn make_admin(user_id: &str) {
         .await
         .expect("test db connect");
     sqlx::query("UPDATE users SET role = 2 WHERE id = $1")
-        .bind(user_id.parse::<i64>().expect("numeric user id"))
+        .bind(user_id.parse::<uuid::Uuid>().expect("uuid user id"))
         .execute(&pool)
         .await
         .expect("promote to admin");
@@ -1063,7 +1063,7 @@ fn target_body(name: &str, user_id: &str, endpoint: &str, bucket: &str) -> Value
         "keep_last": 5,
         "max_age_days": 0,
         "enabled": true,
-        "users": [user_id.parse::<i64>().expect("numeric uid")],
+        "users": [user_id],
     })
 }
 

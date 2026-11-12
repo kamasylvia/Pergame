@@ -13,21 +13,21 @@ use crate::auth::service::now_ms;
 use crate::error::ApiError;
 use crate::models::User;
 use crate::response::ApiOk;
-use crate::types::Snowflake;
+use uuid::Uuid;
 
-/// Go `utils.GetTargetId`: "@me" resolves to the actor, else numeric parse.
-pub fn resolve_target(param: &str, auth: &AuthUser) -> Result<Snowflake, ApiError> {
+/// Go `utils.GetTargetId`: "@me" resolves to the actor, else UUID parse.
+pub fn resolve_target(param: &str, auth: &AuthUser) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
     if param == "@me" {
         return Ok(auth.id);
     }
-    Snowflake::parse(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// Go `RequireUserAccess`: the actor may act on themselves or be an app admin.
-pub fn require_user_access(auth: &AuthUser, target: Snowflake) -> Result<(), ApiError> {
+pub fn require_user_access(auth: &AuthUser, target: Uuid) -> Result<(), ApiError> {
     if auth.id == target || auth.role == 2 {
         Ok(())
     } else {
@@ -63,7 +63,7 @@ pub async fn update_user(
     require_user_access(&auth, target)?;
 
     let mut db = state.toasty.clone();
-    let db_user = User::filter_by_id(target.as_i64())
+    let db_user = User::filter_by_id(target)
         .first()
         .exec(&mut db)
         .await
@@ -135,7 +135,7 @@ pub async fn update_password(
     }
 
     let mut db = state.toasty.clone();
-    let db_user = User::filter_by_id(target.as_i64())
+    let db_user = User::filter_by_id(target)
         .first()
         .exec(&mut db)
         .await

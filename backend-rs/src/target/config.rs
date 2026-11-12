@@ -5,10 +5,9 @@
 
 use serde::Serialize;
 
-use super::pg::PgTarget;
 use super::s3::S3Target;
 use super::webdav::WebdavTarget;
-use super::{Fingerprint, PgStoreParams, S3StoreParams, TargetKind, WebdavStoreParams};
+use super::{Fingerprint, S3StoreParams, TargetKind, WebdavStoreParams};
 use crate::error::ApiError;
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
@@ -28,7 +27,7 @@ pub struct BackupTargetRow {
     pub max_age_days: i32,
     pub schedule: String,
     pub enabled: bool,
-    pub users: Vec<i64>,
+    pub users: Vec<Uuid>,
     pub last_result: String,
     pub created_at: i64,
     pub updated_at: i64,
@@ -54,7 +53,6 @@ fn effective_prefix(prefix: &str, namespace: &str) -> String {
 pub enum TargetParams {
     S3(S3StoreParams),
     WebDav(WebdavStoreParams),
-    Pg(PgStoreParams),
 }
 
 impl BackupTargetRow {
@@ -85,30 +83,10 @@ impl BackupTargetRow {
         }
     }
 
-    pub fn pg_params(&self) -> PgStoreParams {
-        // endpoint = host[:port], bucket = schema, access = user,
-        // secret = password, secure = sslmode require (fork pg.go DSN).
-        // PG has no prefix concept, so the namespace becomes an extra key
-        // segment inside the table (see PgStoreParams::key_namespace).
-        PgStoreParams {
-            dsn: format!(
-                "postgresql://{}:{}@{}/{}?sslmode={}",
-                self.access_key,
-                self.secret_key,
-                self.endpoint,
-                self.bucket,
-                if self.secure { "require" } else { "prefer" }
-            ),
-            schema: self.bucket.clone(),
-            namespace: self.namespace.trim().trim_matches('/').to_string(),
-        }
-    }
-
     pub fn kind(&self) -> Result<TargetKind, ApiError> {
         match self.kind.as_str() {
             "s3" => Ok(TargetKind::S3),
             "webdav" => Ok(TargetKind::WebDav),
-            "pg" => Ok(TargetKind::Pg),
             other => Err(ApiError::BadRequest(format!(
                 "unknown target kind: {other}"
             ))),
@@ -126,10 +104,6 @@ impl BackupTargetRow {
                 store: WebdavTarget::new(&self.webdav_params()),
                 fingerprint: self.config_fingerprint()?,
             },
-            TargetKind::Pg => TargetConn::Pg {
-                store: PgTarget::new(&self.pg_params()).await?,
-                fingerprint: self.config_fingerprint()?,
-            },
         })
     }
 
@@ -140,11 +114,6 @@ impl BackupTargetRow {
             TargetKind::WebDav => Fingerprint(super::webdav_identity(
                 &self.endpoint,
                 "", // unreachable-but-empty is allowed; write-time claim pins it
-            )),
-            TargetKind::Pg => Fingerprint(super::pg_identity(
-                &self.endpoint, // endpoint doubles as the declared identity hint
-                &self.bucket,
-                &self.bucket,
             )),
         })
     }
@@ -158,10 +127,6 @@ pub enum TargetConn {
     },
     WebDav {
         store: WebdavTarget,
-        fingerprint: Fingerprint,
-    },
-    Pg {
-        store: PgTarget,
         fingerprint: Fingerprint,
     },
 }
@@ -188,21 +153,17 @@ fn is_snapshot_key(key: &str) -> bool {
 }
 
 impl TargetConn {
-    /// Prefix argument for `list`: empty for stores that scope internally
-    /// (S3/WebDAV apply their configured prefix), the row prefix for PG
-    /// (which has no prefix concept).
-    pub fn list_prefix<'a>(&self, row_prefix: &'a str) -> &'a str {
-        match self {
-            Self::S3 { .. } | Self::WebDav { .. } => "",
-            Self::Pg { .. } => row_prefix,
-        }
+    /// Prefix argument for `list`: both stores scope internally (S3/WebDAV
+    /// apply their configured prefix), so callers always list from root.
+    pub fn list_prefix(&self) -> &'static str {
+        let _ = self;
+        ""
     }
 
     pub fn fingerprint(&self) -> Fingerprint {
         match self {
             Self::S3 { fingerprint, .. } => fingerprint.clone(),
             Self::WebDav { fingerprint, .. } => fingerprint.clone(),
-            Self::Pg { fingerprint, .. } => fingerprint.clone(),
         }
     }
 
@@ -219,7 +180,6 @@ impl TargetConn {
         let store_result = match self {
             Self::S3 { store, .. } => store.probe().await,
             Self::WebDav { store, .. } => store.list(prefix).await.map(|_| ()),
-            Self::Pg { store, .. } => store.probe().await,
         };
         if let Err(e) = store_result {
             tracing::warn!(error = %e, "backup target probe failed");
@@ -228,7 +188,7 @@ impl TargetConn {
         // The concrete stores already scope by their configured prefix, so
         // the probe must not add it again (double prefix => zero objects and
         // a delete gate that wrongly passes).
-        let objects = match self.list(self.list_prefix(prefix)).await {
+        let objects = match self.list(self.list_prefix()).await {
             Ok(v) => v,
             Err(_) => return unreachable,
         };
@@ -263,7 +223,6 @@ impl TargetConn {
             let exists = match self {
                 Self::S3 { store, .. } => store.has(&path).await?,
                 Self::WebDav { store, .. } => store.has(&path).await?,
-                Self::Pg { store, .. } => store.has(&path).await?,
             };
             if exists {
                 skipped += 1;
@@ -272,7 +231,6 @@ impl TargetConn {
             match self {
                 Self::S3 { store, .. } => store.put(&path, bytes).await?,
                 Self::WebDav { store, .. } => store.put(&path, bytes).await?,
-                Self::Pg { store, .. } => store.put(&path, bytes).await?,
             }
             copied += 1;
         }
@@ -284,7 +242,6 @@ impl TargetConn {
         match self {
             Self::S3 { store, .. } => store.put(path, bytes).await,
             Self::WebDav { store, .. } => store.put(path, bytes).await,
-            Self::Pg { store, .. } => store.put(path, bytes).await,
         }
     }
 
@@ -292,7 +249,6 @@ impl TargetConn {
         match self {
             Self::S3 { store, .. } => store.get(path).await,
             Self::WebDav { store, .. } => store.get(path).await,
-            Self::Pg { store, .. } => store.get(path).await,
         }
     }
 
@@ -300,7 +256,6 @@ impl TargetConn {
         match self {
             Self::S3 { store, .. } => store.delete(path).await,
             Self::WebDav { store, .. } => store.delete(path).await,
-            Self::Pg { store, .. } => store.delete(path).await,
         }
     }
 
@@ -309,7 +264,6 @@ impl TargetConn {
         match self {
             Self::S3 { store, .. } => store.list(prefix).await,
             Self::WebDav { store, .. } => store.list(prefix).await,
-            Self::Pg { store, .. } => store.list(prefix).await,
         }
     }
 }

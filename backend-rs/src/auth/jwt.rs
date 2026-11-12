@@ -48,7 +48,7 @@ fn now() -> i64 {
 }
 
 pub fn sign_access_token(
-    user_id: u64,
+    user_id: uuid::Uuid,
     role: i32,
     expiry_secs: i64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
@@ -66,7 +66,7 @@ pub fn sign_access_token(
     )
 }
 
-pub fn sign_pre_auth_token(user_id: u64) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn sign_pre_auth_token(user_id: uuid::Uuid) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = PreAuthClaims {
         sub: user_id.to_string(),
         iss: JWT_ISSUER.into(),
@@ -82,7 +82,7 @@ pub fn sign_pre_auth_token(user_id: u64) -> Result<String, jsonwebtoken::errors:
 }
 
 /// Verifies an access token (HS256 only, exp validated) and returns (user_id, role).
-pub fn verify_access_token(token: &str) -> Result<(u64, i32), jsonwebtoken::errors::Error> {
+pub fn verify_access_token(token: &str) -> Result<(uuid::Uuid, i32), jsonwebtoken::errors::Error> {
     let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
     validation.validate_exp = true;
     validation.validate_aud = false;
@@ -90,7 +90,7 @@ pub fn verify_access_token(token: &str) -> Result<(u64, i32), jsonwebtoken::erro
     validation.iss = None;
     validation.required_spec_claims.clear(); // Go treats missing exp as valid
     let data = decode::<AccessClaims>(token, &DecodingKey::from_secret(&secret()), &validation)?;
-    let user_id: u64 = data.claims.sub.parse().map_err(|_| {
+    let user_id: uuid::Uuid = data.claims.sub.parse().map_err(|_| {
         jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidClaimFormat(
             "sub/role".into(),
         ))
@@ -104,7 +104,7 @@ pub fn verify_access_token(token: &str) -> Result<(u64, i32), jsonwebtoken::erro
 }
 
 /// Verifies a pre-auth token and returns the user id.
-pub fn verify_pre_auth_token(token: &str) -> Result<u64, jsonwebtoken::errors::Error> {
+pub fn verify_pre_auth_token(token: &str) -> Result<uuid::Uuid, jsonwebtoken::errors::Error> {
     let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
     validation.validate_exp = true;
     validation.validate_aud = false;
@@ -156,9 +156,10 @@ mod tests {
     #[test]
     fn access_token_roundtrip() {
         with_secret("test-secret-for-unit", || {
-            let token = sign_access_token(123456789, 1, 1800).unwrap();
+            let uid = uuid::Uuid::now_v7();
+            let token = sign_access_token(uid, 1, 1800).unwrap();
             let (id, role) = verify_access_token(&token).unwrap();
-            assert_eq!(id, 123456789);
+            assert_eq!(id, uid);
             assert_eq!(role, 1);
         });
     }
@@ -166,7 +167,9 @@ mod tests {
     #[test]
     fn rejects_wrong_secret() {
         // Never nest with_secret calls: ENV_LOCK is not reentrant.
-        let token = with_secret("secret-a", || sign_access_token(1, 1, 1800).unwrap());
+        let token = with_secret("secret-a", || {
+            sign_access_token(uuid::Uuid::now_v7(), 1, 1800).unwrap()
+        });
         with_secret("secret-b", || {
             assert!(verify_access_token(&token).is_err());
         });
@@ -175,10 +178,11 @@ mod tests {
     #[test]
     fn pre_auth_flow() {
         with_secret("test-secret-for-unit", || {
-            let token = sign_pre_auth_token(777).unwrap();
-            assert_eq!(verify_pre_auth_token(&token).unwrap(), 777);
+            let uid = uuid::Uuid::now_v7();
+            let token = sign_pre_auth_token(uid).unwrap();
+            assert_eq!(verify_pre_auth_token(&token).unwrap(), uid);
             // An access token is not a pre-auth token.
-            let access = sign_access_token(777, 1, 1800).unwrap();
+            let access = sign_access_token(uid, 1, 1800).unwrap();
             assert!(verify_pre_auth_token(&access).is_err());
         });
     }

@@ -187,7 +187,7 @@ impl S3Target {
     /// Blob referenced-hash set under a directory (for GC/refcount).
     pub async fn list_blob_keys(
         &self,
-        user_id: i64,
+        user_id: Uuid,
     ) -> Result<Vec<String>, crate::error::ApiError> {
         let mut out = Vec::new();
         for dir in ["blobs", "blobs-e2e"] {

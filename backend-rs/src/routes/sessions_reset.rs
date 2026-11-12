@@ -7,6 +7,7 @@ use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::service::now_ms;
@@ -40,9 +41,9 @@ pub async fn delete_session(
     auth: AuthUser,
     Path(session_id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let id = crate::types::Snowflake::parse(&session_id)
+    let id = Uuid::parse_str(&session_id)
         .ok_or(ApiError::BadRequest("invalid parameter".into()))?
-        .as_i64();
+        ;
     session_repo::delete_by_id_and_user(&state.db, id, auth.user_id())
         .await
         .map_err(|_| {
@@ -92,7 +93,7 @@ pub struct RequestResetBody {
     pub username: String,
 }
 
-fn reset_jwt(user_id: i64) -> Result<String, ApiError> {
+fn reset_jwt(user_id: Uuid) -> Result<String, ApiError> {
     // Go signResetToken: RegisteredClaims with sub + 20-minute exp, HS256.
     let exp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -198,7 +199,7 @@ pub async fn reset_password(
     )
     .map_err(|_| ApiError::BadRequest("invalid reset token".into()))?;
 
-    let user_id: i64 = decoded
+    let user_id: Uuid = decoded
         .claims
         .get("sub")
         .and_then(|v| v.as_str())

@@ -2,10 +2,10 @@
 //! bcrypt verification, session create/rotate, logout, signup.
 
 use toasty::Db;
+use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::models::{Session, User};
-use crate::types::{Snowflake, SnowflakeGenerator};
 
 /// Sessions last 30 days (Go: `30 * 24 * time.Hour`).
 const SESSION_TTL_MS: i64 = 30 * 24 * 3600 * 1000;
@@ -24,7 +24,7 @@ pub enum LoginOutcome {
     TwoFa {
         message: &'static str,
         pre_auth_token: String,
-        user_id: i64,
+        user_id: Uuid,
     },
 }
 
@@ -32,14 +32,13 @@ fn bad_credentials() -> ApiError {
     ApiError::Unauthorized("invalid credentials".into())
 }
 
-/// Generates a Snowflake for the given generator (shared state in AppState).
-pub fn new_id(generator: &SnowflakeGenerator) -> Snowflake {
-    generator.generate()
+/// New entity id (UUIDv7, coordination-free).
+pub fn new_id() -> Uuid {
+    crate::types::new_id()
 }
 
 pub async fn login(
     db: &mut Db,
-    generator: &SnowflakeGenerator,
     username: &str,
     password: &str,
     ip: &str,
@@ -69,7 +68,7 @@ pub async fn login(
     }
 
     if user.totp_enabled || user.totp_forced {
-        let pre = super::jwt::sign_pre_auth_token(user.id as u64).map_err(|_| {
+        let pre = super::jwt::sign_pre_auth_token(user.id).map_err(|_| {
             ApiError::Unauthorized("failed to generate pre-authentication token".into())
         })?;
         let message = if user.totp_enabled {
@@ -84,7 +83,7 @@ pub async fn login(
         });
     }
 
-    let refresh = super::totp::create_login_session(db, generator, user.id, ip, user_agent).await?;
+    let refresh = super::totp::create_login_session(db, user.id, ip, user_agent).await?;
 
     Ok(LoginOutcome::Full {
         user,
@@ -154,11 +153,7 @@ pub struct SignupInput {
     pub totp_forced: bool,
 }
 
-pub async fn signup(
-    db: &mut Db,
-    generator: &SnowflakeGenerator,
-    input: SignupInput,
-) -> Result<User, ApiError> {
+pub async fn signup(db: &mut Db, input: SignupInput) -> Result<User, ApiError> {
     if User::filter_by_username(&input.username)
         .first()
         .exec(db)
@@ -192,7 +187,7 @@ pub async fn signup(
                 "mail client is not initialized".into(),
             ));
         };
-        let user_id = generator.generate().as_i64();
+        let user_id = new_id();
         let token = set_password_token(user_id);
         let frontend = std::env::var("FRONTEND_URL").unwrap_or_default();
         let reset_url = format!("{frontend}/login/reset?token={}", token);
@@ -219,7 +214,7 @@ pub async fn signup(
 
     let now = now_ms();
     let user = User {
-        id: new_id(generator).as_i64(),
+        id: new_id(),
         username: input.username,
         firstname: input.firstname,
         lastname: input.lastname,
@@ -270,7 +265,7 @@ pub async fn signup(
 }
 
 /// Go signSetToken: sub-only HS256 JWT with no expiry claim.
-pub fn set_password_token(user_id: i64) -> String {
+pub fn set_password_token(user_id: Uuid) -> String {
     let claims = serde_json::json!({ "sub": user_id.to_string() });
     let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "development-jwt-secret".into());
     jsonwebtoken::encode(

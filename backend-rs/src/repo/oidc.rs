@@ -2,18 +2,19 @@
 //! parity).
 
 use sqlx::PgPool;
+use uuid::Uuid;
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
 pub struct OidcLinkRow {
-    pub id: i64,
-    pub user_id: i64,
+    pub id: Uuid,
+    pub user_id: Uuid,
     pub provider_name: String,
     pub provider_user_id: String,
     pub created_timestamp: i64,
     pub updated_timestamp: i64,
 }
 
-pub async fn get_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<OidcLinkRow>, sqlx::Error> {
+pub async fn get_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<OidcLinkRow>, sqlx::Error> {
     sqlx::query_as::<_, OidcLinkRow>(
         "SELECT id, user_id, provider_name, provider_user_id, created_timestamp, updated_timestamp
          FROM user_oidc_providers WHERE user_id = $1",
@@ -41,8 +42,8 @@ pub async fn get_by_provider_and_subject(
 
 pub async fn create(
     pool: &PgPool,
-    id: i64,
-    user_id: i64,
+    id: Uuid,
+    user_id: Uuid,
     provider_name: &str,
     provider_user_id: &str,
     now: i64,
@@ -61,7 +62,7 @@ pub async fn create(
     .map(|_| ())
 }
 
-pub async fn delete(pool: &PgPool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM user_oidc_providers WHERE id = $1")
         .bind(id)
         .execute(pool)
@@ -72,8 +73,7 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), sqlx::Error> {
 /// Go LinkProvider service tail: duplicate-link check handled by the caller.
 pub async fn link_provider(
     pool: &PgPool,
-    generator: &crate::types::SnowflakeGenerator,
-    user_id: i64,
+    user_id: Uuid,
     provider_name: &str,
     provider_user_id: &str,
 ) -> Result<(), ApiError> {
@@ -90,7 +90,7 @@ pub async fn link_provider(
     let now = crate::auth::service::now_ms();
     create(
         pool,
-        generator.generate().as_i64(),
+        crate::types::new_id(),
         user_id,
         provider_name,
         provider_user_id,
@@ -103,7 +103,7 @@ pub async fn link_provider(
 use crate::error::ApiError;
 
 /// Go HasPassword: a password column value exists (login via password possible).
-pub async fn has_password(pool: &PgPool, user_id: i64) -> Result<bool, sqlx::Error> {
+pub async fn has_password(pool: &PgPool, user_id: Uuid) -> Result<bool, sqlx::Error> {
     let has: Option<bool> = sqlx::query_scalar(
         "SELECT password IS NOT NULL AND password <> '' FROM users WHERE id = $1",
     )

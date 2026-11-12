@@ -3,6 +3,7 @@
 //! generation with one-time states, code exchange, userinfo, login-or-create.
 
 use std::collections::HashMap;
+use uuid::Uuid;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -70,7 +71,7 @@ pub struct UserInfo {
 pub struct StateData {
     pub expiry_ms: i64,
     pub is_link: bool,
-    pub user_id: i64,
+    pub user_id: Uuid,
 }
 
 pub struct OidcManager {

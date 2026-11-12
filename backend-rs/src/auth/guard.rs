@@ -41,7 +41,7 @@ impl NodeAction {
 
 #[derive(Debug, Clone)]
 pub struct Actor {
-    pub user_id: i64,
+    pub user_id: uuid::Uuid,
     pub role: i32,
 }
 
@@ -58,7 +58,7 @@ pub fn is_app_admin(role: i32) -> bool {
     role == 2
 }
 
-pub fn require_user_access(actor: &Actor, target: i64) -> Result<(), ApiError> {
+pub fn require_user_access(actor: &Actor, target: uuid::Uuid) -> Result<(), ApiError> {
     if actor.user_id == target || is_app_admin(actor.role) {
         Ok(())
     } else {
@@ -91,7 +91,7 @@ pub async fn check_node_action(
 pub async fn require_node_action(
     pool: &PgPool,
     actor: &Actor,
-    node_id: i64,
+    node_id: uuid::Uuid,
     action: NodeAction,
 ) -> Result<NodeRow, ApiError> {
     let node = node_repo::get_by_id(pool, node_id)

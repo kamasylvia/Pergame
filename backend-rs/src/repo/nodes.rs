@@ -3,6 +3,7 @@
 //! parity, ported to PostgreSQL dialect).
 
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::models::{NodeRow, NodeSearchRow, PermissionRow, TrashRow};
 
@@ -17,7 +18,7 @@ pub fn now_ms() -> i64 {
 /// folder-role thumbnails only; ordering mirrors the Go query (role asc,
 /// pinned first, name). Go's `'order' DESC` literal was a no-op string sort
 /// key; the real pinned-first behavior comes from the frontend.
-pub async fn list_all(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sqlx::Error> {
+pub async fn list_all(pool: &PgPool, user_id: Uuid) -> Result<Vec<NodeRow>, sqlx::Error> {
     sqlx::query_as::<_, NodeRow>(
         r#"
         WITH RECURSIVE user_nodes AS (
@@ -47,7 +48,7 @@ pub async fn list_all(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sqlx:
 }
 
 /// Nodes shared with the user via the permissions table (with descendants).
-pub async fn list_shared(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sqlx::Error> {
+pub async fn list_shared(pool: &PgPool, user_id: Uuid) -> Result<Vec<NodeRow>, sqlx::Error> {
     sqlx::query_as::<_, NodeRow>(
         r#"
         WITH RECURSIVE shared_nodes AS (
@@ -78,8 +79,8 @@ pub async fn list_shared(pool: &PgPool, user_id: i64) -> Result<Vec<NodeRow>, sq
 /// Permission rows of `user_id` on the given node ids (batched, Go parity).
 pub async fn permissions_for_nodes(
     pool: &PgPool,
-    user_id: i64,
-    node_ids: &[i64],
+    user_id: Uuid,
+    node_ids: &[Uuid],
 ) -> Result<Vec<PermissionRow>, sqlx::Error> {
     if node_ids.is_empty() {
         return Ok(vec![]);
@@ -95,7 +96,7 @@ pub async fn permissions_for_nodes(
     .await
 }
 
-pub async fn get_by_id(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, sqlx::Error> {
+pub async fn get_by_id(pool: &PgPool, node_id: Uuid) -> Result<Option<NodeRow>, sqlx::Error> {
     // Column list spelled out (sqlx audit lint; same as NODE_FULL_COLS).
     sqlx::query_as::<_, NodeRow>(
         "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, \
@@ -109,7 +110,7 @@ pub async fn get_by_id(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, s
 }
 
 /// Same as `get_by_id` but also returns trashed rows (trash endpoints only).
-pub async fn get_by_id_any(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, sqlx::Error> {
+pub async fn get_by_id_any(pool: &PgPool, node_id: Uuid) -> Result<Option<NodeRow>, sqlx::Error> {
     sqlx::query_as::<_, NodeRow>(
         "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, \
          thumbnail, theme, accessibility, access, display, \"order\" AS node_order, content, \
@@ -122,7 +123,7 @@ pub async fn get_by_id_any(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow
 }
 
 /// The node if it or any ancestor is public (accessibility = 3).
-pub async fn get_public(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, sqlx::Error> {
+pub async fn get_public(pool: &PgPool, node_id: Uuid) -> Result<Option<NodeRow>, sqlx::Error> {
     sqlx::query_as::<_, NodeRow>(
         r#"
         WITH RECURSIVE ancestors AS (
@@ -145,7 +146,7 @@ pub async fn get_public(pool: &PgPool, node_id: i64) -> Result<Option<NodeRow>, 
 }
 
 /// All descendants of a folder-ish public node (roles 1/2/3 inherit access).
-pub async fn public_descendants(pool: &PgPool, node_id: i64) -> Result<Vec<NodeRow>, sqlx::Error> {
+pub async fn public_descendants(pool: &PgPool, node_id: Uuid) -> Result<Vec<NodeRow>, sqlx::Error> {
     sqlx::query_as::<_, NodeRow>(
         r#"
         WITH RECURSIVE descendant_nodes AS (
@@ -173,7 +174,7 @@ pub async fn public_descendants(pool: &PgPool, node_id: i64) -> Result<Vec<NodeR
 }
 
 /// Total upload size (Go: SUM(size) over the user's nodes).
-pub async fn uploads_size(pool: &PgPool, user_id: i64) -> Result<i64, sqlx::Error> {
+pub async fn uploads_size(pool: &PgPool, user_id: Uuid) -> Result<i64, sqlx::Error> {
     let row: (i64,) =
         sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM nodes WHERE user_id = $1")
             .bind(user_id)
@@ -185,8 +186,8 @@ pub async fn uploads_size(pool: &PgPool, user_id: i64) -> Result<i64, sqlx::Erro
 /// Descendant resource rows (role=4) for storage cleanup before deletion.
 pub async fn descendant_resources(
     pool: &PgPool,
-    node_id: i64,
-) -> Result<Vec<(i64, i64, Option<serde_json::Value>)>, sqlx::Error> {
+    node_id: Uuid,
+) -> Result<Vec<(Uuid, Uuid, Option<serde_json::Value>)>, sqlx::Error> {
     sqlx::query_as(
         r#"
         WITH RECURSIVE descendants AS (
@@ -207,8 +208,8 @@ pub async fn descendant_resources(
 /// (Go HasPermission parity).
 pub async fn has_permission(
     pool: &PgPool,
-    user_id: i64,
-    node_id: i64,
+    user_id: Uuid,
+    node_id: Uuid,
     required: i32,
 ) -> (bool, i32) {
     let max_perm: Option<Option<i32>> = sqlx::query_scalar(
@@ -262,7 +263,7 @@ pub async fn has_permission(
 
 #[derive(Debug, Clone, Default)]
 pub struct NodeWrite {
-    pub parent_id: Option<i64>,
+    pub parent_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<String>,
@@ -283,8 +284,8 @@ pub struct NodeWrite {
 
 pub async fn insert(
     pool: &PgPool,
-    id: i64,
-    user_id: i64,
+    id: Uuid,
+    user_id: Uuid,
     n: &NodeWrite,
     now: i64,
 ) -> Result<(), sqlx::Error> {
@@ -322,7 +323,7 @@ pub async fn insert(
 
 pub async fn update(
     pool: &PgPool,
-    id: i64,
+    id: Uuid,
     n: &NodeWrite,
     updated: i64,
 ) -> Result<(), sqlx::Error> {
@@ -364,8 +365,8 @@ pub async fn update(
 
 /// Ids of `node_id` plus every descendant (parent_id chain; node_links do not
 /// carry content and are filtered at read time instead of being copied here).
-pub async fn subtree_ids(pool: &PgPool, node_id: i64) -> Result<Vec<i64>, sqlx::Error> {
-    let rows: Vec<(i64,)> = sqlx::query_as(
+pub async fn subtree_ids(pool: &PgPool, node_id: Uuid) -> Result<Vec<Uuid>, sqlx::Error> {
+    let rows: Vec<(Uuid,)> = sqlx::query_as(
         r#"
         WITH RECURSIVE descendants AS (
             SELECT id FROM nodes WHERE id = $1
@@ -384,7 +385,7 @@ pub async fn subtree_ids(pool: &PgPool, node_id: i64) -> Result<Vec<i64>, sqlx::
 /// stamp (used as the batch key for restore) and the affected node count.
 pub async fn soft_delete_subtree(
     pool: &PgPool,
-    node_id: i64,
+    node_id: Uuid,
     now: i64,
 ) -> Result<(i64, u64), sqlx::Error> {
     let ids = subtree_ids(pool, node_id).await?;
@@ -405,7 +406,7 @@ pub async fn soft_delete_subtree(
 /// deleted in a different batch. Ordered most recently deleted first.
 /// `batch_size` = nodes sharing the same batch stamp under that root, computed
 /// in the same query (no N+1).
-pub async fn list_trash(pool: &PgPool, user_id: i64) -> Result<Vec<TrashRow>, sqlx::Error> {
+pub async fn list_trash(pool: &PgPool, user_id: Uuid) -> Result<Vec<TrashRow>, sqlx::Error> {
     sqlx::query_as::<_, TrashRow>(
         r#"
         WITH RECURSIVE trashed AS (
@@ -494,7 +495,7 @@ pub async fn restore_subtree(
 
 /// Physical delete of a trashed subtree (S3 cleanup happens in the route,
 /// before this call). Returns the removed node count.
-pub async fn purge_subtree(pool: &PgPool, node_id: i64) -> Result<u64, sqlx::Error> {
+pub async fn purge_subtree(pool: &PgPool, node_id: Uuid) -> Result<u64, sqlx::Error> {
     let ids = subtree_ids(pool, node_id).await?;
     if ids.is_empty() {
         return Ok(0);
@@ -508,8 +509,8 @@ pub async fn purge_subtree(pool: &PgPool, node_id: i64) -> Result<u64, sqlx::Err
 }
 
 /// Roots of the user's whole trash (used by "empty trash").
-pub async fn trash_roots(pool: &PgPool, user_id: i64) -> Result<Vec<i64>, sqlx::Error> {
-    let rows: Vec<(i64,)> = sqlx::query_as(
+pub async fn trash_roots(pool: &PgPool, user_id: Uuid) -> Result<Vec<Uuid>, sqlx::Error> {
+    let rows: Vec<(Uuid,)> = sqlx::query_as(
         r#"
         SELECT id FROM nodes n
         WHERE n.user_id = $1
@@ -544,7 +545,7 @@ pub fn to_or_tsquery(query: &str) -> String {
 /// LOCATE/SUBSTRING truncation, documented in the research report §3).
 pub async fn search(
     pool: &PgPool,
-    user_id: i64,
+    user_id: Uuid,
     query: &str,
     include_content: bool,
     limit: i32,

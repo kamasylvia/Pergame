@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use serde_json::json;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub const BACKUP_VERSION: &str = "2.0.0";
 
@@ -121,7 +122,7 @@ struct JobEntry {
 #[derive(Default)]
 pub struct BackupStore {
     jobs: Mutex<HashMap<String, JobEntry>>,
-    user_jobs: Mutex<HashMap<i64, String>>,
+    user_jobs: Mutex<HashMap<Uuid, String>>,
 }
 
 fn rfc3339_now() -> String {
@@ -132,7 +133,7 @@ fn rfc3339_now() -> String {
 
 impl BackupStore {
     /// Go cancelExistingBackup: flag + remove the user's previous job.
-    async fn cancel_existing(&self, user_id: i64) {
+    async fn cancel_existing(&self, user_id: Uuid) {
         let mut user_jobs = self.user_jobs.lock().await;
         if let Some(existing) = user_jobs.remove(&user_id)
             && let Some(entry) = self.jobs.lock().await.remove(&existing)
@@ -143,15 +144,22 @@ impl BackupStore {
 
     pub async fn create(
         self: &Arc<Self>,
-        user_id: i64,
+        user_id: Uuid,
         options: BackupOptions,
     ) -> Result<String, crate::error::ApiError> {
         self.cancel_existing(user_id).await;
-
         let job_id = format!("user-{user_id}-backup");
+        self.register(&job_id, user_id, options).await;
+        Ok(job_id)
+    }
+
+    /// Inserts a job row under an explicit id without touching the user's
+    /// current job (for inline runners like the pre-restore safety snapshot,
+    /// which must not cancel anything and is never polled).
+    pub async fn register(&self, job_id: &str, user_id: Uuid, options: BackupOptions) {
         let now = rfc3339_now();
         let job = BackupJob {
-            id: job_id.clone(),
+            id: job_id.to_string(),
             user_id: user_id.to_string(),
             options,
             progress: 0,
@@ -163,14 +171,12 @@ impl BackupStore {
             expires_at: None,
         };
         self.jobs.lock().await.insert(
-            job_id.clone(),
+            job_id.to_string(),
             JobEntry {
                 job,
                 cancelled: Arc::new(AtomicBool::new(false)),
             },
         );
-        self.user_jobs.lock().await.insert(user_id, job_id.clone());
-        Ok(job_id)
     }
 
     pub(crate) async fn update<F: FnOnce(&mut BackupJob)>(&self, job_id: &str, f: F) {
@@ -194,7 +200,7 @@ impl BackupStore {
 
     pub async fn get(
         &self,
-        user_id: i64,
+        user_id: Uuid,
         job_id: &str,
     ) -> Result<BackupJob, crate::error::ApiError> {
         use crate::error::ApiError;
@@ -210,7 +216,7 @@ impl BackupStore {
         Ok(entry.job.clone())
     }
 
-    pub async fn cancel(&self, user_id: i64, job_id: &str) -> Result<(), crate::error::ApiError> {
+    pub async fn cancel(&self, user_id: Uuid, job_id: &str) -> Result<(), crate::error::ApiError> {
         use crate::error::ApiError;
         let mut jobs = self.jobs.lock().await;
         let entry = jobs
@@ -231,7 +237,7 @@ impl BackupStore {
 }
 
 /// Placeholder-path parity: Go fails fast when the storage client is nil.
-pub async fn run_backup_no_storage(store: Arc<BackupStore>, user_id: i64, job_id: String) {
+pub async fn run_backup_no_storage(store: Arc<BackupStore>, user_id: Uuid, job_id: String) {
     let _ = user_id;
     store
         .update(&job_id, |j| {
@@ -244,7 +250,7 @@ pub async fn run_backup_no_storage(store: Arc<BackupStore>, user_id: i64, job_id
 
 /// Soft-link row projection for documents.json (spec note-links.md §2: the
 /// backup carries the links table; a future restore rebuilds rows and skips +
-/// reports ones pointing at missing nodes). Snowflake ids cast to text to
+/// reports ones pointing at missing nodes). UUIDs render as text to
 /// keep the string-on-the-wire contract.
 #[derive(Debug, sqlx::FromRow, Serialize)]
 struct NodeLinkBackup {
@@ -256,13 +262,18 @@ struct NodeLinkBackup {
 }
 
 /// Job phases (Go run() flow): collect → assemble zip → upload → presign.
+/// `passphrase`: caller-supplied snapshot password (fork §2 semantics). None
+/// = plain snapshot. The passphrase is never stored; unattended schedulers
+/// pass the deployment fallback (`passphrase_from_env`), which is usually
+/// unset — an unconfigured scheduler simply produces plain snapshots.
 pub async fn run_backup(
     store: Arc<BackupStore>,
     sql: sqlx::PgPool,
     storage: crate::storage::S3Storage,
-    user_id: i64,
+    user_id: Uuid,
     job_id: String,
     options: BackupOptions,
+    passphrase: Option<String>,
 ) {
     macro_rules! progress {
         ($p:expr, $msg:expr) => {
@@ -296,9 +307,11 @@ pub async fn run_backup(
     }
     progress!(5, "Preparing backup...");
 
-    let encryption =
-        crate::snapcrypto::passphrase_from_env().map(|_| crate::snapcrypto::new_params());
-    let passphrase = crate::snapcrypto::passphrase_from_env();
+    let encryption = passphrase
+        .as_ref()
+        .filter(|p| !p.trim().is_empty())
+        .map(|_| crate::snapcrypto::new_params());
+    let passphrase = passphrase.filter(|p| !p.trim().is_empty());
 
     // ---------------- v2: collect members, then content-addressed blobs ----
     let mut members: Vec<(String, Vec<u8>)> = Vec::new();
@@ -455,9 +468,6 @@ pub async fn run_backup(
 
     // ---------------- manifest + blobs upload ----------------
     let snapshot_id = crate::auth::service::now_ms();
-    let encryption =
-        crate::snapcrypto::passphrase_from_env().map(|_| crate::snapcrypto::new_params());
-    let passphrase = crate::snapcrypto::passphrase_from_env();
     let manifest = BackupManifest {
         version: BACKUP_VERSION.into(),
         id: snapshot_id.to_string(),
@@ -700,7 +710,19 @@ pub fn spawn_snapshot_scheduler(
                 let sql2 = sql.clone();
                 let storage2 = storage.clone();
                 tokio::spawn(async move {
-                    run_backup(store2, sql2, storage2, user_id, job_id, options).await;
+                    // Unattended fallback: deployment passphrase if configured,
+                    // else plain. Per-user passwords can't apply here — no one
+                    // is holding the password at 3am.
+                    run_backup(
+                        store2,
+                        sql2,
+                        storage2,
+                        user_id,
+                        job_id,
+                        options,
+                        crate::snapcrypto::passphrase_from_env(),
+                    )
+                    .await;
                 });
             }
         }

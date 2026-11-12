@@ -6,6 +6,7 @@ use axum::extract::{Multipart, Path, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::AuthUser;
@@ -25,6 +26,11 @@ pub struct BackupBody {
     pub include_settings: bool,
     #[serde(default)]
     pub memo: Option<String>,
+    /// Snapshot password (fork §2 semantics). Some = encrypt with it, None =
+    /// plain snapshot. Never stored; the caller must supply it again to
+    /// restore or download.
+    #[serde(default)]
+    pub passphrase: Option<String>,
 }
 
 fn options_from(body: BackupBody) -> BackupOptions {
@@ -46,7 +52,9 @@ pub async fn create_backup(
     auth: AuthUser,
     body: Option<Json<BackupBody>>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let options = options_from(body.map(|b| b.0).unwrap_or_default());
+    let body = body.map(|b| b.0).unwrap_or_default();
+    let passphrase = body.passphrase.clone();
+    let options = options_from(body);
 
     let job_id = state
         .backups
@@ -62,14 +70,22 @@ pub async fn create_backup(
     let spawn_job_id = job_id.clone();
     if let Some(storage) = state.storage.clone() {
         tokio::spawn(async move {
-            crate::backup::run_backup(store, sql, storage, user_id, spawn_job_id, options).await;
+            crate::backup::run_backup(
+                store,
+                sql,
+                storage,
+                user_id,
+                spawn_job_id,
+                options,
+                passphrase,
+            )
+            .await;
         });
     } else {
         tokio::spawn(async move {
             crate::backup::run_backup_no_storage(store, user_id, spawn_job_id).await;
         });
     }
-
     Ok(ApiOk::with_status(
         axum::http::StatusCode::ACCEPTED,
         json!({ "job_id": job_id_for_response }),
@@ -106,7 +122,7 @@ pub async fn cancel_backup(
 
 impl BackupStore {
     /// Placeholder path parity: Go fails fast when the storage client is nil.
-    pub async fn run_backup_no_storage(&self, user_id: i64, job_id: String) {
+    pub async fn run_backup_no_storage(&self, user_id: Uuid, job_id: String) {
         let _ = user_id;
         self.update(&job_id, |j| {
             j.progress = 0;
@@ -117,9 +133,15 @@ impl BackupStore {
     }
 }
 
-// ---------------- snapshots + restore (spec backup-restore.md) ----------------
+/// Optional passphrase carrier for snapshot read paths (restore / download /
+/// preview): encrypted snapshots need it, plain ones ignore it.
+#[derive(Debug, Deserialize, Default)]
+pub struct PassphraseBody {
+    #[serde(default)]
+    pub passphrase: Option<String>,
+}
 
-fn snapshot_key(user_id: i64, id: &str) -> Result<String, ApiError> {
+fn snapshot_key(user_id: Uuid, id: &str) -> Result<String, ApiError> {
     if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(ApiError::BadRequest("invalid snapshot id".into()));
     }
@@ -128,10 +150,13 @@ fn snapshot_key(user_id: i64, id: &str) -> Result<String, ApiError> {
 
 /// Loads a snapshot as restorable zip bytes, transparently assembling v2
 /// manifests (manifest + blobs) and reading legacy zips as-is.
+/// `passphrase`: snapshot password for encrypted manifests (fork §2: the
+/// caller supplies it; the server never stores it).
 async fn load_snapshot_bytes(
     storage: &crate::storage::S3Storage,
-    user_id: i64,
+    user_id: Uuid,
     id: &str,
+    passphrase: Option<&str>,
 ) -> Result<Vec<u8>, ApiError> {
     if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(ApiError::BadRequest("invalid snapshot id".into()));
@@ -140,7 +165,7 @@ async fn load_snapshot_bytes(
     if let Ok(bytes) = storage.get_backup_object(&manifest_key).await {
         let manifest: crate::backup::BackupManifest = serde_json::from_slice(&bytes)
             .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
-        return crate::restore::assemble_snapshot_zip(storage, user_id, manifest).await;
+        return crate::restore::assemble_snapshot_zip(storage, user_id, manifest, passphrase).await;
     }
     storage.get_backup_object(&snapshot_key(user_id, id)?).await
 }
@@ -215,16 +240,19 @@ pub async fn list_snapshots(
             "format": "v1",
         }));
     }
-    rows.sort_by_key(|r| -r.get("last_modified").and_then(|v| v.as_i64()).unwrap_or(0));
+    rows.sort_by_key(|r| -r.get("last_modified").and_then(|v| v).unwrap_or(0));
     Ok(ApiOk::ok(json!(rows)))
 }
 
 /// GET /backup/snapshots/:id/download — streams the snapshot zip directly
 /// (cookie-authenticated; v2 snapshots are assembled from blobs on the fly).
+/// Encrypted snapshots need `?passphrase=`; portable export keeps ciphertext
+/// blobs as-is (fork §7), so the password is only needed for legacy zips.
 pub async fn download_snapshot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<axum::response::Response, ApiError> {
     use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
     let storage = state
@@ -240,7 +268,15 @@ pub async fn download_snapshot(
                 .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
             crate::restore::export_portable_zip(&storage, auth.user_id(), &manifest).await?
         }
-        Err(_) => load_snapshot_bytes(&storage, auth.user_id(), &id).await?,
+        Err(_) => {
+            load_snapshot_bytes(
+                &storage,
+                auth.user_id(),
+                &id,
+                query.get("passphrase").map(|s| s.as_str()),
+            )
+            .await?
+        }
     };
     let filename = format!("pergame-snapshot-{id}.zip");
     let disposition = format!("attachment; filename=\"{filename}\"");
@@ -285,7 +321,12 @@ pub async fn delete_snapshot(
 /// Safety snapshot (SiYuan "Backup before checkout" parity): taken before any
 /// restore so the replaced state stays recoverable. Memo marks it. Returns the
 /// snapshot id, appended to the restore report's warnings.
-async fn safety_snapshot(state: &AppState, user_id: i64) -> Option<String> {
+///
+/// Runs inline (not via the job registry): the old code created a job row but
+/// never spawned its runner, so it always timed out and no safety snapshot
+/// was ever taken. Plain (no passphrase): it guards the restore itself, and
+/// encrypting it would demand a second password at the worst moment.
+async fn safety_snapshot(state: &AppState, user_id: Uuid) -> Option<String> {
     let storage = state.storage.clone()?;
     let options = crate::backup::BackupOptions {
         include_documents: true,
@@ -293,28 +334,29 @@ async fn safety_snapshot(state: &AppState, user_id: i64) -> Option<String> {
         memo: Some("Pre-restore safety snapshot".into()),
         ..Default::default()
     };
-    let job_id = state.backups.create(user_id, options).await.ok()?;
-    // Synchronous wait: snapshots are small (documents-only), bounded at ~30s.
-    for _ in 0..60 {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        if let Ok(job) = state.backups.get(user_id, &job_id).await {
-            if job.error.is_some() {
-                tracing::warn!(job = %job_id, "safety snapshot failed");
-                return None;
-            }
-            if job.download_url.is_some() || job.progress >= 100 {
-                let snaps = storage.list_backup_snapshots(user_id).await.ok()?;
-                let latest = snaps.iter().map(|(k, _, _)| k).max()?;
-                return latest
-                    .rsplit('/')
-                    .next()
-                    .and_then(|f| f.strip_suffix(".zip"))
-                    .map(|s| s.to_string());
-            }
-        }
-    }
-    tracing::warn!("safety snapshot timed out");
-    None
+    let job_id = format!("user-{user_id}-safety");
+    state
+        .backups
+        .register(&job_id, user_id, options.clone())
+        .await;
+    crate::backup::run_backup(
+        state.backups.clone(),
+        state.db.clone(),
+        storage.clone(),
+        user_id,
+        job_id,
+        options,
+        None,
+    )
+    .await;
+    // run_backup reports via the job row; confirm a fresh manifest landed.
+    let manifests = storage.list_manifests(user_id).await.ok()?;
+    let latest = manifests.iter().map(|(k, _, _)| k).max()?;
+    latest
+        .rsplit('/')
+        .next()
+        .and_then(|f| f.strip_suffix(".json"))
+        .map(|s| s.to_string())
 }
 
 /// POST /backup/snapshots/:id/restore — replace current data with the snapshot.
@@ -322,6 +364,7 @@ pub async fn restore_snapshot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
+    body: Option<Json<PassphraseBody>>,
 ) -> Result<ApiOk<crate::restore::RestoreReport>, ApiError> {
     let storage = state
         .storage
@@ -339,7 +382,9 @@ pub async fn restore_snapshot(
                 ApiError::Conflict("a backup is still running; retry shortly".into())
             }
         })?;
-    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id).await?;
+    let passphrase = body.and_then(|b| b.0.passphrase);
+    let bytes =
+        load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
     let mut report = crate::restore::restore_from_zip(
         state.db.clone(),
         Some(storage.clone()),
@@ -434,12 +479,15 @@ pub async fn preview_snapshot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
+    body: Option<Json<PassphraseBody>>,
 ) -> Result<ApiOk<crate::restore::RestorePlan>, ApiError> {
     let storage = state
         .storage
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id).await?;
+    let passphrase = body.and_then(|b| b.0.passphrase);
+    let bytes =
+        load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
     let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
     Ok(ApiOk::ok(plan))
 }

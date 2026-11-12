@@ -17,16 +17,16 @@ use crate::response::ApiOk;
 fn toasty_err(e: String) -> ApiError {
     ApiError::Internal(Box::new(std::io::Error::other(e)))
 }
-use crate::types::Snowflake;
+use uuid::Uuid;
 
 pub const PERM_READ: i32 = 1;
 pub const PERM_ADMIN: i32 = 3;
 
-fn resolve(param: &str) -> Result<Snowflake, ApiError> {
+fn resolve(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Snowflake::parse(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// Invitation code alphabet excludes confusable glyphs (Go parity).
@@ -103,7 +103,7 @@ pub async fn get_node_permissions(
     Query(q): Query<PermissionsQuery>,
 ) -> Result<ApiOk<Vec<crate::models::PermissionRow>>, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve(&node_id)?.as_i64();
+    let id = resolve(&node_id)?;
     guard::require_node_action(&state.db, &actor, id, NodeAction::ManagePermissions).await?;
 
     let perms = if q.recursive == "true" {
@@ -133,17 +133,17 @@ pub async fn create_permission(
     Json(body): Json<CreatePermissionBody>,
 ) -> Result<ApiOk<crate::models::PermissionRow>, ApiError> {
     let actor: Actor = auth.into();
-    let node = resolve(&node_id)?.as_i64();
+    let node = resolve(&node_id)?;
     if !(PERM_READ..=PERM_ADMIN).contains(&body.permission) {
         return Err(ApiError::BadRequest("invalid permission level".into()));
     }
     guard::require_node_action(&state.db, &actor, node, NodeAction::ManagePermissions).await?;
 
-    let user = Snowflake::parse(&body.user_id)
+    let user = Uuid::parse_str(&body.user_id)
         .ok_or(ApiError::BadRequest("invalid user id".into()))?
-        .as_i64();
+        ;
 
-    let id = state.snowflake.generate().as_i64();
+    let id = crate::types::new_id();
     let mut tdb = state.toasty.clone();
     perm_repo::create(
         &mut tdb,
@@ -179,7 +179,7 @@ pub async fn update_permission(
     Json(body): Json<UpdatePermissionBody>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let _ = node_id;
-    let perm = resolve(&perm_id)?.as_i64();
+    let perm = resolve(&perm_id)?;
     if !(PERM_READ..=PERM_ADMIN).contains(&body.permission) {
         return Err(ApiError::BadRequest("invalid permission level".into()));
     }
@@ -217,7 +217,7 @@ pub async fn delete_permission(
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let _ = node_id;
     let actor: Actor = auth.into();
-    let perm = resolve(&perm_id)?.as_i64();
+    let perm = resolve(&perm_id)?;
 
     let mut tdb = state.toasty.clone();
     let existing = perm_repo::get_by_id(&mut tdb, perm)
@@ -250,7 +250,7 @@ pub async fn get_node_invitations(
     Path(node_id): Path<String>,
 ) -> Result<ApiOk<Vec<serde_json::Value>>, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve(&node_id)?.as_i64();
+    let id = resolve(&node_id)?;
     guard::require_node_action(&state.db, &actor, id, NodeAction::ManagePermissions).await?;
     let rows = perm_repo::invitations_by_node(&state.db, id).await?;
     Ok(ApiOk::ok(
@@ -272,7 +272,7 @@ pub async fn create_invitation(
     Json(body): Json<CreateInvitationBody>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve(&node_id)?.as_i64();
+    let id = resolve(&node_id)?;
     if !(PERM_READ..=PERM_ADMIN).contains(&body.permission_level) {
         return Err(ApiError::BadRequest(
             "Permission level must be between 1 and 3".into(),
@@ -284,7 +284,7 @@ pub async fn create_invitation(
     let mut last_err: Option<sqlx::Error> = None;
     for _ in 0..10 {
         let code = generate_invitation_code(6);
-        let iid = state.snowflake.generate().as_i64();
+        let iid = crate::types::new_id();
         match perm_repo::create_invitation(&state.db, iid, &code, body.permission_level, id, now)
             .await
         {
@@ -322,7 +322,7 @@ pub async fn delete_invitation(
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let _ = node_id;
     let actor: Actor = auth.into();
-    let iid = resolve(&invitation_id)?.as_i64();
+    let iid = resolve(&invitation_id)?;
 
     let row = perm_repo::get_invitation_by_id(&state.db, iid)
         .await
@@ -385,7 +385,7 @@ pub async fn join_invitation(
             }
         }
         None => {
-            let pid = state.snowflake.generate().as_i64();
+            let pid = crate::types::new_id();
             perm_repo::create(
                 &mut tdb,
                 pid,

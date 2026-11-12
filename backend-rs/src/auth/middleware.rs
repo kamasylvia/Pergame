@@ -7,17 +7,17 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use serde_json::json;
 
-use crate::types::Snowflake;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AuthUser {
-    pub id: Snowflake,
+    pub id: Uuid,
     pub role: i32,
 }
 
 impl AuthUser {
-    pub fn user_id(&self) -> i64 {
-        self.id.as_i64()
+    pub fn user_id(&self) -> Uuid {
+        self.id
     }
 }
 
@@ -72,10 +72,7 @@ impl FromRequestParts<crate::AppState> for AuthUser {
         };
 
         match super::jwt::verify_access_token(&token) {
-            Ok((user_id, role)) => Ok(AuthUser {
-                id: Snowflake(user_id),
-                role,
-            }),
+            Ok((user_id, role)) => Ok(AuthUser { id: user_id, role }),
             Err(_) => Err(unauthorized("Bad access token.")),
         }
     }

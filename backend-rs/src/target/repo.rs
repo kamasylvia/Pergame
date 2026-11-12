@@ -49,7 +49,7 @@ pub struct TargetInput {
     pub enabled: bool,
     /// Owning user ids (empty = unassigned, cannot enable).
     #[serde(default)]
-    pub users: Vec<i64>,
+    pub users: Vec<Uuid>,
     /// Namespace is server-allocated (ULID) at creation and never accepted
     /// from the client — two instances sharing a store stay isolated without
     /// anyone configuring it. Ignored when supplied.
@@ -263,8 +263,11 @@ pub async fn upsert_target(
             "a target with no assigned users cannot be enabled".into(),
         ));
     }
-    if !matches!(input.kind.as_str(), "s3" | "webdav" | "pg") {
-        return Err(ApiError::BadRequest("kind must be s3|webdav|pg".into()));
+    // Siyuan fork §1 parity: only S3 and WebDAV. Stored `pg` rows from older
+    // builds are inert: kind() rejects them, so they can be listed and
+    // deleted but never connected.
+    if !matches!(input.kind.as_str(), "s3" | "webdav") {
+        return Err(ApiError::BadRequest("kind must be s3|webdav".into()));
     }
     // Save gate (siyuan #15 §9): a target may only be written after its
     // connection fields were tested. Existing targets may skip the gate when
@@ -477,7 +480,7 @@ fn resolve_secret(incoming: &str, previous: &str) -> String {
 pub async fn empty_target(pool: &PgPool, id: Uuid) -> Result<usize, ApiError> {
     let row = get_target(pool, id).await?;
     let conn = row.connect().await?;
-    let objects = conn.list(conn.list_prefix(&row.prefix)).await?;
+    let objects = conn.list(conn.list_prefix()).await?;
     let mut deleted = 0usize;
     for (key, _, _) in objects {
         if conn.delete(&key).await.is_ok() {

@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::AuthUser;
@@ -53,8 +54,8 @@ pub async fn get_user_nodes(
     let caller = auth.user_id();
     let actor: Actor = auth.into();
     let target = resolve_user_param(&user_id, caller)?;
-    guard::require_user_access(&actor, target.as_i64())?;
-    let nodes = node_repo::list_all(&state.db, target.as_i64()).await?;
+    guard::require_user_access(&actor, target)?;
+    let nodes = node_repo::list_all(&state.db, target).await?;
     Ok(ApiOk::ok(nodes))
 }
 
@@ -67,10 +68,10 @@ pub async fn get_shared_nodes(
     let caller = auth.user_id();
     let actor: Actor = auth.into();
     let target = resolve_user_param(&user_id, caller)?;
-    guard::require_user_access(&actor, target.as_i64())?;
-    let nodes = node_repo::list_shared(&state.db, target.as_i64()).await?;
-    let ids: Vec<i64> = nodes.iter().map(|n| n.id).collect();
-    let perms = node_repo::permissions_for_nodes(&state.db, target.as_i64(), &ids).await?;
+    guard::require_user_access(&actor, target)?;
+    let nodes = node_repo::list_shared(&state.db, target).await?;
+    let ids: Vec<Uuid> = nodes.iter().map(|n| n.id).collect();
+    let perms = node_repo::permissions_for_nodes(&state.db, target, &ids).await?;
     // Attach permissions array to each shared node (Go shape).
     let value: Vec<serde_json::Value> = nodes
         .iter()
@@ -97,7 +98,7 @@ pub async fn get_node(
     Path(node_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
     let node = guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
     let perms = node_repo::permissions_for_nodes(&state.db, actor.user_id, &[id]).await?;
     let owner = node.user_id == actor.user_id;
@@ -117,7 +118,7 @@ pub async fn get_public_node(
     State(state): State<AppState>,
     Path(node_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
     let node = node_repo::get_public(&state.db, id).await?;
     if node.is_none() {
         // Go: nil service result marshals to `null`.
@@ -218,19 +219,19 @@ fn node_size(
     Some(total)
 }
 
-fn resolve_id(param: &str) -> Result<crate::types::Snowflake, ApiError> {
+fn resolve_id(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    crate::types::Snowflake::parse(param)
+    Uuid::parse_str(param)
         .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// User-scoped path param: "@me" resolves to the authenticated caller
 /// (frontend contract `nodes/user/@me`, Go controller parity).
-fn resolve_user_param(param: &str, caller: i64) -> Result<crate::types::Snowflake, ApiError> {
+fn resolve_user_param(param: &str, caller: Uuid) -> Result<Uuid, ApiError> {
     if param == "@me" {
-        return Ok(crate::types::Snowflake(caller as u64));
+        return Ok(caller);
     }
     resolve_id(param)
 }
@@ -266,7 +267,7 @@ pub async fn create_node(
     let mut write = input.into_write();
     write.parent_id = safe_parent;
 
-    let id = state.snowflake.generate().as_i64();
+    let id = crate::types::new_id();
     let now = node_repo::now_ms();
     node_repo::insert(&state.db, id, actor.user_id, &write, now)
         .await
@@ -290,7 +291,7 @@ pub async fn update_node(
     Json(input): Json<NodeInput>,
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
 
     let db_node = node_repo::get_by_id(&state.db, id)
         .await
@@ -370,7 +371,7 @@ pub async fn delete_node(
     Path(node_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let actor: Actor = auth.into();
-    let id = resolve_id(&node_id)?.as_i64();
+    let id = resolve_id(&node_id)?;
     let node = guard::require_node_action(&state.db, &actor, id, NodeAction::Delete).await?;
 
     let (deleted_at, affected) =

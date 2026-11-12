@@ -180,7 +180,7 @@ interface Probe {
 const { t } = useI18nT();
 const notifications = useNotifications();
 
-const KINDS = ['s3', 'webdav', 'pg'] as unknown as never[];
+const KINDS = ['s3', 'webdav'] as unknown as never[];
 
 const targets = ref<Target[]>([]);
 const users = ref<Array<{ id: string; username: string; email?: string }>>([]);
@@ -236,20 +236,12 @@ const needsTest = computed(
 );
 
 const endpointHint = computed(() =>
-  form.kind === 's3'
-    ? 'https://s3.example.com:9000'
-    : form.kind === 'webdav'
-      ? 'https://nas.example.com/dav'
-      : 'db.example.com:5432',
+  form.kind === 's3' ? 'https://s3.example.com:9000' : 'https://nas.example.com/dav',
 );
 
-const bucketLabel = computed(() =>
-  form.kind === 'pg' ? t('settings.snapshotTargets.schema') : t('settings.snapshotTargets.bucket'),
-);
+const bucketLabel = computed(() => t('settings.snapshotTargets.bucket'));
 
-const bucketHint = computed(() =>
-  form.kind === 'pg' ? 'pergame_backup' : 'pergame-offsite',
-);
+const bucketHint = 'pergame-offsite';
 
 onMounted(async () => {
   await Promise.all([load(), loadUsers()]);

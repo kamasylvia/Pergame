@@ -5,9 +5,9 @@
 -- ==============================================================================
 
 CREATE TABLE node_links (
-    id                BIGINT PRIMARY KEY,
-    parent_id         BIGINT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-    node_id           BIGINT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    id                UUID PRIMARY KEY,
+    parent_id         UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    node_id           UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     created_timestamp BIGINT NOT NULL,
     UNIQUE (parent_id, node_id)
 );

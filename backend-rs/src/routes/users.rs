@@ -10,7 +10,7 @@ use crate::auth::AuthUser;
 use crate::auth::service::{self, SignupInput};
 use crate::error::ApiError;
 use crate::response::ApiOk;
-use crate::types::Snowflake;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateUserBody {
@@ -73,7 +73,6 @@ pub async fn create_user(
     let mut db = state.toasty.clone();
     let user = service::signup(
         &mut db,
-        &state.snowflake,
         SignupInput {
             username: body.username,
             firstname: body.firstname.filter(|s| !s.is_empty()),
@@ -106,14 +105,14 @@ pub async fn get_user(
     _auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<crate::models::User>, ApiError> {
-    let snowflake =
-        Snowflake::parse(&id).ok_or_else(|| ApiError::BadRequest("Invalid user ID".into()))?;
+    let uid =
+        Uuid::parse_str(&id).ok_or_else(|| ApiError::BadRequest("Invalid user ID".into()))?;
     let mut db = state.toasty.clone();
-    let user = fetch_user(&mut db, snowflake.as_i64()).await?;
+    let user = fetch_user(&mut db, uid).await?;
     Ok(ApiOk::ok(user))
 }
 
-async fn fetch_user(db: &mut toasty::Db, id: i64) -> Result<crate::models::User, ApiError> {
+async fn fetch_user(db: &mut toasty::Db, id: Uuid) -> Result<crate::models::User, ApiError> {
     crate::models::User::filter_by_id(id)
         .first()
         .exec(db)

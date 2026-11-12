@@ -8,6 +8,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::service::now_ms;
@@ -58,7 +59,7 @@ async fn resolve_user_id(
     _state: &AppState,
     auth: Option<AuthUser>,
     pre_auth_token: Option<String>,
-) -> Result<i64, ApiError> {
+) -> Result<Uuid, ApiError> {
     if let Some(auth) = auth {
         return Ok(auth.user_id());
     }
@@ -66,7 +67,7 @@ async fn resolve_user_id(
         .filter(|t| !t.is_empty())
         .ok_or(ApiError::BadRequest("pre_auth_token is required".into()))?;
     jwt::verify_pre_auth_token(&token)
-        .map(|id| id as i64)
+        .map(|id| id)
         .map_err(|_| ApiError::Unauthorized("invalid pre-authentication token".into()))
 }
 
@@ -130,7 +131,7 @@ pub async fn confirm_activation(
 
     let mut db = state.toasty.clone();
     let plain_codes =
-        totp::enable_totp(&mut db, &state.snowflake, user_id, &body.secret, &body.code).await?;
+        totp::enable_totp(&mut db, user_id, &body.secret, &body.code).await?;
     Ok(ok_envelope(json!({ "backup_codes": plain_codes })))
 }
 
@@ -158,11 +159,11 @@ pub async fn verify_totp(
     let user = totp::verify_pre_auth_and_user(&mut db, &body.pre_auth_token, &body.code).await?;
 
     let refresh_token =
-        totp::create_login_session(&mut db, &state.snowflake, user.id, &ctx.ip, &ctx.user_agent)
+        totp::create_login_session(&mut db, user.id, &ctx.ip, &ctx.user_agent)
             .await?;
 
     let cfg = crate::config::global();
-    let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
+    let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
         .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to sign token"))))?;
 
     Ok(envelope_with_cookies(

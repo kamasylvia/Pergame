@@ -9,6 +9,7 @@
 //! query model does not express.
 
 use sqlx::PgPool;
+use uuid::Uuid;
 use toasty::Db;
 
 use crate::models::{LinkRow, NodeLink};
@@ -17,9 +18,9 @@ use crate::models::{LinkRow, NodeLink};
 /// keep their existing 409 mapping.
 pub async fn create(
     db: &mut Db,
-    id: i64,
-    parent_id: i64,
-    node_id: i64,
+    id: Uuid,
+    parent_id: Uuid,
+    node_id: Uuid,
     order: i32,
     now: i64,
 ) -> Result<(), String> {
@@ -36,7 +37,7 @@ pub async fn create(
 }
 
 /// Deletes one link position; false when the row did not exist.
-pub async fn delete(db: &mut Db, id: i64) -> Result<bool, String> {
+pub async fn delete(db: &mut Db, id: Uuid) -> Result<bool, String> {
     let existed = NodeLink::filter_by_id(id)
         .first()
         .exec(db)
@@ -54,7 +55,7 @@ pub async fn delete(db: &mut Db, id: i64) -> Result<bool, String> {
     Ok(true)
 }
 
-pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<LinkRow>, String> {
+pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<LinkRow>, String> {
     let row = NodeLink::filter_by_id(id)
         .first()
         .exec(db)
@@ -69,7 +70,7 @@ pub async fn get_by_id(db: &mut Db, id: i64) -> Result<Option<LinkRow>, String> 
     }))
 }
 
-pub async fn links_of_node(db: &mut Db, node_id: i64) -> Result<Vec<LinkRow>, String> {
+pub async fn links_of_node(db: &mut Db, node_id: Uuid) -> Result<Vec<LinkRow>, String> {
     let rows = NodeLink::filter_by_node_id(node_id)
         .exec(db)
         .await
@@ -88,7 +89,7 @@ pub async fn links_of_node(db: &mut Db, node_id: i64) -> Result<Vec<LinkRow>, St
 
 /// All link rows anchored on the user's own nodes (v1 scope: private tree;
 /// shared/team links join through node ownership like the backup export).
-pub async fn list_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<LinkRow>, sqlx::Error> {
+pub async fn list_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<LinkRow>, sqlx::Error> {
     sqlx::query_as::<_, LinkRow>(
         "SELECT nl.id, nl.parent_id, nl.node_id, nl.created_timestamp, nl.\"order\" \
          FROM node_links nl JOIN nodes n ON n.id = nl.node_id \
@@ -103,10 +104,10 @@ pub async fn list_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<LinkRow>, s
 /// (recursive walk; links do not participate — the tree is parent_id-only).
 pub async fn is_self_or_descendant(
     pool: &PgPool,
-    node_id: i64,
-    candidate_id: i64,
+    node_id: Uuid,
+    candidate_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let hit: Option<(i64,)> = sqlx::query_as(
+    let hit: Option<(Uuid,)> = sqlx::query_as(
         r#"
         WITH RECURSIVE descendants AS (
             SELECT id FROM nodes WHERE id = $1

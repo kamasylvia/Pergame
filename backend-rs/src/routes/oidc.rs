@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use rand::RngExt;
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::{AuthUser, cookies, jwt};
@@ -155,7 +156,7 @@ pub async fn callback(
     if state_data.is_link {
         oidc_repo::link_provider(
             &state.db,
-            &state.snowflake,
+            
             state_data.user_id,
             &provider,
             &user_info.sub,
@@ -173,11 +174,10 @@ pub async fn callback(
     let _is_new = false; // parity detail: LoginOrCreate signals new; surfaced via created timestamps
 
     let cfg = crate::config::global();
-    let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
+    let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
         .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to sign token"))))?;
     let refresh_token = crate::auth::totp::create_login_session_type(
         &mut db,
-        &state.snowflake,
         user.id,
         &ctx.ip,
         &ctx.user_agent,
@@ -311,7 +311,7 @@ async fn oidc_login_or_create(
     if is_new {
         oidc_repo::link_provider(
             &state.db,
-            &state.snowflake,
+            
             user_id,
             provider,
             &user_info.sub,
@@ -321,7 +321,6 @@ async fn oidc_login_or_create(
 
     crate::auth::totp::create_login_session_type(
         db,
-        &state.snowflake,
         user_id,
         &ctx.ip,
         &ctx.user_agent,
@@ -342,8 +341,8 @@ async fn create_user_from_oidc(
     db: &mut toasty::Db,
     state: &AppState,
     user_info: &UserInfo,
-) -> Result<i64, ApiError> {
-    let user_id = state.snowflake.generate().as_i64();
+) -> Result<Uuid, ApiError> {
+    let user_id = crate::types::new_id();
     let username = generate_unique_username(db, user_info.preferred_username.as_deref(), user_id);
     let now = now_ms();
 
@@ -379,7 +378,7 @@ async fn create_user_from_oidc(
 
 /// Go GenerateUniqueUsername: sanitized preferred name (or "Alex-{adjective}")
 /// + "-%06d" of the id mod 1e6.
-fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: i64) -> String {
+fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: Uuid) -> String {
     let mut base = String::new();
     if let Some(name) = given {
         let trimmed = name.trim();
@@ -402,6 +401,6 @@ fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: 
         let adj = ADJECTIVES[rand::rng().random_range(0..ADJECTIVES.len())];
         base = format!("Alex-{adj}");
     }
-    let suffix = format!("{:06}", user_id % 1_000_000);
+    let suffix = format!("{:06}", user_id.as_u128() % 1_000_000);
     format!("{base}-{suffix}")
 }

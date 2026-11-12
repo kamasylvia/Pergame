@@ -19,6 +19,7 @@ use aws_smithy_runtime_api::client::http::SharedHttpClient;
 const BACKUP_PRESIGN_SECONDS: u64 = 24 * 3600;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::operation::create_bucket::CreateBucketOutput;
+use uuid::Uuid;
 
 use crate::error::ApiError;
 
@@ -111,15 +112,14 @@ fn load_custom_ca_client(ca_path: &str) -> Result<SharedHttpClient, String> {
 }
 
 impl S3Storage {
-    /// Creates both buckets idempotently; sets the public-read policy (warn +
-    /// continue on providers without PutBucketPolicy, Go parity). The backups
-    /// bucket has no lifecycle rule: snapshot retention is managed by the app
-    /// (keep-last-N prune, see backup.rs) instead of a blanket expiry.
+    /// Creates the main bucket idempotently; sets the public-read policy (warn +
+    /// continue on providers without PutBucketPolicy, Go parity).
+    /// The backups bucket is deliberately NOT created here: snapshots write
+    /// straight to the user's own targets, so a deployment with no backup
+    /// configured owns no backup bucket at all.
     pub async fn ensure_buckets(&self) -> Result<(), ApiError> {
         self.ensure_bucket(&self.bucket).await?;
         self.set_public_policy(&self.bucket).await;
-        self.ensure_bucket(&self.backup_bucket).await?;
-        self.clear_backup_lifecycle(&self.backup_bucket).await;
         Ok(())
     }
 
@@ -168,23 +168,10 @@ impl S3Storage {
         }
     }
 
-    /// Previously a 24h blanket lifecycle rule deleted backups a day after
-    /// upload; snapshots are now multi-version and app-pruned, so no lifecycle
-    /// rule is installed. Best-effort removal for buckets that still carry the
-    /// old rule from earlier bootstraps.
-    async fn clear_backup_lifecycle(&self, bucket: &str) {
-        let _ = self
-            .client
-            .delete_bucket_lifecycle()
-            .bucket(bucket)
-            .send()
-            .await;
-    }
-
     /// PUT object under `{user_id}/{key}`.
     pub async fn put_user_object(
         &self,
-        user_id: i64,
+        user_id: Uuid,
         key: &str,
         content: Vec<u8>,
         content_type: Option<&str>,
@@ -209,7 +196,7 @@ impl S3Storage {
     /// dedup: skip the PUT).
     pub async fn blob_exists(
         &self,
-        user_id: i64,
+        user_id: Uuid,
         e2e: bool,
         sha256_hex: &str,
     ) -> Result<bool, ApiError> {
@@ -240,7 +227,7 @@ impl S3Storage {
     /// PUTs a blob under `{uid}/blobs[-e2e]/{sha256}` (caller deduped).
     pub async fn put_blob(
         &self,
-        user_id: i64,
+        user_id: Uuid,
         e2e: bool,
         sha256_hex: &str,
         content: Vec<u8>,
@@ -264,7 +251,7 @@ impl S3Storage {
     /// GETs a blob by hex sha (decryption is the caller's concern).
     pub async fn get_blob(
         &self,
-        user_id: i64,
+        user_id: Uuid,
         e2e: bool,
         sha256_hex: &str,
     ) -> Result<Vec<u8>, ApiError> {
@@ -286,7 +273,7 @@ impl S3Storage {
     }
 
     /// Lists manifest objects under `{uid}/manifests/` as (key, size, mtime_ms).
-    pub async fn list_manifests(&self, user_id: i64) -> Result<Vec<(String, i64, i64)>, ApiError> {
+    pub async fn list_manifests(&self, user_id: Uuid) -> Result<Vec<(String, i64, i64)>, ApiError> {
         let prefix = format!("{user_id}/manifests/");
         let mut out = Vec::new();
         let resp = self
@@ -313,7 +300,7 @@ impl S3Storage {
     }
 
     /// Lists all blob keys under both blob dirs (for GC reachability checks).
-    pub async fn list_blob_keys(&self, user_id: i64) -> Result<Vec<String>, ApiError> {
+    pub async fn list_blob_keys(&self, user_id: Uuid) -> Result<Vec<String>, ApiError> {
         let mut out = Vec::new();
         for dir in ["blobs", "blobs-e2e"] {
             let prefix = format!("{user_id}/{dir}/");
@@ -341,7 +328,7 @@ impl S3Storage {
     /// (key, size_bytes, last_modified_epoch_ms), oldest first.
     pub async fn list_backup_snapshots(
         &self,
-        user_id: i64,
+        user_id: Uuid,
     ) -> Result<Vec<(String, i64, i64)>, ApiError> {
         let prefix = format!("{user_id}/snapshots/");
         let mut out = Vec::new();
@@ -404,7 +391,7 @@ impl S3Storage {
     }
 
     /// Deletes `{user_id}/{key}` (best-effort, Go parity: failures logged).
-    pub async fn delete_user_object(&self, user_id: i64, key: &str) {
+    pub async fn delete_user_object(&self, user_id: Uuid, key: &str) {
         let object_key = format!("{}/{}", user_id, key);
         if let Err(e) = self
             .client
@@ -420,7 +407,7 @@ impl S3Storage {
 
     /// Deletes everything under the `{user_id}/{node_id}` prefix (fallback
     /// sweep of a resource node, Go DeleteSingleResource fallback path).
-    pub async fn delete_node_prefix(&self, user_id: i64, node_id: i64) {
+    pub async fn delete_node_prefix(&self, user_id: Uuid, node_id: Uuid) {
         let prefix = format!("{}/{}/", user_id, node_id);
         let Ok(list) = self
             .client
@@ -449,7 +436,7 @@ impl S3Storage {
     }
 
     /// GET object bytes (backup archiving).
-    pub async fn get_user_object(&self, user_id: i64, key: &str) -> Result<Vec<u8>, ApiError> {
+    pub async fn get_user_object(&self, user_id: Uuid, key: &str) -> Result<Vec<u8>, ApiError> {
         let object_key = format!("{}/{}", user_id, key);
         let resp = self
             .client
@@ -512,8 +499,8 @@ impl S3Storage {
     /// prefix sweep (Go DeleteSingleResource parity).
     pub async fn delete_resource_files(
         &self,
-        user_id: i64,
-        node_id: i64,
+        user_id: Uuid,
+        node_id: Uuid,
         metadata: Option<&serde_json::Value>,
     ) {
         if let Some(meta) = metadata

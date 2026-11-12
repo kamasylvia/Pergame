@@ -112,7 +112,6 @@ pub async fn login(
     let mut db = state.toasty.clone();
     let outcome = service::login(
         &mut db,
-        &state.snowflake,
         &input.username,
         &input.password,
         &ctx.ip,
@@ -140,7 +139,7 @@ pub async fn login(
         } => {
             let cfg = crate::config::global();
             let token =
-                jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
+                jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
                     .map_err(|_| {
                         ApiError::Internal(Box::new(std::io::Error::other("failed to sign token")))
                     })?;
@@ -168,7 +167,7 @@ pub async fn refresh(
     let (user, new_refresh) = service::refresh_session(&mut db, &refresh_token).await?;
 
     let cfg = crate::config::global();
-    let token = jwt::sign_access_token(user.id as u64, user.role, cfg.auth.access_token_expiry)
+    let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
         .map_err(|_| ApiError::Internal(Box::new(std::io::Error::other("failed to sign token"))))?;
 
     Ok(envelope_with_cookies(

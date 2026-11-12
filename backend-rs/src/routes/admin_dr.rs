@@ -836,11 +836,11 @@ pub async fn sync_target(
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let row = target_repo::get_target(&state.db, id).await?;
-    let users: Vec<i64> = match body.and_then(|b| b.0.user_id) {
+    let users: Vec<uuid::Uuid> = match body.and_then(|b| b.0.user_id) {
         Some(uid) => uid
-            .parse::<i64>()
+            .parse::<uuid::Uuid>()
             .map(|v| vec![v])
-            .map_err(|_| ApiError::BadRequest("user_id must be numeric".into()))?,
+            .map_err(|_| ApiError::BadRequest("user_id must be a UUID".into()))?,
         None => row.users.clone(),
     };
     let mut results = Vec::new();
@@ -869,14 +869,14 @@ pub async fn fetch_target(
         .user_id
         .as_deref()
         .ok_or(ApiError::BadRequest("user_id is required".into()))?
-        .parse::<i64>()
-        .map_err(|_| ApiError::BadRequest("user_id must be numeric".into()))?;
+        .parse::<uuid::Uuid>()
+        .map_err(|_| ApiError::BadRequest("user_id must be a UUID".into()))?;
     let fetched = fanout::fetch_user_from_target(&state.db, &storage, id, uid).await?;
     Ok(ApiOk::ok(json!({ "fetched": fetched })))
 }
 
 /// GET /api/admin/dr-backup/backup-users — users that own data (candidates
-/// for target assignment). Admin only; ids are snowflake strings on the wire.
+/// for target assignment). Admin only; ids are UUID strings on the wire.
 pub async fn list_backup_users(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -926,7 +926,7 @@ pub async fn export_target_snapshot(
     let row = target_repo::get_target(&state.db, target_id).await?;
     let conn = row.connect().await?;
     let manifest_key = format!("{snapshot_id}.json");
-    let objects = conn.list(conn.list_prefix(&row.prefix)).await?;
+    let objects = conn.list(conn.list_prefix()).await?;
     let manifest_obj = objects
         .iter()
         .find(|(k, _, _)| k.ends_with(&format!("/manifests/{manifest_key}")))

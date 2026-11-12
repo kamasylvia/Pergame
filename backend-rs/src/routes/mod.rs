@@ -12,5 +12,6 @@ pub mod sessions_reset;
 pub mod settings;
 pub mod totp;
 pub mod trash;
+pub mod user_targets;
 pub mod users;
 pub mod users_patch;

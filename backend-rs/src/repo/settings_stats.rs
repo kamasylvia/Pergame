@@ -2,18 +2,19 @@
 //! stats}.repository.go parity, PostgreSQL dialect).
 
 use sqlx::PgPool;
+use uuid::Uuid;
 
 // ------------------------------------------------------------------ settings
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
 pub struct SettingsRow {
-    pub user_id: i64,
+    pub user_id: Uuid,
     pub general: serde_json::Value,
     pub editor: serde_json::Value,
     pub advanced: serde_json::Value,
 }
 
-pub async fn get_settings(pool: &PgPool, user_id: i64) -> Result<Option<SettingsRow>, sqlx::Error> {
+pub async fn get_settings(pool: &PgPool, user_id: Uuid) -> Result<Option<SettingsRow>, sqlx::Error> {
     sqlx::query_as::<_, SettingsRow>(
         "SELECT user_id, general, editor, advanced FROM user_settings WHERE user_id = $1",
     )
@@ -25,7 +26,7 @@ pub async fn get_settings(pool: &PgPool, user_id: i64) -> Result<Option<Settings
 /// Go Upsert parity: INSERT ... ON CONFLICT (user_id) DO UPDATE.
 pub async fn upsert_settings(
     pool: &PgPool,
-    user_id: i64,
+    user_id: Uuid,
     general: &serde_json::Value,
     editor: &serde_json::Value,
     advanced: &serde_json::Value,
@@ -108,7 +109,7 @@ pub async fn nodes_monthly_growth(
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
 pub struct NodeOwnerStats {
-    pub user_id: i64,
+    pub user_id: Uuid,
     pub username: String,
     pub node_count: i64,
     pub total_size: i64,
