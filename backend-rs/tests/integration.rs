@@ -154,11 +154,19 @@ async fn cleanup_user(user_id: &str) {
         .await
     {
         let _ = sqlx::query("DELETE FROM backup_targets WHERE $1 = ANY(users)")
-            .bind(user_id.parse::<uuid::Uuid>().unwrap_or_else(|_| uuid::Uuid::nil()))
+            .bind(
+                user_id
+                    .parse::<uuid::Uuid>()
+                    .unwrap_or_else(|_| uuid::Uuid::nil()),
+            )
             .execute(&pool)
             .await;
         let _ = sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user_id.parse::<uuid::Uuid>().unwrap_or_else(|_| uuid::Uuid::nil()))
+            .bind(
+                user_id
+                    .parse::<uuid::Uuid>()
+                    .unwrap_or_else(|_| uuid::Uuid::nil()),
+            )
             .execute(&pool)
             .await;
     }

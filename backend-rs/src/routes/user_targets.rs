@@ -19,7 +19,7 @@ use crate::AppState;
 use crate::auth::AuthUser;
 use crate::error::ApiError;
 use crate::response::ApiOk;
-use crate::target::{fanout, repo as target_repo};
+use crate::target::repo as target_repo;
 
 /// Admins pass; regular users must be listed on the target row.
 async fn require_owner(
@@ -175,39 +175,38 @@ pub async fn empty_target(
     Ok(ApiOk::ok(json!({ "deleted_objects": deleted })))
 }
 
-/// POST /api/backup/targets/:id/sync — manual fan-out of the caller's data now.
+/// POST /api/backup/targets/:id/sync — run a snapshot of the caller's data
+/// now (direct-write: lands on all of the caller's targets). Returns the
+/// spawned job id.
 pub async fn sync_target(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_owner(&state.db, &auth, id).await?;
+    let row = require_owner(&state.db, &auth, id).await?;
     let storage = state
         .storage
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    // The user route syncs the caller only; cross-user sync stays admin-only.
-    let mut results = Vec::new();
-    for r in fanout::fanout_user(&state.db, &storage, auth.user_id()).await {
-        results.push(json!(r));
-    }
-    Ok(ApiOk::ok(json!(results)))
-}
-
-/// POST /api/backup/targets/:id/fetch — pull the caller's objects from the
-/// target back into the local bucket (prerequisite for restore).
-pub async fn fetch_target(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_owner(&state.db, &auth, id).await?;
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    let fetched = fanout::fetch_user_from_target(&state.db, &storage, id, auth.user_id()).await?;
-    Ok(ApiOk::ok(json!({ "fetched": fetched })))
+    let options = crate::backup::BackupOptions {
+        include_documents: true,
+        include_files: true,
+        include_settings: true,
+        include_metadata: true,
+        memo: Some(format!("Manual sync ({})", row.name)),
+    };
+    let job_id = state
+        .backups
+        .create(auth.user_id(), options.clone())
+        .await?;
+    let store = state.backups.clone();
+    let sql = state.db.clone();
+    let uid = auth.user_id();
+    let spawn_job_id = job_id.clone();
+    tokio::spawn(async move {
+        crate::backup::run_backup(store, sql, storage, uid, spawn_job_id, options, None).await;
+    });
+    Ok(ApiOk::ok(json!({ "job_id": job_id })))
 }
 
 /// GET /api/backup/targets/:id/export/:snapshotId — portable zip of one

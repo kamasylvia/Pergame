@@ -49,8 +49,8 @@ pub async fn create_link(
     let actor: Actor = auth.into();
     let node = resolve(&node_id)?;
 
-    let parent =
-        Uuid::parse_str(&body.parent_id).map_err(|_| ApiError::BadRequest("invalid parent_id".into()))?;
+    let parent = Uuid::parse_str(&body.parent_id)
+        .map_err(|_| ApiError::BadRequest("invalid parent_id".into()))?;
     if parent == node {
         return Err(ApiError::BadRequest(
             "cannot link a note into itself".into(),

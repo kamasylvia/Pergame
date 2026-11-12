@@ -120,6 +120,35 @@ pub async fn cancel_backup(
     ))
 }
 
+/// GET /backup/:jobId/download — one-shot download of a zero-target
+/// snapshot zip (fork §4 "save zip locally"). The bytes are removed on
+/// first successful read; re-download requires a fresh snapshot.
+pub async fn download_job_zip(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(job_id): Path<String>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
+    use axum::response::IntoResponse;
+    if job_id.is_empty() {
+        return Err(ApiError::BadRequest("job ID is required".into()));
+    }
+    let bytes = state
+        .backups
+        .take_inline_zip(auth.user_id(), &job_id)
+        .await?;
+    let disposition = format!("attachment; filename=\"pergame-snapshot-{job_id}.zip\"");
+    Ok((
+        axum::http::StatusCode::OK,
+        [
+            (CONTENT_TYPE, "application/zip"),
+            (CONTENT_DISPOSITION, disposition.as_str()),
+        ],
+        bytes,
+    )
+        .into_response())
+}
+
 impl BackupStore {
     /// Placeholder path parity: Go fails fast when the storage client is nil.
     pub async fn run_backup_no_storage(&self, user_id: Uuid, job_id: String) {
@@ -141,19 +170,13 @@ pub struct PassphraseBody {
     pub passphrase: Option<String>,
 }
 
-fn snapshot_key(user_id: Uuid, id: &str) -> Result<String, ApiError> {
-    if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
-        return Err(ApiError::BadRequest("invalid snapshot id".into()));
-    }
-    Ok(format!("{user_id}/snapshots/{id}.zip"))
-}
-
-/// Loads a snapshot as restorable zip bytes, transparently assembling v2
-/// manifests (manifest + blobs) and reading legacy zips as-is.
-/// `passphrase`: snapshot password for encrypted manifests (fork §2: the
-/// caller supplies it; the server never stores it).
+/// Loads a snapshot as restorable zip bytes from the first reachable target,
+/// assembling the v2 manifest + blobs into the v1 shape the restore engine
+/// consumes. `passphrase`: snapshot password for encrypted manifests (fork
+/// §2: the caller supplies it; the server never stores it). Legacy service-
+/// bucket zips are not read back (no read fallback by design).
 async fn load_snapshot_bytes(
-    storage: &crate::storage::S3Storage,
+    db: &sqlx::PgPool,
     user_id: Uuid,
     id: &str,
     passphrase: Option<&str>,
@@ -161,28 +184,43 @@ async fn load_snapshot_bytes(
     if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(ApiError::BadRequest("invalid snapshot id".into()));
     }
+    let conn = crate::target::fanout::first_readable_target(db, user_id)
+        .await
+        .ok_or(ApiError::NotFound(
+            "snapshot not available (no reachable targets)".into(),
+        ))?;
     let manifest_key = format!("{user_id}/manifests/{id}.json");
-    if let Ok(bytes) = storage.get_backup_object(&manifest_key).await {
-        let manifest: crate::backup::BackupManifest = serde_json::from_slice(&bytes)
-            .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
-        return crate::restore::assemble_snapshot_zip(storage, user_id, manifest, passphrase).await;
+    let bytes = conn
+        .get(&manifest_key)
+        .await
+        .map_err(|_| ApiError::NotFound("snapshot not found on target".into()))?;
+    let manifest: crate::backup::BackupManifest = serde_json::from_slice(&bytes)
+        .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
+    if manifest.user_id != user_id.to_string() {
+        return Err(ApiError::Forbidden("not your snapshot".into()));
     }
-    storage.get_backup_object(&snapshot_key(user_id, id)?).await
+    crate::restore::assemble_snapshot_zip(&conn, manifest, passphrase).await
 }
 
 /// GET /backup/snapshots — caller's snapshots, newest first.
+/// Reads the first reachable target (all targets hold identical snapshots).
+/// No targets or all unreachable = empty list: snapshots are invisible
+/// rather than partially visible.
 pub async fn list_snapshots(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    // v2 manifests first (memo/size read from the manifest object itself),
-    // then legacy v1 zips; merged newest-first by last_modified.
+    let Some(conn) = crate::target::fanout::first_readable_target(&state.db, auth.user_id()).await
+    else {
+        return Ok(ApiOk::ok(json!([])));
+    };
+    let prefix = format!("{}/manifests/", auth.user_id());
+    let objects = conn.list(&prefix).await.unwrap_or_default();
     let mut rows = Vec::new();
-    for (key, _size, mtime) in storage.list_manifests(auth.user_id()).await? {
+    for (key, _size, mtime) in objects {
+        if !key.contains("/manifests/") {
+            continue;
+        }
         let Some(id) = key
             .rsplit('/')
             .next()
@@ -191,7 +229,7 @@ pub async fn list_snapshots(
         else {
             continue;
         };
-        let meta = storage.get_backup_object(&key).await.ok().and_then(|b| {
+        let meta = conn.get(&key).await.ok().and_then(|b| {
             serde_json::from_slice::<serde_json::Value>(&b)
                 .ok()
                 .map(|v| {
@@ -200,44 +238,18 @@ pub async fn list_snapshots(
                             .and_then(|m| m.as_str())
                             .map(|s| s.to_string()),
                         v.get("logical_bytes").and_then(|n| n.as_u64()).unwrap_or(0),
+                        v.get("encryption").is_some(),
                     )
                 })
         });
-        let (memo, size) = meta.unwrap_or((None, 0));
+        let (memo, size, encrypted) = meta.unwrap_or((None, 0, false));
         rows.push(json!({
             "id": id,
             "size": size,
             "last_modified": mtime,
             "memo": memo,
             "format": "v2",
-        }));
-    }
-    for (key, size, mtime) in storage.list_backup_snapshots(auth.user_id()).await? {
-        let Some(id) = key
-            .rsplit('/')
-            .next()
-            .and_then(|f| f.strip_suffix(".zip"))
-            .map(|s| s.to_string())
-        else {
-            continue;
-        };
-        // Sidecar memo (older snapshots may not have one).
-        let memo = storage
-            .get_backup_object(&format!("{}/snapshots/{id}.json", auth.user_id()))
-            .await
-            .ok()
-            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-            .and_then(|v| {
-                v.get("memo")
-                    .and_then(|m| m.as_str())
-                    .map(|s| s.to_string())
-            });
-        rows.push(json!({
-            "id": id,
-            "size": size,
-            "last_modified": mtime,
-            "memo": memo,
-            "format": "v1",
+            "encrypted": encrypted,
         }));
     }
     rows.sort_by_key(|r| -r.get("last_modified").and_then(|v| v.as_i64()).unwrap_or(0));
@@ -245,39 +257,34 @@ pub async fn list_snapshots(
 }
 
 /// GET /backup/snapshots/:id/download — streams the snapshot zip directly
-/// (cookie-authenticated; v2 snapshots are assembled from blobs on the fly).
-/// Encrypted snapshots need `?passphrase=`; portable export keeps ciphertext
-/// blobs as-is (fork §7), so the password is only needed for legacy zips.
+/// (cookie-authenticated; assembled from the first reachable target).
+/// Portable export keeps ciphertext blobs as-is (fork §7): no passphrase
+/// needed for download, only for restore.
 pub async fn download_snapshot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
-    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<axum::response::Response, ApiError> {
     use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    // v2 snapshots download in the portable object-set layout (meta +
-    // manifest + blobs); legacy v1 zips pass through unchanged.
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ApiError::BadRequest("invalid snapshot id".into()));
+    }
+    let conn = crate::target::fanout::first_readable_target(&state.db, auth.user_id())
+        .await
+        .ok_or(ApiError::NotFound(
+            "snapshot not available (no reachable targets)".into(),
+        ))?;
     let manifest_key = format!("{}/manifests/{id}.json", auth.user_id());
-    let bytes = match storage.get_backup_object(&manifest_key).await {
-        Ok(raw) => {
-            let manifest: crate::backup::BackupManifest = serde_json::from_slice(&raw)
-                .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
-            crate::restore::export_portable_zip(&storage, auth.user_id(), &manifest).await?
-        }
-        Err(_) => {
-            load_snapshot_bytes(
-                &storage,
-                auth.user_id(),
-                &id,
-                query.get("passphrase").map(|s| s.as_str()),
-            )
-            .await?
-        }
-    };
+    let raw = conn
+        .get(&manifest_key)
+        .await
+        .map_err(|_| ApiError::NotFound("snapshot not found on target".into()))?;
+    let manifest: crate::backup::BackupManifest = serde_json::from_slice(&raw)
+        .map_err(|e| ApiError::BadRequest(format!("manifest unreadable: {e}")))?;
+    if manifest.user_id != auth.user_id().to_string() {
+        return Err(ApiError::Forbidden("not your snapshot".into()));
+    }
+    let bytes = crate::restore::export_portable_zip_from_conn(&conn, &manifest).await?;
     let filename = format!("pergame-snapshot-{id}.zip");
     let disposition = format!("attachment; filename=\"{filename}\"");
     Ok((
@@ -291,31 +298,45 @@ pub async fn download_snapshot(
         .into_response())
 }
 
-/// DELETE /backup/snapshots/:id — deletes the v2 manifest (blobs are GC'd by
-/// the retention pass) or the legacy zip.
+/// DELETE /backup/snapshots/:id — deletes the manifest from every reachable
+/// target (blobs are GC'd by each target's retention pass). Unreachable
+/// targets are reported, not silently skipped.
 pub async fn delete_snapshot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ApiError::BadRequest("invalid snapshot id".into()));
+    }
+    let targets = crate::target::fanout::readable_targets(&state.db, auth.user_id()).await;
+    if targets.is_empty() {
+        return Err(ApiError::NotFound(
+            "snapshot not available (no reachable targets)".into(),
+        ));
+    }
     let manifest_key = format!("{}/manifests/{id}.json", auth.user_id());
-    if storage.get_backup_object(&manifest_key).await.is_ok() {
-        storage.delete_backup_object(&manifest_key).await?;
-    } else {
-        let key = snapshot_key(auth.user_id(), &id)?;
-        storage.delete_backup_object(&key).await?;
-        if let Some(sidecar) = snapshot_key(auth.user_id(), &id)?
-            .strip_suffix(".zip")
-            .map(|s| format!("{s}.json"))
-        {
-            storage.delete_backup_object(&sidecar).await.ok();
+    let mut deleted = 0usize;
+    let mut missing = Vec::new();
+    for (name, conn) in &targets {
+        match conn.delete(&manifest_key).await {
+            Ok(true) => deleted += 1,
+            _ => missing.push(name.clone()),
         }
     }
-    Ok(ApiOk::ok(json!("Snapshot deleted successfully.")))
+    if deleted == 0 {
+        return Err(ApiError::NotFound(
+            "snapshot not found on any target".into(),
+        ));
+    }
+    if missing.is_empty() {
+        Ok(ApiOk::ok(json!("Snapshot deleted successfully.")))
+    } else {
+        Ok(ApiOk::ok(json!(format!(
+            "Snapshot deleted on {deleted} target(s); not found on: {}",
+            missing.join(", ")
+        ))))
+    }
 }
 
 /// Safety snapshot (SiYuan "Backup before checkout" parity): taken before any
@@ -349,9 +370,13 @@ async fn safety_snapshot(state: &AppState, user_id: Uuid) -> Option<String> {
         None,
     )
     .await;
-    // run_backup reports via the job row; confirm a fresh manifest landed.
-    let manifests = storage.list_manifests(user_id).await.ok()?;
-    let latest = manifests.iter().map(|(k, _, _)| k).max()?;
+    // run_backup reports via the job row; confirm a fresh manifest landed on
+    // the first readable target (zero-target safety snapshots stay in the
+    // job's inline zip and are dropped with it — warn, don't fail).
+    let conn = crate::target::fanout::first_readable_target(&state.db, user_id).await?;
+    let prefix = format!("{user_id}/manifests/");
+    let objects = conn.list(&prefix).await.ok()?;
+    let latest = objects.iter().map(|(k, _, _)| k).max()?;
     latest
         .rsplit('/')
         .next()
@@ -383,7 +408,7 @@ pub async fn restore_snapshot(
             }
         })?;
     let passphrase = body.and_then(|b| b.0.passphrase);
-    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
+    let bytes = load_snapshot_bytes(&state.db, auth.user_id(), &id, passphrase.as_deref()).await?;
     let mut report = crate::restore::restore_from_zip(
         state.db.clone(),
         Some(storage.clone()),
@@ -480,12 +505,8 @@ pub async fn preview_snapshot(
     Path(id): Path<String>,
     body: Option<Json<PassphraseBody>>,
 ) -> Result<ApiOk<crate::restore::RestorePlan>, ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let passphrase = body.and_then(|b| b.0.passphrase);
-    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
+    let bytes = load_snapshot_bytes(&state.db, auth.user_id(), &id, passphrase.as_deref()).await?;
     let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
     Ok(ApiOk::ok(plan))
 }

@@ -1,16 +1,19 @@
-//! Fan-out engine (spec §14.5): after a snapshot lands in the local bucket,
-//! replicate that user's objects (manifests + blobs + refs) to every enabled
-//! target listing the user. Objects are copied byte-for-byte (encrypted blobs
-//! stay ciphertext — no decrypt/re-encrypt), and existing objects are skipped
-//! so only new content is transferred (incremental).
+//! Direct-write snapshot engine: a snapshot lands on the user's own
+//! targets, never on the service bucket. Zero targets = the snapshot is
+//! packaged as a portable zip in memory for one download (fork §4 "save zip
+//! locally"); nothing is persisted server-side.
+//!
+//! Every enabled target listing the user receives identical bytes
+//! (multi-target full write with per-target dedup, fork §2). Failures are
+//! per-target: one bad target never blocks the others, but all-failed fails
+//! the job. Retention runs per target after a successful write.
 
 use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::repo;
-use crate::backup::SNAPSHOT_KEEP;
-use crate::storage::S3Storage;
+use crate::backup::{BackupManifest, SNAPSHOT_KEEP};
 
 #[derive(Debug, Default, Serialize)]
 pub struct FanoutResult {
@@ -21,107 +24,91 @@ pub struct FanoutResult {
     pub error: Option<String>,
 }
 
-/// Collects one user's snapshot objects from the local backup bucket.
-async fn collect_user_objects(
-    storage: &S3Storage,
+/// Writes one snapshot (manifest + member blobs + file blobs) to every
+/// enabled target listing the user. Payloads are `(sha, e2e, bytes)`.
+#[allow(clippy::too_many_arguments)]
+pub async fn write_snapshot_to_targets(
+    pool: &PgPool,
     user_id: Uuid,
-) -> Result<Vec<(String, Vec<u8>)>, crate::error::ApiError> {
-    let mut keys: Vec<String> = Vec::new();
-    for (k, _, _) in storage.list_manifests(user_id).await? {
-        keys.push(k);
-    }
-    for (k, _, _) in storage.list_backup_snapshots(user_id).await? {
-        keys.push(k); // legacy v1 zips + sidecars stay restorable offsite too
-    }
-    for k in storage.list_blob_keys(user_id).await? {
-        keys.push(k);
-    }
-    keys.sort();
-    keys.dedup();
-
-    let mut out = Vec::with_capacity(keys.len());
-    for key in keys {
-        match storage.get_backup_object(&key).await {
-            Ok(bytes) => out.push((key, bytes)),
-            // Must be visible: a silently skipped manifest means the offsite
-            // replica is incomplete even though fan-out reports success.
-            Err(e) => tracing::warn!(%key, error = %e, "fan-out: local object unreadable"),
-        }
-    }
-    tracing::info!(
-        user_id = %user_id,
-        objects = out.len(),
-        "fan-out: collected local objects"
-    );
-    Ok(out)
-}
-
-/// Replicates one user's objects to every enabled target that lists the user.
-/// Called right after a successful snapshot (auto) and by the admin "sync now"
-/// action. Best-effort per target: a failure is recorded, others continue.
-pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: Uuid) -> Vec<FanoutResult> {
+    manifest: &BackupManifest,
+    manifest_bytes: &[u8],
+    member_payloads: &[(String, bool, Vec<u8>)],
+    file_payloads: &[(String, bool, Vec<u8>)],
+) -> Vec<FanoutResult> {
     let mut results = Vec::new();
-    let targets = match repo::list_targets(pool).await {
+    let targets = match repo::list_targets_for_user(pool, user_id).await {
         Ok(t) => t,
         Err(e) => {
-            tracing::warn!(error = %e, "fan-out: target list failed");
+            tracing::warn!(error = %e, "direct-write: target list failed");
             return results;
         }
     };
-    let entries = match collect_user_objects(storage, user_id).await {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!(error = %e, user_id = %user_id, "fan-out: object collection failed");
-            return results;
-        }
-    };
-    if entries.is_empty() {
-        return results;
-    }
-    for target in targets
-        .into_iter()
-        .filter(|t| t.enabled && t.users.contains(&user_id))
-    {
+    let manifest_key = format!("{user_id}/manifests/{}.json", manifest.id);
+    for target in targets {
         let mut result = FanoutResult {
             target: target.name.clone(),
             ..Default::default()
         };
-        match target.connect().await {
-            Ok(conn) => {
-                // Ownership gate: only the claiming instance writes. A foreign
-                // claim means another deployment owns this scope's lineage.
-                match super::owner::claim(&conn, false).await {
-                    Ok(super::owner::ClaimOutcome::Claimed) => {}
-                    Ok(super::owner::ClaimOutcome::Foreign { owner, .. }) => {
-                        result.error = Some(format!(
-                            "target owned by instance '{}' (claimed {}); take over explicitly to write",
-                            owner.instance_id, owner.claimed_at
-                        ));
-                        record_result(pool, &target, &result).await;
-                        results.push(result);
-                        continue;
-                    }
-                    Err(e) => {
-                        result.error = Some(format!("ownership check failed: {e}"));
-                        record_result(pool, &target, &result).await;
-                        results.push(result);
-                        continue;
-                    }
-                }
-                match conn.replicate(entries.clone()).await {
-                    Ok((copied, skipped)) => {
-                        result.copied = copied;
-                        result.skipped = skipped;
-                        // Retention on the target mirrors the local keep-last.
-                        if let Err(e) = prune_target(&conn, &target.prefix, target.keep_last).await
-                        {
-                            tracing::warn!(error = %e, target = %target.name, "fan-out prune failed");
-                        }
-                    }
-                    Err(e) => result.error = Some(e.to_string()),
-                }
+        let conn = match target.connect().await {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e.to_string());
+                record_result(pool, &target, &result).await;
+                results.push(result);
+                continue;
             }
-            Err(e) => result.error = Some(e.to_string()),
+        };
+        // Ownership gate: only the claiming instance writes. A foreign
+        // claim means another deployment owns this scope's lineage.
+        match super::owner::claim(&conn, false).await {
+            Ok(super::owner::ClaimOutcome::Claimed) => {}
+            Ok(super::owner::ClaimOutcome::Foreign { owner, .. }) => {
+                result.error = Some(format!(
+                    "target owned by instance '{}' (claimed {}); take over explicitly to write",
+                    owner.instance_id, owner.claimed_at
+                ));
+                record_result(pool, &target, &result).await;
+                results.push(result);
+                continue;
+            }
+            Err(e) => {
+                result.error = Some(format!("ownership check failed: {e}"));
+                record_result(pool, &target, &result).await;
+                results.push(result);
+                continue;
+            }
+        }
+        // Blob entries: members + files, content-addressed, deduped per target.
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+        for (sha, e2e, bytes) in member_payloads.iter().chain(file_payloads.iter()) {
+            let dir = if *e2e { "blobs-e2e" } else { "blobs" };
+            entries.push((format!("{user_id}/{dir}/{sha}"), bytes.clone()));
+        }
+        match conn.replicate(entries).await {
+            Ok((copied, skipped)) => {
+                result.copied = copied;
+                result.skipped = skipped;
+            }
+            Err(e) => {
+                result.error = Some(e.to_string());
+                record_result(pool, &target, &result).await;
+                results.push(result);
+                continue;
+            }
+        }
+        if let Err(e) = conn.put(&manifest_key, manifest_bytes.to_vec()).await {
+            result.error = Some(format!("manifest upload failed: {e}"));
+            record_result(pool, &target, &result).await;
+            results.push(result);
+            continue;
+        }
+        result.copied += 1;
+        // Retention on the target mirrors the local keep-last.
+        match prune_target(&conn, target.keep_last).await {
+            Ok(pruned) => result.pruned = pruned,
+            Err(e) => {
+                tracing::warn!(error = %e, target = %target.name, "direct-write prune failed")
+            }
         }
         record_result(pool, &target, &result).await;
         results.push(result);
@@ -129,15 +116,19 @@ pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: Uuid) -> V
     results
 }
 
-/// Records the last fan-out outcome on the target row (operator visibility).
+/// Records the last write outcome on the target row (operator visibility).
 async fn record_result(
     pool: &PgPool,
     target: &super::config::BackupTargetRow,
     result: &FanoutResult,
 ) {
-    let summary = match &result.error {
-        Some(e) => format!("error: {e}"),
-        None => format!("copied {}, skipped {}", result.copied, result.skipped),
+    let summary = if let Some(e) = &result.error {
+        format!("error: {e}")
+    } else {
+        format!(
+            "ok: copied {} skipped {} pruned {}",
+            result.copied, result.skipped, result.pruned
+        )
     };
     let _ =
         sqlx::query("UPDATE backup_targets SET last_result = $2, updated_at = $3 WHERE id = $1")
@@ -150,9 +141,8 @@ async fn record_result(
 
 /// Prunes the oldest manifests on a target beyond `keep_last`, then deletes
 /// blobs no longer referenced by any surviving manifest.
-async fn prune_target(
+pub async fn prune_target(
     conn: &super::config::TargetConn,
-    _prefix: &str,
     keep_last: i32,
 ) -> Result<usize, crate::error::ApiError> {
     let keep = keep_last.max(1) as usize;
@@ -180,7 +170,7 @@ async fn prune_target(
             continue;
         }
         if let Ok(bytes) = conn.get(&k).await
-            && let Ok(m) = serde_json::from_slice::<crate::backup::BackupManifest>(&bytes)
+            && let Ok(m) = serde_json::from_slice::<BackupManifest>(&bytes)
         {
             for e in m.entries {
                 referenced.insert(e.sha256);
@@ -203,43 +193,59 @@ async fn prune_target(
     Ok(pruned)
 }
 
-/// Pulls one user's snapshot objects from a target back into the local bucket
-/// (only missing ones), so the existing restore engine can consume them.
-pub async fn fetch_user_from_target(
+/// First reachable target connection for the user, for read paths
+/// (list/download/restore/preview). All targets hold identical snapshots,
+/// so reading one is enough. None = no targets or all unreachable, and the
+/// caller reports "no snapshots visible" (never a partial view).
+pub async fn first_readable_target(
     pool: &PgPool,
-    storage: &S3Storage,
-    target_id: uuid::Uuid,
     user_id: Uuid,
-) -> Result<usize, crate::error::ApiError> {
-    let target = repo::get_target(pool, target_id).await?;
-    let conn = target.connect().await?;
-    let prefix = format!("{}/", user_id);
-    let objects = conn.list(conn.list_prefix()).await?;
-    let mut fetched = 0usize;
-    for (key, _, _) in objects {
-        if !key.starts_with(&prefix) {
+) -> Option<super::config::TargetConn> {
+    let targets = repo::list_targets_for_user(pool, user_id).await.ok()?;
+    for target in targets {
+        let Ok(conn) = target.connect().await else {
             continue;
-        }
-        let local_exists = storage.get_backup_object(&key).await.is_ok();
-        if local_exists {
-            continue;
-        }
-        if let Ok(bytes) = conn.get(&key).await
-            && storage.put_backup_object(&key, bytes).await.is_ok()
-        {
-            fetched += 1;
+        };
+        // Reachability check: a list that errors means unusable.
+        if conn.list(conn.list_prefix()).await.is_ok() {
+            return Some(conn);
         }
     }
-    Ok(fetched)
+    None
+}
+
+/// All reachable target connections for the user (for delete: a snapshot
+/// delete removes the manifest from every target holding it).
+pub async fn readable_targets(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Vec<(String, super::config::TargetConn)> {
+    let mut out = Vec::new();
+    let Ok(targets) = repo::list_targets_for_user(pool, user_id).await else {
+        return out;
+    };
+    for target in targets {
+        let Ok(conn) = target.connect().await else {
+            continue;
+        };
+        if conn.list(conn.list_prefix()).await.is_ok() {
+            out.push((target.name.clone(), conn));
+        }
+    }
+    out
 }
 
 /// Per-target cron scheduler (fork §4 parity): ticks every minute, asks each
 /// enabled target whether its `schedule` matched the elapsed minute, and runs
-/// a full fan-out for that target's users. Expressions are evaluated in the
-/// process timezone (`TZ` env var; UTC in containers by default). Missed
-/// minutes are not replayed (standard cron), and a tick is skipped while a
-/// backup/restore lock is held.
-pub fn spawn_target_scheduler(pool: sqlx::PgPool, storage: S3Storage) {
+/// a direct-write snapshot for that target's users. Expressions are evaluated
+/// in the process timezone (`TZ` env var; UTC in containers by default).
+/// Missed minutes are not replayed (standard cron), and a tick is skipped
+/// while a backup/restore lock is held.
+pub fn spawn_target_scheduler(
+    pool: sqlx::PgPool,
+    store: std::sync::Arc<crate::backup::BackupStore>,
+    storage: crate::storage::S3Storage,
+) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -281,13 +287,33 @@ pub fn spawn_target_scheduler(pool: sqlx::PgPool, storage: S3Storage) {
                 let Ok(row) = repo::get_target(&pool, id).await else {
                     continue;
                 };
-                tracing::info!(target = %name, "target scheduler: running scheduled fan-out");
+                tracing::info!(target = %name, "target scheduler: running scheduled snapshot");
                 for uid in row.users.clone() {
-                    for r in fanout_user(&pool, &storage, uid).await {
-                        if let Some(e) = r.error {
-                            tracing::warn!(target = %r.target, error = %e, "scheduled fan-out failed");
-                        }
-                    }
+                    let options = crate::backup::BackupOptions {
+                        include_documents: true,
+                        include_files: true,
+                        include_settings: true,
+                        include_metadata: true,
+                        memo: Some(format!("Scheduled snapshot ({name})")),
+                    };
+                    let Ok(job_id) = store.create(uid, options.clone()).await else {
+                        continue;
+                    };
+                    let store2 = store.clone();
+                    let pool2 = pool.clone();
+                    let storage2 = storage.clone();
+                    tokio::spawn(async move {
+                        crate::backup::run_backup(
+                            store2,
+                            pool2,
+                            storage2,
+                            uid,
+                            job_id,
+                            options,
+                            crate::snapcrypto::passphrase_from_env(),
+                        )
+                        .await;
+                    });
                 }
             }
         }

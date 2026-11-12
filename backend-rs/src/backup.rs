@@ -25,7 +25,7 @@ pub const BACKUP_VERSION: &str = "2.0.0";
 pub const SNAPSHOT_KEEP: usize = 10;
 
 /// Resource projection used while archiving file nodes.
-pub type ResourceRow = (i64, Option<serde_json::Value>, Option<String>, Option<i64>);
+pub type ResourceRow = (Uuid, Option<serde_json::Value>, Option<String>, Option<i64>);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackupOptions {
@@ -123,7 +123,14 @@ struct JobEntry {
 pub struct BackupStore {
     jobs: Mutex<HashMap<String, JobEntry>>,
     user_jobs: Mutex<HashMap<Uuid, String>>,
+    /// Zero-target snapshots: the portable zip bytes, held in memory for a
+    /// single download (fork §4 "save zip locally" semantics). Bounded by
+    /// MAX_INLINE_ZIP_BYTES; larger snapshots require a configured target.
+    inline_zips: Mutex<HashMap<String, Vec<u8>>>,
 }
+
+/// Largest zero-target snapshot kept in memory (matches the upload cap).
+pub const MAX_INLINE_ZIP_BYTES: usize = 256 * 1024 * 1024;
 
 fn rfc3339_now() -> String {
     time::OffsetDateTime::now_utc()
@@ -234,6 +241,32 @@ impl BackupStore {
         self.jobs.lock().await.remove(&job_id_owned);
         Ok(())
     }
+
+    /// Stores a zero-target snapshot zip for later download.
+    pub async fn put_inline_zip(&self, job_id: &str, bytes: Vec<u8>) {
+        self.inline_zips
+            .lock()
+            .await
+            .insert(job_id.to_string(), bytes);
+    }
+
+    /// Takes (and removes) a stored zip; ownership-checked against the job.
+    pub async fn take_inline_zip(
+        &self,
+        user_id: Uuid,
+        job_id: &str,
+    ) -> Result<Vec<u8>, crate::error::ApiError> {
+        use crate::error::ApiError;
+        // Ownership first: the zip belongs to whoever owns the job row.
+        self.get(user_id, job_id).await?;
+        self.inline_zips
+            .lock()
+            .await
+            .remove(job_id)
+            .ok_or(ApiError::NotFound(
+                "snapshot zip expired or already downloaded".into(),
+            ))
+    }
 }
 
 /// Placeholder-path parity: Go fails fast when the storage client is nil.
@@ -316,6 +349,8 @@ pub async fn run_backup(
     // ---------------- v2: collect members, then content-addressed blobs ----
     let mut members: Vec<(String, Vec<u8>)> = Vec::new();
     let mut files_meta: Vec<ManifestFile> = Vec::new();
+    // (sha, e2e, bytes) for each attachment, uploaded in the write pass.
+    let mut file_payloads: Vec<(String, bool, Vec<u8>)> = Vec::new();
     let mut stats = BackupStats::default();
 
     if options.include_documents {
@@ -425,15 +460,9 @@ pub async fn run_backup(
                 }
                 _ => (false, bytes.clone()),
             };
-            // Content-addressed dedup: same bytes are stored once per user.
-            if !storage
-                .blob_exists(user_id, e2e, &sha)
-                .await
-                .unwrap_or(false)
-                && let Err(e) = storage.put_blob(user_id, e2e, &sha, payload).await
-            {
-                fail!(format!("Failed to store blob {sha}: {e}"));
-            }
+            // Held in memory: direct-write uploads everything to the user's
+            // targets in one pass below (dedup happens per target there).
+            file_payloads.push((sha.clone(), e2e, payload));
             files_meta.push(ManifestFile {
                 id: res_id.to_string(),
                 key: transformed,
@@ -491,6 +520,8 @@ pub async fn run_backup(
     };
     progress!(85, "Writing blobs...");
 
+    // Encrypt member blobs once; every target receives identical bytes.
+    let mut member_payloads: Vec<(String, bool, Vec<u8>)> = Vec::with_capacity(members.len());
     for (_path, bytes) in &members {
         let sha = hex_sha(bytes);
         let (e2e, payload) = match (&encryption, &passphrase) {
@@ -502,102 +533,84 @@ pub async fn run_backup(
             },
             _ => (false, bytes.clone()),
         };
-        if !storage
-            .blob_exists(user_id, e2e, &sha)
-            .await
-            .unwrap_or(false)
-            && let Err(e) = storage.put_blob(user_id, e2e, &sha, payload).await
-        {
-            fail!(format!("Failed to store blob {sha}: {e}"));
+        member_payloads.push((sha, e2e, payload));
+    }
+
+    // Direct-write: the snapshot lands on the user's own targets, never on
+    // the service bucket. Zero targets = fork §4 "save zip locally": the
+    // portable set is held in memory for one download, nothing is persisted.
+    let targets = crate::target::repo::list_targets_for_user(&sql, user_id).await;
+    let targets = match targets {
+        Ok(t) => t,
+        Err(e) => fail!(format!("Failed to list backup targets: {e}")),
+    };
+    if targets.is_empty() {
+        let manifest_bytes = serde_json::to_vec_pretty(&manifest).unwrap_or_default();
+        match crate::restore::build_portable_zip_in_memory(
+            &manifest,
+            &manifest_bytes,
+            &member_payloads,
+            &file_payloads,
+        ) {
+            Ok(zip) if zip.len() <= MAX_INLINE_ZIP_BYTES => {
+                store.put_inline_zip(&job_id, zip).await;
+                store
+                    .update(&job_id, |j| {
+                        j.progress = 100;
+                        j.message =
+                            "Snapshot packaged for download (no targets configured).".into();
+                        j.download_url = Some(format!("/api/backup/{job_id}/download"));
+                    })
+                    .await;
+                return;
+            }
+            Ok(zip) => fail!(format!(
+                "Snapshot is {} MB with no targets configured (limit {} MB); configure a backup target first",
+                zip.len() / 1_048_576,
+                MAX_INLINE_ZIP_BYTES / 1_048_576
+            )),
+            Err(e) => fail!(format!("Failed to package snapshot: {e}")),
         }
     }
-
-    // Auto fan-out (spec §14.5): replicate this user's objects to every
-    // enabled target listing them. Best-effort; failures land in last_result.
-    if let Some(pool) = crate::APP_DB.get() {
-        for r in crate::target::fanout::fanout_user(pool, &storage, user_id).await {
-            if let Some(e) = &r.error {
-                tracing::warn!(target = %r.target, error = %e, "fan-out failed");
-            } else {
-                tracing::info!(target = %r.target, copied = r.copied, skipped = r.skipped, "fan-out done");
-            }
-        }
-    }
-
-    let manifest_name = format!("{user_id}/manifests/{snapshot_id}.json");
-    if let Err(e) = storage
-        .put_backup_object(
-            &manifest_name,
-            serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
-        )
-        .await
-    {
-        fail!(format!("Failed to upload manifest: {e}"));
-    }
-
-    // ---------------- retention (manifests + legacy zips) + blob GC --------
-    progress!(95, "Pruning old snapshots...");
-    let mut all: Vec<(String, &str)> = Vec::new();
-    for (key, _, _) in storage.list_manifests(user_id).await.unwrap_or_default() {
-        all.push((key.clone(), "manifest"));
-    }
-    for (key, _, _) in storage
-        .list_backup_snapshots(user_id)
-        .await
-        .unwrap_or_default()
-    {
-        all.push((key.clone(), "zip"));
-    }
-    all.sort();
-    let excess = all.len().saturating_sub(SNAPSHOT_KEEP);
-    let mut keep_keys: Vec<String> = Vec::new();
-    for (idx, (key, kind)) in all.iter().enumerate() {
-        if idx < excess {
-            storage.delete_backup_object(key).await.ok();
-            if *kind == "zip"
-                && let Some(sidecar) = key.strip_suffix(".zip")
-            {
-                storage
-                    .delete_backup_object(&format!("{sidecar}.json"))
-                    .await
-                    .ok();
-            }
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).unwrap_or_default();
+    let results = crate::target::fanout::write_snapshot_to_targets(
+        &sql,
+        user_id,
+        &manifest,
+        &manifest_bytes,
+        &member_payloads,
+        &file_payloads,
+    )
+    .await;
+    let mut failed = 0usize;
+    for r in &results {
+        if let Some(e) = &r.error {
+            failed += 1;
+            tracing::warn!(target = %r.target, error = %e, "direct-write failed");
         } else {
-            keep_keys.push(key.clone());
+            tracing::info!(target = %r.target, copied = r.copied, skipped = r.skipped, "direct-write done");
         }
     }
-    // GC: drop blobs no longer referenced by any retained manifest.
-    let mut referenced = std::collections::HashSet::new();
-    for key in &keep_keys {
-        if !key.contains("/manifests/") {
-            continue;
-        }
-        if let Ok(bytes) = storage.get_backup_object(key).await
-            && let Ok(m) = serde_json::from_slice::<BackupManifest>(&bytes)
-        {
-            for e in m.entries {
-                referenced.insert(e.sha256);
-            }
-            for f in m.files {
-                referenced.insert(f.sha256);
-            }
-        }
+    if failed == results.len() && !results.is_empty() {
+        fail!(format!(
+            "All {} target(s) failed: {}",
+            results.len(),
+            results
+                .iter()
+                .filter_map(|r| r.error.clone())
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
     }
-    if let Ok(blob_keys) = storage.list_blob_keys(user_id).await {
-        for bk in blob_keys {
-            let sha = bk.rsplit('/').next().unwrap_or("");
-            if !referenced.contains(sha)
-                && let Err(e) = storage.delete_backup_object(&bk).await
-            {
-                tracing::warn!(%bk, error = %e, "blob GC failed (non-fatal)");
-            }
-        }
-    }
-
+    let ok = results.len() - failed;
     store
         .update(&job_id, |j| {
             j.progress = 100;
-            j.message = "Snapshot completed successfully.".into();
+            j.message = if failed == 0 {
+                format!("Snapshot completed successfully ({} target(s)).", ok)
+            } else {
+                format!("Snapshot completed with {failed} failed target(s) ({ok} ok).")
+            };
             // download_url intentionally unset: snapshots download through
             // the authenticated /backup/snapshots/:id/download endpoint.
         })

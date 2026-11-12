@@ -133,6 +133,24 @@ pub async fn list_targets(pool: &PgPool) -> Result<Vec<BackupTargetRow>, ApiErro
         .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
 }
 
+/// Enabled targets listing the user (direct-write destinations + read
+/// sources). Ordered by creation; callers treat the first reachable one as
+/// the read source.
+pub async fn list_targets_for_user(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<BackupTargetRow>, ApiError> {
+    let _ = backfill_namespaces(pool).await;
+    sqlx::query_as::<_, BackupTargetRow>(
+        "SELECT * FROM backup_targets WHERE enabled = true AND $1 = ANY(users) ORDER BY created_at",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(ApiError::from)
+    .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+}
+
 pub async fn get_target(pool: &PgPool, id: Uuid) -> Result<BackupTargetRow, ApiError> {
     sqlx::query_as::<_, BackupTargetRow>("SELECT * FROM backup_targets WHERE id = $1")
         .bind(id)

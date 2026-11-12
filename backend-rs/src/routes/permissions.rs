@@ -139,8 +139,8 @@ pub async fn create_permission(
     }
     guard::require_node_action(&state.db, &actor, node, NodeAction::ManagePermissions).await?;
 
-    let user =
-        Uuid::parse_str(&body.user_id).map_err(|_| ApiError::BadRequest("invalid user id".into()))?;
+    let user = Uuid::parse_str(&body.user_id)
+        .map_err(|_| ApiError::BadRequest("invalid user id".into()))?;
 
     let id = crate::types::new_id();
     let mut tdb = state.toasty.clone();

@@ -586,10 +586,10 @@ pub async fn plan_from_zip(
 
 /// Assembles a v2 snapshot (manifest + deduped blobs) back into the v1 zip
 /// shape the restore/preview engine consumes, decrypting blobs when the
-/// manifest says the snapshot is encrypted.
+/// manifest says the snapshot is encrypted. Reads from a connected target
+/// (direct-write read path).
 pub async fn assemble_snapshot_zip(
-    storage: &S3Storage,
-    user_id: Uuid,
+    conn: &crate::target::config::TargetConn,
     manifest: crate::backup::BackupManifest,
     passphrase: Option<&str>,
 ) -> Result<Vec<u8>, ApiError> {
@@ -601,6 +601,9 @@ pub async fn assemble_snapshot_zip(
             "snapshot is encrypted but no passphrase was supplied".into(),
         ));
     }
+    let e2e = manifest.encryption.is_some();
+    let dir = if e2e { "blobs-e2e" } else { "blobs" };
+    let uid = &manifest.user_id;
     let mut archive = crate::backup::SimpleArchive::new();
     // The manifest itself is an archive member (the engine gates on it).
     archive.add(
@@ -608,9 +611,7 @@ pub async fn assemble_snapshot_zip(
         &serde_json::to_vec_pretty(&manifest).unwrap_or_default(),
     );
     for e in &manifest.entries {
-        let blob = storage
-            .get_blob(user_id, manifest.encryption.is_some(), &e.sha256)
-            .await?;
+        let blob = conn.get(&format!("{uid}/{dir}/{}", e.sha256)).await?;
         let plain = match (&manifest.encryption, &passphrase) {
             (Some(params), Some(pass)) => crate::snapcrypto::decrypt(params, pass, &blob)
                 .map_err(|e| ApiError::BadRequest(format!("snapshot decrypt: {e}")))?,
@@ -646,9 +647,7 @@ pub async fn assemble_snapshot_zip(
             .map(|(_, e)| format!(".{e}"))
             .unwrap_or_default();
         let path = format!("files/{}{}", f.id, ext);
-        let blob = storage
-            .get_blob(user_id, manifest.encryption.is_some(), &f.sha256)
-            .await?;
+        let blob = conn.get(&format!("{uid}/{dir}/{}", f.sha256)).await?;
         let plain = match (&manifest.encryption, &passphrase) {
             (Some(params), Some(pass)) => crate::snapcrypto::decrypt(params, pass, &blob)
                 .map_err(|e| ApiError::BadRequest(format!("snapshot decrypt: {e}")))?,
@@ -686,11 +685,52 @@ pub struct PortableMeta {
 pub const PORTABLE_FORMAT: &str = "pergame-backup/object-set";
 pub const PORTABLE_VERSION: &str = "1";
 
+/// Builds the portable object-set zip from in-memory payloads (zero-target
+/// snapshots): identical layout to `export_portable_zip`, but the blobs come
+/// from the just-collected snapshot rather than any store.
+pub fn build_portable_zip_in_memory(
+    manifest: &crate::backup::BackupManifest,
+    manifest_bytes: &[u8],
+    member_payloads: &[(String, bool, Vec<u8>)],
+    file_payloads: &[(String, bool, Vec<u8>)],
+) -> Result<Vec<u8>, ApiError> {
+    let meta = PortableMeta {
+        format: PORTABLE_FORMAT.into(),
+        version: PORTABLE_VERSION.into(),
+        created_at: manifest.created_at.clone(),
+        snapshot_id: manifest.id.clone(),
+        user_id: manifest.user_id.clone(),
+        encryption: manifest.encryption.clone(),
+        entries: manifest.entries.clone(),
+        files: manifest.files.clone(),
+    };
+    let mut archive = crate::backup::SimpleArchive::new();
+    archive.add(
+        "meta.json",
+        &serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+    );
+    archive.add("manifest.json", manifest_bytes);
+    let mut seen = std::collections::HashSet::new();
+    for (sha, e2e, bytes) in member_payloads.iter().chain(file_payloads.iter()) {
+        if !seen.insert(sha.clone()) {
+            continue;
+        }
+        // Ciphertext blobs are incompressible: store as-is (fork §7).
+        if *e2e {
+            archive.add_stored(format!("blobs/{sha}"), bytes);
+        } else {
+            archive.add(&format!("blobs/{sha}"), bytes);
+        }
+    }
+    archive
+        .finish()
+        .map_err(|e| ApiError::BadRequest(format!("zip assembly failed: {e}")))
+}
 /// Builds the portable zip for a v2 snapshot: manifest.json + one blob per
 /// referenced hash (ciphertext preserved when the snapshot is encrypted).
-pub async fn export_portable_zip(
-    storage: &S3Storage,
-    user_id: Uuid,
+/// Reads blobs from a connected target (direct-write read path).
+pub async fn export_portable_zip_from_conn(
+    conn: &crate::target::config::TargetConn,
     manifest: &crate::backup::BackupManifest,
 ) -> Result<Vec<u8>, ApiError> {
     let mut archive = crate::backup::SimpleArchive::new();
@@ -700,7 +740,7 @@ pub async fn export_portable_zip(
         version: PORTABLE_VERSION.into(),
         created_at: manifest.created_at.clone(),
         snapshot_id: manifest.id.clone(),
-        user_id: user_id.to_string(),
+        user_id: manifest.user_id.clone(),
         encryption: manifest.encryption.clone(),
         entries: manifest.entries.clone(),
         files: manifest.files.clone(),
@@ -713,7 +753,7 @@ pub async fn export_portable_zip(
         "manifest.json",
         &serde_json::to_vec_pretty(manifest).unwrap_or_default(),
     );
-    // Content-addressed blobs, deduped by hash (members and files may share).
+    let dir = if e2e { "blobs-e2e" } else { "blobs" };
     let mut seen = std::collections::HashSet::new();
     let mut hashes: Vec<String> = manifest.entries.iter().map(|e| e.sha256.clone()).collect();
     hashes.extend(manifest.files.iter().map(|f| f.sha256.clone()));
@@ -721,8 +761,9 @@ pub async fn export_portable_zip(
         if !seen.insert(sha.clone()) {
             continue;
         }
-        let blob = storage.get_blob(user_id, e2e, &sha).await?;
-        // Encrypted blobs are already incompressible: store them as-is.
+        let blob = conn
+            .get(&format!("{}/{dir}/{sha}", manifest.user_id))
+            .await?;
         if e2e {
             archive.add_stored(format!("blobs/{sha}"), &blob);
         } else {

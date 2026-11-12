@@ -119,7 +119,7 @@ async fn main() {
     // unset). Instance-level 3-2-1 backup stays with the dr-backup sidecar.
     if let Some(storage) = state.storage.clone() {
         backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage.clone());
-        target::fanout::spawn_target_scheduler(state.db.clone(), storage);
+        target::fanout::spawn_target_scheduler(state.db.clone(), state.backups.clone(), storage);
     }
 
     // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).
@@ -205,6 +205,10 @@ async fn main() {
             get(routes::backup::get_backup_status),
         )
         .route("/api/backup/{jobId}", delete(routes::backup::cancel_backup))
+        .route(
+            "/api/backup/{jobId}/download",
+            get(routes::backup::download_job_zip),
+        )
         .route("/api/backup/snapshots", get(routes::backup::list_snapshots))
         .route(
             "/api/backup/snapshots/{id}/download",
@@ -282,10 +286,6 @@ async fn main() {
             post(routes::admin_dr::sync_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/fetch",
-            post(routes::admin_dr::fetch_target),
-        )
-        .route(
             "/api/admin/dr-backup/backup-users",
             get(routes::admin_dr::list_backup_users),
         )
@@ -322,10 +322,6 @@ async fn main() {
         .route(
             "/api/backup/targets/{id}/sync",
             post(routes::user_targets::sync_target),
-        )
-        .route(
-            "/api/backup/targets/{id}/fetch",
-            post(routes::user_targets::fetch_target),
         )
         .route(
             "/api/backup/targets/{id}/export/{snapshotId}",

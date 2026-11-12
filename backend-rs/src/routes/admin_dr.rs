@@ -656,7 +656,7 @@ RETAIN_DAYS=14"#;
 
 // ---------------- fan-out targets (spec §14) ----------------
 
-use crate::target::{fanout, repo as target_repo};
+use crate::target::repo as target_repo;
 
 /// GET /api/admin/dr-backup/targets — list (secrets masked).
 pub async fn list_targets(
@@ -823,8 +823,10 @@ pub struct SyncTargetBody {
     pub user_id: Option<String>,
 }
 
-/// POST /api/admin/dr-backup/targets/:id/sync — manual fan-out now.
-/// Without user_id, syncs every user assigned to the target.
+/// POST /api/admin/dr-backup/targets/:id/sync — run a snapshot now for the
+/// target's users (direct-write: snapshots land on all of each user's
+/// targets, not just this one). Without user_id, snapshots every user
+/// assigned to the target. Returns the spawned job ids.
 pub async fn sync_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -844,36 +846,35 @@ pub async fn sync_target(
             .map_err(|_| ApiError::BadRequest("user_id must be a UUID".into()))?,
         None => row.users.clone(),
     };
-    let mut results = Vec::new();
+    let mut jobs = Vec::new();
     for uid in users {
-        for r in fanout::fanout_user(&state.db, &storage, uid).await {
-            results.push(json!(r));
-        }
+        let options = crate::backup::BackupOptions {
+            include_documents: true,
+            include_files: true,
+            include_settings: true,
+            include_metadata: true,
+            memo: Some(format!("Manual sync ({})", row.name)),
+        };
+        let job_id = state.backups.create(uid, options.clone()).await?;
+        let store = state.backups.clone();
+        let sql = state.db.clone();
+        let storage2 = storage.clone();
+        let spawn_job_id = job_id.clone();
+        tokio::spawn(async move {
+            crate::backup::run_backup(
+                store,
+                sql,
+                storage2,
+                uid,
+                spawn_job_id,
+                options,
+                crate::snapcrypto::passphrase_from_env(),
+            )
+            .await;
+        });
+        jobs.push(json!({ "user_id": uid.to_string(), "job_id": job_id }));
     }
-    Ok(ApiOk::ok(json!(results)))
-}
-
-/// POST /api/admin/dr-backup/targets/:id/fetch — pull a user's objects from
-/// the target back into the local bucket (prerequisite for restore).
-pub async fn fetch_target(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
-    axum::Json(body): axum::Json<SyncTargetBody>,
-) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_admin(&auth)?;
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::NotFound("storage not configured".into()))?;
-    let uid = body
-        .user_id
-        .as_deref()
-        .ok_or(ApiError::BadRequest("user_id is required".into()))?
-        .parse::<uuid::Uuid>()
-        .map_err(|_| ApiError::BadRequest("user_id must be a UUID".into()))?;
-    let fetched = fanout::fetch_user_from_target(&state.db, &storage, id, uid).await?;
-    Ok(ApiOk::ok(json!({ "fetched": fetched })))
+    Ok(ApiOk::ok(json!(jobs)))
 }
 
 /// GET /api/admin/dr-backup/backup-users — users that own data (candidates
@@ -883,7 +884,7 @@ pub async fn list_backup_users(
     auth: AuthUser,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
-    let rows: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+    let rows: Vec<(uuid::Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT DISTINCT u.id, u.username, u.email FROM users u \
          JOIN nodes n ON n.user_id = u.id ORDER BY u.username",
     )
