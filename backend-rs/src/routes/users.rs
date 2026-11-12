@@ -120,3 +120,71 @@ async fn fetch_user(db: &mut toasty::Db, id: Uuid) -> Result<crate::models::User
         .flatten()
         .ok_or(ApiError::NotFound("user not found".into()))
 }
+
+/// DELETE /users/:id — delete an account (self or admin).
+///
+/// Snapshot gate: refused while the user has snapshots on any reachable
+/// target — deleting the account must not orphan backups the user paid
+/// storage for. Empty the targets first (or delete them); unreachable
+/// targets also refuse, since emptiness cannot be proven (fork §8
+/// deleteCheck parity).
+///
+/// What goes away: the users row (FK cascades clear nodes, sessions,
+/// settings, links, permissions, invitations) plus the `{uid}/` attachment
+/// prefix in the service bucket. Target objects are the user's own S3 and
+/// are never touched here.
+pub async fn delete_user(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let uid = Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid user ID".into()))?;
+    if auth.user_id() != uid && !crate::auth::guard::is_app_admin(auth.role) {
+        return Err(ApiError::Forbidden("forbidden".into()));
+    }
+    // The last admin cannot delete themselves (lockout prevention).
+    if auth.user_id() == uid && crate::auth::guard::is_app_admin(auth.role) {
+        let (admins,): (i64,) = sqlx::query_as("SELECT count(*) FROM users WHERE role = 2")
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or((1,));
+        if admins <= 1 {
+            return Err(ApiError::BadRequest(
+                "cannot delete the last admin account".into(),
+            ));
+        }
+    }
+    // Snapshot gate across all of the user's targets.
+    let targets = crate::target::repo::list_targets(&state.db).await?;
+    for t in targets.into_iter().filter(|t| t.users.contains(&uid)) {
+        let conn = t.connect().await.map_err(|_| {
+            ApiError::Conflict(format!(
+                "target '{}' is unreachable; prove it is empty before deleting this account",
+                t.name
+            ))
+        })?;
+        let prefix = format!("{uid}/manifests/");
+        let has_snapshots = conn
+            .list(&prefix)
+            .await
+            .map(|objs| objs.iter().any(|(k, _, _)| k.contains("/manifests/")))
+            .unwrap_or(true); // list failure = cannot prove empty
+        if has_snapshots {
+            return Err(ApiError::Conflict(format!(
+                "account has snapshots on target '{}'; empty the target first",
+                t.name
+            )));
+        }
+    }
+    // Attachments first (best-effort), then the row (cascades the rest).
+    if let Some(storage) = &state.storage {
+        storage.delete_user_prefix(uid).await;
+    }
+    let mut db = state.toasty.clone();
+    crate::models::User::filter_by_id(uid)
+        .delete()
+        .exec(&mut db)
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("account deletion failed: {e}")))?;
+    Ok(ApiOk::ok(serde_json::json!("Account deleted.")))
+}

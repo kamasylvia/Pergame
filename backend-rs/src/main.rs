@@ -397,6 +397,7 @@ async fn main() {
         .route("/api/users/@me", get(routes::users::get_me))
         .route("/api/users/{id}", get(routes::users::get_user))
         .route("/api/users/{id}", patch(routes::users_patch::update_user))
+        .route("/api/users/{id}", delete(routes::users::delete_user))
         .route(
             "/api/users/{id}/password",
             patch(routes::users_patch::update_password),

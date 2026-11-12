@@ -435,6 +435,37 @@ impl S3Storage {
         }
     }
 
+    /// Deletes everything under the `{user_id}/` prefix (account deletion:
+    /// attachments go away with the user; snapshots live on the user's own
+    /// targets and are gated separately, never touched here).
+    pub async fn delete_user_prefix(&self, user_id: Uuid) {
+        let prefix = format!("{user_id}/");
+        let Ok(list) = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+        else {
+            return;
+        };
+        let Some(objects) = list.contents else { return };
+        for obj in objects {
+            let Some(key) = obj.key else { continue };
+            if let Err(e) = self
+                .client
+                .delete_object()
+                .bucket(&self.bucket)
+                .key(&key)
+                .send()
+                .await
+            {
+                tracing::warn!(%key, error = %e, "failed to delete object");
+            }
+        }
+    }
+
     /// GET object bytes (backup archiving).
     pub async fn get_user_object(&self, user_id: Uuid, key: &str) -> Result<Vec<u8>, ApiError> {
         let object_key = format!("{}/{}", user_id, key);
