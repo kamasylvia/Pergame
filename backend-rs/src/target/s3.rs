@@ -120,14 +120,29 @@ impl S3Target {
         } else {
             self.key(path)
         };
-        let resp = self
+        let resp = match self
             .client
             .get_object()
             .bucket(&self.bucket)
             .key(&key)
             .send()
             .await
-            .map_err(|e| internal(format!("s3 get {}: {e}", self.key(path))))?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                // Same 404 detection as has(): Display is just "service
+                // error", the status lives in the raw response. Missing keys
+                // must surface as NotFound so callers (owner claim, blob
+                // fetch) treat absence as a normal case, not a failure.
+                let status = e.raw_response().map(|r| r.status().as_u16()).unwrap_or(0);
+                if status == 404 {
+                    return Err(crate::error::ApiError::NotFound(format!(
+                        "target object not found: {key}"
+                    )));
+                }
+                return Err(internal(format!("s3 get {}: {e}", self.key(path))));
+            }
+        };
         let bytes = resp.body.collect().await.map_err(internal)?;
         Ok(bytes.to_vec())
     }

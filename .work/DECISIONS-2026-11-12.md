@@ -46,3 +46,8 @@
 ## 9. i18n 新键只翻了 en/zh-CN/zh-TW(已执行)
 
 - 12 个新键,de/fr/it/ko/uk 走 `fallbackLocale: 'en'` 回英文。这是常规做法,但如果你要全语言齐,告诉我,我补(机翻+标注待校)。
+
+## 10. backup_targets INSERT 占位符错位(线上抓到,已修 v0.0.6)
+
+- v0.0.5 上线验证时创建 target 直接 500:`created_at` 绑到了 namespace(string)槽。这是**旧代码就有的 bug**(VALUES `$17,$17,$18` vs bind 顺序错位),之前集成测试居然过了——因为测试可能没走 create 全路径,或者旧测试库容忍?没深究。
+- 教训:sqlx 非宏 `query` 的占位符是纯运行时检查,编译器不救。以后凡手写 INSERT,review 时数一遍。
