@@ -1775,3 +1775,304 @@ async fn mcp_token_lifecycle_and_tools() {
     cleanup_user(&user_id).await;
     cleanup_user(&stranger_id).await;
 }
+
+// ---------------------------------------------------------------- MCP + lock
+
+/// Extracts the JSON payload of a successful tool call (the text content).
+fn tool_payload(messages: &[Value]) -> Value {
+    let text = rpc_result(messages)["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("tool result has no text: {messages:?}"));
+    serde_json::from_str(text).unwrap_or_else(|e| panic!("tool payload not JSON ({e}): {text}"))
+}
+
+/// Asserts a tool call failed and returns (code, data).
+fn tool_error(messages: &[Value]) -> (i64, Value) {
+    let err = messages
+        .iter()
+        .find(|m| m.get("error").is_some())
+        .unwrap_or_else(|| panic!("expected a JSON-RPC error, got {messages:?}"));
+    (
+        err["error"]["code"].as_i64().expect("error code"),
+        err["error"].get("data").cloned().unwrap_or(Value::Null),
+    )
+}
+
+async fn mcp_tool(
+    http: &reqwest::Client,
+    token: &str,
+    sid: &str,
+    id: i64,
+    name: &str,
+    args: Value,
+) -> Vec<Value> {
+    let (status, messages, _) = mcp_rpc(
+        http,
+        token,
+        Some(sid),
+        json!({
+            "jsonrpc": "2.0", "id": id, "method": "tools/call",
+            "params": { "name": name, "arguments": args }
+        }),
+    )
+    .await;
+    assert_eq!(
+        status, 200,
+        "transport-level failure for {name}: {messages:?}"
+    );
+    messages
+}
+
+/// The read-only window must stop MCP writes exactly like REST writes: the
+/// four write tools answer -32023 with `reason=backup_in_progress`, while the
+/// three read tools keep working (an agent still needs to read while a backup
+/// runs). The target points at a listener this test owns that accepts and
+/// answers 500 after a delay, so the backup stalls with the lock held instead
+/// of depending on timing luck.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn mcp_writes_blocked_while_backup_runs() {
+    let client = Client::new();
+    let (user_id, _) = signup_and_login_tagged(&client, "mcplock").await;
+
+    // A slow, always-failing HTTP listener stands in for an unreachable S3:
+    // the first write attempt stalls for seconds, which is the window under
+    // test.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind fake s3");
+    let port = listener.local_addr().unwrap().port();
+    // Handles so the test can shut the fake store down once the assertions
+    // are done: killing the sockets makes the backup fail immediately instead
+    // of waiting out a stall, so the lock release is prompt and deterministic.
+    let fake_handles: std::sync::Arc<std::sync::Mutex<Vec<tokio::task::AbortHandle>>> =
+        Default::default();
+    let handles_for_accept = fake_handles.clone();
+    let fake_server = tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                break;
+            };
+            let handle = tokio::spawn(async move {
+                use tokio::io::AsyncWriteExt as _;
+                tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                let _ = socket
+                    .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+                let _ = socket.shutdown().await;
+            });
+            handles_for_accept
+                .lock()
+                .unwrap()
+                .push(handle.abort_handle());
+        }
+    });
+
+    // Token + one note to update/move/delete during the window.
+    let (status, r) = post_json(
+        &client,
+        "/users/@me/api-tokens",
+        &json!({ "name": "lock-window" }),
+    )
+    .await;
+    assert_eq!(status, 201, "create token failed: {:?}", r.message);
+    let token = r.result["token"].as_str().expect("plaintext").to_string();
+    let token_id = result_id_string(&r);
+
+    let mcp = reqwest::Client::builder().no_proxy().build().unwrap();
+    let sid = mcp_session(&mcp, &token).await;
+
+    let created = tool_payload(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            100,
+            "create_note",
+            json!({
+                "name": "lock window note", "content": "before"
+            }),
+        )
+        .await,
+    );
+    let note_id = created["id"].as_str().unwrap().to_string();
+
+    // A target that stalls: enabled, owned by the caller. Saving requires a
+    // prior connection test (probing is what mints the token; reachability is
+    // not part of the gate), so probe-draft first.
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let target_fields = json!({
+        "name": format!("stall-{unique}"),
+        "kind": "s3",
+        "endpoint": format!("http://127.0.0.1:{port}"),
+        "bucket": "stall",
+        "access_key": "test",
+        "secret_key": "test",
+        "enabled": true,
+    });
+    let (_, probed) = post_json(
+        &client,
+        "/backup/targets/probe-draft",
+        &json!({ "target": target_fields }),
+    )
+    .await;
+    let connection_token = probed.result["connection_token"]
+        .as_str()
+        .unwrap_or_else(|| panic!("probe-draft returned no token: {:?}", probed.message))
+        .to_string();
+    let mut create_body = target_fields.clone();
+    create_body["connection_token"] = json!(connection_token);
+    let (status, t) = post_json(&client, "/backup/targets", &create_body).await;
+    assert!(
+        (200..300).contains(&status),
+        "target create failed [{status}]: {:?}",
+        t.message
+    );
+    let target_id = result_id_string(&t);
+
+    // Start a backup and wait for the workspace to turn read-only.
+    let (status, job) = post_json(
+        &client,
+        "/backup",
+        &json!({ "include_documents": true, "include_settings": true }),
+    )
+    .await;
+    assert_eq!(status, 202, "backup start failed: {:?}", job.message);
+    let job_id = job.result["job_id"].as_str().expect("job id").to_string();
+
+    // The read-only window is observable through any REST write: an empty
+    // name is rejected with 400 while writable and preempted with 423 while
+    // locked, so the probe has no side effects. (`/admin/dr-backup/status`
+    // would need an admin account; this is the same signal for a plain user.)
+    async fn write_probe(client: &Client) -> u16 {
+        let (status, _) = post_json(client, "/nodes", &json!({ "name": "" })).await;
+        status
+    }
+    let mut read_only = false;
+    for _ in 0..600 {
+        if write_probe(&client).await == 423 {
+            read_only = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(read_only, "the backup never engaged the read-only lock");
+
+    // All four write tools are refused with -32023 + reason.
+    let writes = [
+        ("create_note", json!({ "name": "blocked create" })),
+        (
+            "update_note",
+            json!({ "id": note_id, "content": "blocked edit" }),
+        ),
+        (
+            "move_node",
+            json!({ "id": note_id, "new_folder_id": Value::Null }),
+        ),
+        ("delete_node", json!({ "id": note_id })),
+    ];
+    for (i, (name, args)) in writes.iter().enumerate() {
+        let messages = mcp_tool(&mcp, &token, &sid, 200 + i as i64, name, args.clone()).await;
+        let (code, data) = tool_error(&messages);
+        assert_eq!(code, -32023, "{name} must be refused during a backup");
+        assert_eq!(
+            data["reason"], "backup_in_progress",
+            "{name} must say why: {data}"
+        );
+    }
+
+    // Reads keep working.
+    let read = tool_payload(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            300,
+            "read_note",
+            json!({ "id": note_id }),
+        )
+        .await,
+    );
+    assert_eq!(read["content"], "before", "read must survive the window");
+    let _ = tool_payload(&mcp_tool(&mcp, &token, &sid, 301, "list_children", json!({})).await);
+    let _ = tool_payload(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            302,
+            "search_notes",
+            json!({ "query": "before" }),
+        )
+        .await,
+    );
+
+    // REST parity: a real node write is refused the same way (423), not just
+    // the empty-name probe.
+    let (status, _) = post_json(&client, "/nodes", &json!({ "name": "blocked rest write" })).await;
+    assert_eq!(status, 423, "REST writes share the window");
+
+    // The note really was untouched while writes were refused.
+    let after = tool_payload(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            303,
+            "read_note",
+            json!({ "id": note_id }),
+        )
+        .await,
+    );
+    assert_eq!(after["content"], "before");
+
+    // Release: stop the fake store so the stalled writes fail at once, cancel
+    // the job, then wait for the window to close.
+    for handle in fake_handles.lock().unwrap().iter() {
+        handle.abort();
+    }
+    fake_server.abort();
+    let resp = client
+        .http
+        .delete(format!("{BASE_URL}/backup/{job_id}"))
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.status().is_success(), "cancel failed");
+
+    let mut closed = false;
+    for _ in 0..1200 {
+        if write_probe(&client).await == 400 {
+            closed = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(closed, "the read-only window never closed");
+
+    // Writes work again once the window closes.
+    let messages = mcp_tool(
+        &mcp,
+        &token,
+        &sid,
+        400,
+        "create_note",
+        json!({ "name": "after window" }),
+    )
+    .await;
+    assert_eq!(rpc_result(&messages)["isError"], false, "writes resume");
+
+    // Cleanup: the API would refuse deleting a target that may still hold
+    // objects (this one is unreachable), so `cleanup_user` removes the row
+    // directly — it also drops the tokens/nodes by cascade.
+    let _ = target_id;
+    let _ = client
+        .http
+        .delete(format!("{BASE_URL}/users/@me/api-tokens/{token_id}"))
+        .send()
+        .await;
+    cleanup_user(&user_id).await;
+}

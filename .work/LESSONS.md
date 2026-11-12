@@ -91,3 +91,11 @@
 - **`CallToolResult.isError` 总是序列化**(`false` 也在),断言「没有 isError」会假红;该断言 `== false`。
 - **活体验证的最小隔离法**:NAS pg 上 `CREATE DATABASE pergame_mcp_test` + 本地二进制跑 migration + `--ignored` 单用例 + 用完 DROP DATABASE。生产桶名可复用(MCP 不落对象);**绝不复用生产库**——trash sweeper 会按保留期真删行。凭据走 `~/.agents/config.toml` 的 Infisical Machine Identity,本机需把 `PG_HOST`/`QUOBJECT_ENDPOINT` 的容器名换成 `qnap.elf-balance.ts.net`。
 - **审计落点**:`logs` 表此前只有 schema 没有写入方;MCP 的 token 创建/吊销与四个写工具是第一批生产者,活测 SQL 可核(`mcp.tool.*` / `mcp.token.*`)。
+
+## 2026-11-12 只读窗口实测(锁门活体验证)
+
+- **验证「锁期禁止写」要自己制造锁窗口**:备份/还原才持锁,自然数据量下窗口太短不可测。做法 = 测试进程自己 `TcpListener::bind("127.0.0.1:0")`,接受连接后 sleep 4s 再回 500;后端把它当 target endpoint,备份写路径卡住 → 锁持续。断言完 `abort()` 掉所有 socket 任务,让在飞请求立即 RST,备份快速失败、锁确定性释放(否则要等 SDK 重试退避,分钟级)。
+- **普通用户读不到 `/api/admin/dr-backup/status`**(`require_admin`)。探测锁态的通用信号 = 发一个**必定失败且无副作用**的 REST 写:`POST /api/nodes {"name":""}` → 未锁 400、锁中 423。零副作用 + 同源真相。
+- **被测 target 的删除门禁会拒绝「不可达 target」**(无法证明已清空),所以测试清理别调 `DELETE /backup/targets/:id`;走 `cleanup_user` 的 `DELETE FROM backup_targets WHERE $uid = ANY(users)`。
+- **target 名唯一约束**:重跑失败的用例会撞 `backup_targets_name_key`,测试里的 target 名要带时间戳后缀(和用户名同款)。
+- 实测结论(2026-11-12,活 pg):备份期内 MCP `create_note` / `update_note` / `move_node` / `delete_node` 全部 `-32023` + `data.reason=backup_in_progress`,正文确实未变;`read_note` / `list_children` / `search_notes` 照常;REST 写同窗口 423;窗口关闭后写恢复。
