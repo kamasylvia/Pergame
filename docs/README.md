@@ -142,7 +142,7 @@ These variables configure the RustFS object storage service.
 - `RUSTFS_EXTERNAL_PORT`: The port exposed on your host machine for the RustFS service.
 - `RUSTFS_ACCESS_KEY`: The access key for the RustFS S3-compatible API.
 - `RUSTFS_SECRET_KEY`: The secret key for the RustFS S3-compatible API.
-- `S3_BUCKET`: The name of the default bucket created for Pergame. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `pergame` and the backend will create `pergame` and `pergame-backups` buckets.
+- `S3_BUCKET`: The name of the default bucket created for Pergame. Note that this bucket name should match the `CDN_ENDPOINT` variable in the backend configuration. By default, it is set to `pergame` and the backend creates just that one bucket (snapshots write straight to the user's own backup targets since 2026-11-12; no `pergame-backups` bucket anymore).
 
 ### 6. Email — SMTP (optional)
 

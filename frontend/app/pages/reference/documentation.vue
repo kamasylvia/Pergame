@@ -185,8 +185,8 @@ S3_BUCKET=pergame
         <li><code>RUSTFS_SECRET_KEY</code>: The secret key for the RustFS S3-compatible API.</li>
         <li>
           <code>S3_BUCKET</code>: The name of the default bucket created for Pergame. Note that this bucket name should match the
-          <code>CDN_ENDPOINT</code> variable in the backend configuration. By default, it is set to <code>pergame</code> and the backend will create
-          <code>pergame</code> and <code>pergame-backups</code> buckets.
+          <code>CDN_ENDPOINT</code> variable in the backend configuration. By default, it is set to <code>pergame</code> and the backend creates just
+          that one bucket (snapshots write straight to the user's own backup targets; no <code>pergame-backups</code> bucket anymore).
         </li>
       </ul>
       <h3 id="6.-email-%E2%80%94-smtp-(optional)">6. Email — SMTP (optional)</h3>

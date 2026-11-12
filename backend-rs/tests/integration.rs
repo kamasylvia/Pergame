@@ -1274,12 +1274,18 @@ async fn get_bytes(client: &Client, url: &str) -> (u16, Vec<u8>) {
 }
 
 /// Hand-rolled multipart upload (reqwest has no multipart feature here).
-async fn upload_file(client: &Client, filename: &str, mime: &str, body: &[u8]) -> (u16, ApiResponse) {
+async fn upload_file(
+    client: &Client,
+    filename: &str,
+    mime: &str,
+    body: &[u8],
+) -> (u16, ApiResponse) {
     let boundary = "----pergame-test-boundary";
     let mut payload = Vec::new();
     payload.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     payload.extend_from_slice(
-        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n").as_bytes(),
+        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n")
+            .as_bytes(),
     );
     payload.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
     payload.extend_from_slice(body);
@@ -1287,7 +1293,10 @@ async fn upload_file(client: &Client, filename: &str, mime: &str, body: &[u8]) -
     let resp = client
         .http
         .post(format!("{BASE_URL}/resources"))
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
         .body(payload)
         .send()
         .await
@@ -1314,7 +1323,10 @@ async fn resource_file_download_matrix() {
     let (status, r) = upload_file(&client, "probe.txt", "text/plain", payload).await;
     assert_eq!(status, 200, "upload failed: {:?}", r.message);
     let node_id = result_id_string(&r);
-    let tp = r.result["metadata"]["transformed_path"].as_str().unwrap().to_string();
+    let tp = r.result["metadata"]["transformed_path"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let file_url = format!("{BASE_URL}/resources/{node_id}/file");
     let legacy_url = format!(
         "{}/pergame/{}/{}",
@@ -1365,7 +1377,13 @@ async fn resource_file_download_matrix() {
     assert_eq!(bytes, payload);
 
     // Range passthrough.
-    let resp = client.http.get(&file_url).header("Range", "bytes=0-4").send().await.unwrap();
+    let resp = client
+        .http
+        .get(&file_url)
+        .header("Range", "bytes=0-4")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status().as_u16(), 206);
     assert!(resp.headers().contains_key("content-range"));
     let bytes = resp.bytes().await.unwrap();

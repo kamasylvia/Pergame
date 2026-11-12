@@ -1,8 +1,9 @@
 //! User backup jobs (Go services/backup.service.go + types/backup.go parity):
-//! per-user async job, zip v1.2.0 archive (documents.json — `{nodes, links}`
-//! since v1.2.0, when soft links shipped — / files/ + files_index.json /
-//! user_settings.json / manifest.json), upload to the private backups bucket,
-//! 24h presigned download URL.
+//! per-user async job, portable zip archive (documents.json — `{nodes, links}`
+//! — / files/ + files_index.json / user_settings.json / manifest.json /
+//! permissions.json / invitations.json / trash.json / profile.json), written
+//! straight to the user's own backup targets; zero targets = S3 inline zip
+//! with user-chosen expiry, downloaded via a one-shot token link.
 
 use std::collections::HashMap;
 use std::sync::Arc;

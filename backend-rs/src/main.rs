@@ -95,7 +95,7 @@ async fn main() {
     // Admin-role reconciliation (ADMIN_ACCOUNTS env, Go LoadAppAdmins parity).
     auth::admins::load_app_admins(&mut state.toasty.clone(), &state.db).await;
 
-    // S3 buckets bootstrap (public-read policy + backup lifecycle, Go parity).
+    // S3 bucket bootstrap (create main bucket idempotently; stays private).
     if let Some(storage) = &state.storage
         && let Err(e) = storage.ensure_buckets().await
     {

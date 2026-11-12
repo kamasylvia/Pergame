@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 import AppSelectNode from '~/components/AppSelectNode.vue';
-import type { ANode, Node } from '~/stores';
+import type { Node } from '~/stores';
 
 const props = defineProps<{ node: Node }>();
 const emit = defineEmits(['close']);

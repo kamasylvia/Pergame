@@ -1,7 +1,7 @@
 //! Snapshot restore engine (spec .work/features/backup-restore.md §3).
 //!
-//! Two entrances feed the same engine: restoring a snapshot already stored in
-//! the backups bucket, and restoring an uploaded zip. Strategy is replace:
+//! Two entrances feed the same engine: restoring a snapshot already stored on
+//! a user backup target, and restoring an uploaded zip. Strategy is replace:
 //! the caller's nodes (cascading links/permissions/invitations) are removed
 //! inside a transaction, then rebuilt from documents.json; links pointing at
 //! missing nodes are skipped and reported.
@@ -767,7 +767,6 @@ pub async fn plan_from_zip(
         .unwrap_or_default();
     let settings_present = read_member("user_settings.json").is_some();
     let profile_present = read_member("profile.json").is_some();
-    drop(read_member);
     plan.settings_in_archive = settings_present;
     plan.profile_in_archive = profile_present;
     plan.incoming_permissions = permissions.len();

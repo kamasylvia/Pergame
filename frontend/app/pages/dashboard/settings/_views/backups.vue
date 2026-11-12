@@ -338,7 +338,7 @@ async function restoreSnapshot(snap: BackupSnapshot) {
     const plan = await makeRequest<RestorePlan>(`backup/snapshots/${snap.id}/preview`, 'POST', {
       passphrase: restorePassphrase.value.trim() || undefined,
     });
-    if (pendingRestore.value === snap.id && plan.status === 'success') {
+    if (pendingRestore.value === snap.id && plan.status === 'success' && plan.result) {
       pendingPlan.value = plan.result;
     }
     return;
