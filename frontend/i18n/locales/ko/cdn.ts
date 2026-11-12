@@ -40,6 +40,20 @@ export default {
     successTitle: '업로드 완료',
   },
 
+  orphans: {
+    deleteAll: '모두 삭제',
+    deleted: '정리 완료',
+    deletedDetail: '{count}개 객체 삭제, {size} 확보',
+    deleteFailed: '삭제 실패',
+    found: '{count}개 미사용 · {size}',
+    hint: '문서가 참조하지 않는 저장 객체를 찾습니다(실패한 가져오기나 중단된 업로드의 잔여물).',
+    none: '남은 파일이 없습니다 — 저장소와 문서가 일치합니다.',
+    scan: '확인',
+    scanFailed: '확인 실패',
+    scanning: '확인 중…',
+    title: '사용되지 않는 파일',
+  },
+
   page: {
     empty: '아직 업로드된 파일이 없습니다.',
   },

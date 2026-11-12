@@ -40,6 +40,20 @@ export default {
     successTitle: 'Upload complete',
   },
 
+  orphans: {
+    deleteAll: 'Delete all',
+    deleted: 'Cleanup done',
+    deletedDetail: '{count} object(s) removed, {size} freed',
+    deleteFailed: 'Delete failed',
+    found: '{count} unused · {size}',
+    hint: 'Check for stored objects no document points at (leftovers from failed imports or interrupted uploads).',
+    none: 'Nothing unused — storage matches your documents.',
+    scan: 'Check',
+    scanFailed: 'Scan failed',
+    scanning: 'Checking…',
+    title: 'Unused files',
+  },
+
   page: {
     empty: 'No files uploaded yet.',
   },

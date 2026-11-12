@@ -1,6 +1,7 @@
 //! /resources routes — file upload, avatar upload, file update, authed file
 //! download (fork: replaces the public-bucket CDN reads; see `download_file`).
 
+use axum::Json;
 use axum::body::Body;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -696,4 +697,106 @@ pub async fn download_legacy(
         return Err(ApiError::NotFound("not found".into()));
     }
     serve_object(&state, node.user_id, &obj, &headers, q.download).await
+}
+
+// ------------------------------------------------------------- orphans
+
+/// Objects under `{uid}/` that no resource node references. Files of trashed
+/// nodes count as referenced (they must survive until the trash is purged),
+/// and the avatar plus the `inline-zips/` prefix are never candidates.
+async fn scan_orphans(
+    state: &AppState,
+    user_id: Uuid,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
+    let referenced: std::collections::HashSet<String> =
+        node_repo::referenced_resource_paths(&state.db, user_id)
+            .await
+            .map_err(ApiError::from)?
+            .into_iter()
+            .collect();
+
+    let objects = storage.list_user_objects(user_id).await?;
+    let mut out = Vec::new();
+    let mut total = 0i64;
+    for (name, size, mtime) in objects {
+        if name == "avatar" || referenced.contains(&name) {
+            continue;
+        }
+        total += size;
+        out.push(json!({
+            "key": name,
+            "size": size,
+            "last_modified": mtime,
+        }));
+    }
+    out.sort_by(|a, b| b["size"].as_i64().cmp(&a["size"].as_i64()));
+    Ok((out, total))
+}
+
+/// GET /resources/orphans — list stored objects nothing points at.
+pub async fn list_orphans(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let (objects, total) = scan_orphans(&state, auth.user_id()).await?;
+    Ok(ApiOk::ok(json!({
+        "objects": objects,
+        "total_bytes": total,
+        "count": objects.len(),
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PurgeOrphansInput {
+    /// Object names to delete; omitted/null = every orphan found by the scan.
+    #[serde(default)]
+    pub keys: Option<Vec<String>>,
+}
+
+/// POST /resources/orphans/purge — delete orphans (all, or the named ones).
+/// The scan is repeated here: a file that a node started referencing between
+/// listing and purging is not deleted.
+pub async fn purge_orphans(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    body: Option<Json<PurgeOrphansInput>>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
+    let (objects, _) = scan_orphans(&state, auth.user_id()).await?;
+    let orphans: std::collections::HashSet<String> = objects
+        .iter()
+        .filter_map(|o| o["key"].as_str().map(str::to_string))
+        .collect();
+
+    let requested = body.and_then(|b| b.0.keys);
+    let targets: Vec<String> = match requested {
+        Some(keys) => keys.into_iter().filter(|k| orphans.contains(k)).collect(),
+        None => orphans.into_iter().collect(),
+    };
+
+    let mut deleted = 0usize;
+    let mut bytes = 0i64;
+    for key in &targets {
+        if storage
+            .delete_user_object_checked(auth.user_id(), key)
+            .await
+            .is_ok()
+        {
+            deleted += 1;
+            bytes += objects
+                .iter()
+                .find(|o| o["key"].as_str() == Some(key))
+                .and_then(|o| o["size"].as_i64())
+                .unwrap_or(0);
+        }
+    }
+    tracing::info!(%deleted, %bytes, "orphan resources purged");
+    Ok(ApiOk::ok(json!({ "deleted": deleted, "bytes": bytes })))
 }

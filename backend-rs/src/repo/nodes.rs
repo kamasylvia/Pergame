@@ -76,6 +76,23 @@ pub async fn list_shared(pool: &PgPool, user_id: Uuid) -> Result<Vec<NodeRow>, s
     .await
 }
 
+/// Object keys still referenced by this user's resource nodes, trashed ones
+/// included: a file in the trash must survive until the trash is purged, so
+/// orphan detection can never treat it as garbage.
+pub async fn referenced_resource_paths(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_as::<_, (String,)>(
+        "SELECT metadata->>'transformed_path' FROM nodes
+         WHERE user_id = $1 AND role = 4 AND metadata ? 'transformed_path'",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map(|rows| rows.into_iter().map(|(p,)| p).collect())
+}
+
 /// Permission rows of `user_id` on the given node ids (batched, Go parity).
 pub async fn permissions_for_nodes(
     pool: &PgPool,

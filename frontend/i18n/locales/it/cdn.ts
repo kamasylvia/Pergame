@@ -40,6 +40,20 @@ export default {
     successTitle: 'Caricamento completato',
   },
 
+  orphans: {
+    deleteAll: 'Elimina tutto',
+    deleted: 'Pulizia completata',
+    deletedDetail: '{count} oggetto/i rimossi, {size} liberati',
+    deleteFailed: 'Eliminazione non riuscita',
+    found: '{count} inutilizzati · {size}',
+    hint: 'Cerca oggetti memorizzati che nessun documento referenzia (residui di import falliti o caricamenti interrotti).',
+    none: 'Niente di inutilizzato — lo spazio corrisponde ai documenti.',
+    scan: 'Controlla',
+    scanFailed: 'Controllo non riuscito',
+    scanning: 'Controllo…',
+    title: 'File inutilizzati',
+  },
+
   page: {
     empty: 'Nessun file ancora caricato.',
   },

@@ -22,6 +22,40 @@
       </div>
       <span class="storage-percentage">{{ storagePercentage.toFixed(1) }}%</span>
     </div>
+    <!-- Orphan objects: stored bytes no node references (SiYuan's "unused
+         assets"). Nothing is deleted until the user asks. -->
+    <div class="orphan-panel">
+      <div class="orphan-head">
+        <div class="orphan-info">
+          <span class="orphan-label">{{ t('cdn.orphans.title') }}</span>
+          <span class="orphan-desc">
+            <template v-if="orphans.scanned">
+              {{ orphans.count
+                ? t('cdn.orphans.found', { count: orphans.count, size: readableFileSize(orphans.bytes) })
+                : t('cdn.orphans.none') }}
+            </template>
+            <template v-else>{{ t('cdn.orphans.hint') }}</template>
+          </span>
+        </div>
+        <div class="orphan-actions">
+          <AppButton type="secondary" small :disabled="orphans.scanning" @click="scanOrphans">
+            {{ orphans.scanning ? t('cdn.orphans.scanning') : t('cdn.orphans.scan') }}
+          </AppButton>
+          <AppButton v-if="orphans.count" type="danger" small :disabled="orphans.purging" @click="purgeOrphans()">
+            {{ t('cdn.orphans.deleteAll') }}
+          </AppButton>
+        </div>
+      </div>
+      <ul v-if="orphans.count" class="orphan-list">
+        <li v-for="item in orphans.items" :key="item.key">
+          <span class="orphan-name">{{ item.key }}</span>
+          <span class="orphan-size">{{ readableFileSize(item.size) }}</span>
+          <span class="orphan-remove" @click="purgeOrphans([item.key])">
+            <Icon name="delete" />
+          </span>
+        </li>
+      </ul>
+    </div>
     <AppDrop ref="dropComponent" multiple :max-files="10" @select="selectFiles" />
     <div class="upload-actions">
       <AppButton type="primary" :disabled="!selectedFiles.length" @click="submitFiles">
@@ -92,6 +126,7 @@ import DeleteNodeModal from '~/components/Node/Modals/Delete.vue';
 import { readableFileSize, resolvePreviewUrl } from '~/helpers/resources';
 import { assignParent } from '~/helpers/resources-parent';
 import { resolveNodeColor } from '~/helpers/node';
+import { makeRequest } from '~/stores/_utils';
 
 import type { Field } from '~/components/DataTable.vue';
 import type { Node } from '~/stores';
@@ -126,6 +161,45 @@ const dropComponent = ref();
 const filter = ref('');
 
 const MAX_STORAGE = 1024 * 1024 * 1024; // 1 GB in bytes
+
+const orphans = reactive({ items: [] as { key: string, size: number }[], count: 0, bytes: 0, scanned: false, scanning: false, purging: false });
+
+const scanOrphans = async () => {
+  orphans.scanning = true;
+  try {
+    const response = await makeRequest<{ objects: { key: string, size: number }[], total_bytes: number, count: number }>('resources/orphans', 'GET');
+    if (response.status === 'success' && response.result) {
+      orphans.items = response.result.objects;
+      orphans.count = response.result.count;
+      orphans.bytes = response.result.total_bytes;
+      orphans.scanned = true;
+    } else {
+      notifications.add({ type: 'error', title: t('cdn.orphans.scanFailed'), message: response.message });
+    }
+  } finally {
+    orphans.scanning = false;
+  }
+};
+
+/** `keys` = null deletes every orphan found by the server-side rescan. */
+const purgeOrphans = async (keys: string[] | null = null) => {
+  orphans.purging = true;
+  try {
+    const response = await makeRequest<{ deleted: number, bytes: number }>('resources/orphans/purge', 'POST', keys ? { keys } : {});
+    if (response.status === 'success' && response.result) {
+      notifications.add({
+        type: 'success',
+        title: t('cdn.orphans.deleted'),
+        message: t('cdn.orphans.deletedDetail', { count: response.result.deleted, size: readableFileSize(response.result.bytes) }),
+      });
+      await scanOrphans();
+    } else {
+      notifications.add({ type: 'error', title: t('cdn.orphans.deleteFailed'), message: response.message });
+    }
+  } finally {
+    orphans.purging = false;
+  }
+};
 const parentNodes = tree.getTreeUpToRole(3);
 
 const nodes = computed(() => {
@@ -262,6 +336,82 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.orphan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+
+  .orphan-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .orphan-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .orphan-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .orphan-desc {
+    font-size: 13px;
+  }
+
+  .orphan-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .orphan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 260px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-y: auto;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .orphan-name {
+      flex: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .orphan-size {
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .orphan-remove {
+      display: inline-flex;
+      cursor: pointer;
+    }
+  }
+}
+
 .storage-indicator {
   display: flex;
   align-items: center;

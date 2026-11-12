@@ -40,6 +40,20 @@ export default {
     successTitle: 'Téléversement terminé',
   },
 
+  orphans: {
+    deleteAll: 'Tout supprimer',
+    deleted: 'Nettoyage terminé',
+    deletedDetail: '{count} objet(s) supprimé(s), {size} libérés',
+    deleteFailed: 'Échec de la suppression',
+    found: '{count} inutilisé(s) · {size}',
+    hint: 'Recherche les objets stockés qu’aucun document ne référence (restes d’imports échoués ou d’envois interrompus).',
+    none: 'Rien d’inutilisé — le stockage correspond aux documents.',
+    scan: 'Vérifier',
+    scanFailed: 'Échec de la vérification',
+    scanning: 'Vérification…',
+    title: 'Fichiers inutilisés',
+  },
+
   page: {
     empty: 'Aucun fichier téléversé pour le moment.',
   },

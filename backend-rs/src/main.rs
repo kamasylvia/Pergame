@@ -419,6 +419,16 @@ async fn main() {
             "/api/resources/{id}/file/{name}",
             get(routes::resources::download_file_named),
         )
+        // Orphan cleanup: objects nothing references any more (SiYuan's
+        // "unused assets"), scoped to the caller's own prefix.
+        .route(
+            "/api/resources/orphans",
+            get(routes::resources::list_orphans),
+        )
+        .route(
+            "/api/resources/orphans/purge",
+            post(routes::resources::purge_orphans),
+        )
         .route(
             "/api/users/{id}/avatar",
             get(routes::resources::download_avatar),

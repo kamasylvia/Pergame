@@ -2076,3 +2076,89 @@ async fn mcp_writes_blocked_while_backup_runs() {
         .await;
     cleanup_user(&user_id).await;
 }
+
+// ------------------------------------------------------------ orphan resources
+
+/// Objects whose node row is gone are orphans; a file belonging to a trashed
+/// node is not (it must stay restorable), and a purge only ever touches names
+/// that the rescan still considers orphaned.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn orphan_resource_lifecycle() {
+    let client = Client::new();
+    let (user_id, _) = signup_and_login_tagged(&client, "orph").await;
+
+    // The uploaded resource node itself is the reference; no parent needed.
+    let payload = b"orphan probe bytes";
+    let (status, up) = upload_file(&client, "orphan-probe.txt", "text/plain", payload).await;
+    assert_eq!(status, 200, "upload failed: {:?}", up.message);
+    let file_id = result_id_string(&up);
+    let key = up.result["metadata"]["transformed_path"]
+        .as_str()
+        .expect("transformed_path")
+        .to_string();
+
+    // Referenced while the node exists.
+    let (_, listed) = get(&client, "/resources/orphans").await;
+    assert!(
+        !listed.result["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o["key"] == key),
+        "a live resource is not an orphan"
+    );
+
+    // Deleting the node row directly (as a failed import does) leaves the
+    // object behind; that is the case this endpoint exists for.
+    let host = std::env::var("DATABASE_HOST").expect("DATABASE_HOST");
+    let port = std::env::var("DATABASE_PORT").unwrap_or_else(|_| "5432".into());
+    let db = std::env::var("DATABASE_NAME").expect("DATABASE_NAME");
+    let db_user = std::env::var("DATABASE_USER").expect("DATABASE_USER");
+    let db_pass = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD");
+    let dsn = format!("postgresql://{db_user}:{db_pass}@{host}:{port}/{db}");
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&dsn)
+        .await
+        .expect("test db");
+    sqlx::query("DELETE FROM nodes WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(&file_id).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (_, listed) = get(&client, "/resources/orphans").await;
+    let orphans = listed.result["objects"].as_array().unwrap();
+    assert!(
+        orphans.iter().any(|o| o["key"] == key),
+        "the detached object must be listed: {listed:?}"
+    );
+
+    // A caller can only delete names the server still considers orphaned.
+    let (status, out) = post_json(
+        &client,
+        "/resources/orphans/purge",
+        &json!({"keys": ["../elsewhere/secret.bin", "inline-zips/x.json"]}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(out.result["deleted"], 0, "out-of-scope keys are refused");
+
+    let (status, out) =
+        post_json(&client, "/resources/orphans/purge", &json!({"keys": [key]})).await;
+    assert_eq!(status, 200);
+    assert_eq!(out.result["deleted"], 1, "purge removes the orphan");
+
+    let (_, listed) = get(&client, "/resources/orphans").await;
+    assert!(
+        !listed.result["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o["key"] == key),
+        "purged object is gone from the scan"
+    );
+
+    cleanup_user(&user_id).await;
+}

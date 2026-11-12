@@ -237,6 +237,65 @@ impl S3Storage {
         Ok(out)
     }
 
+    /// Direct children of `{user_id}/` — the user's resource objects (uploads
+    /// and the avatar). Nested prefixes such as `inline-zips/` are excluded:
+    /// those are managed by their own sweepers, not by resource cleanup.
+    pub async fn list_user_objects(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<(String, i64, i64)>, ApiError> {
+        let prefix = format!("{user_id}/");
+        let resp = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "list user objects failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to list objects")))
+            })?;
+        let mut out = Vec::new();
+        for obj in resp.contents() {
+            let Some(key) = obj.key() else { continue };
+            let Some(rest) = key.strip_prefix(&prefix) else {
+                continue;
+            };
+            if rest.is_empty() || rest.contains('/') {
+                continue;
+            }
+            let size = obj.size().unwrap_or(0);
+            let mtime = obj
+                .last_modified()
+                .and_then(|t| t.to_millis().ok())
+                .unwrap_or(0);
+            out.push((rest.to_string(), size, mtime));
+        }
+        Ok(out)
+    }
+
+    /// Deletes one direct child of `{user_id}/`, surfacing failures (the
+    /// best-effort `delete_user_object` is for cascades that must not abort).
+    pub async fn delete_user_object_checked(
+        &self,
+        user_id: Uuid,
+        key: &str,
+    ) -> Result<(), ApiError> {
+        let object_key = format!("{user_id}/{key}");
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                tracing::warn!(%object_key, error = %e, "delete object failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to delete object")))
+            })
+    }
+
     /// Deletes `{user_id}/{key}` (best-effort, Go parity: failures logged).
     pub async fn delete_user_object(&self, user_id: Uuid, key: &str) {
         let object_key = format!("{}/{}", user_id, key);

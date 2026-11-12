@@ -40,6 +40,20 @@ export default {
     successTitle: 'Hochladen abgeschlossen',
   },
 
+  orphans: {
+    deleteAll: 'Alle löschen',
+    deleted: 'Bereinigung fertig',
+    deletedDetail: '{count} Objekt(e) entfernt, {size} freigegeben',
+    deleteFailed: 'Löschen fehlgeschlagen',
+    found: '{count} ungenutzt · {size}',
+    hint: 'Prüft gespeicherte Objekte, auf die kein Dokument verweist (Reste fehlgeschlagener Importe oder abgebrochener Uploads).',
+    none: 'Nichts Unbenutztes — der Speicher passt zu den Dokumenten.',
+    scan: 'Prüfen',
+    scanFailed: 'Prüfung fehlgeschlagen',
+    scanning: 'Prüfe…',
+    title: 'Ungenutzte Dateien',
+  },
+
   page: {
     empty: 'Es wurden noch keine Dateien hochgeladen.',
   },
