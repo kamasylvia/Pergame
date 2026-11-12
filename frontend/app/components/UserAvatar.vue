@@ -1,5 +1,5 @@
 <template>
-  <img v-if="avatarURL != '/placeholder/avatar.avif'" :src="avatarURL" alt="" :class="['avatar', { square }, display]" />
+  <img v-if="avatarURL != '/placeholder/avatar.avif'" :src="avatarURL" crossorigin="use-credentials" alt="" :class="['avatar', { square }, display]" />
   <div v-else :class="['placeholder', getAppAccent(avatarHash), display]">
     <span> {{ props.user?.username.slice(0, 2).toUpperCase() }}</span>
   </div>

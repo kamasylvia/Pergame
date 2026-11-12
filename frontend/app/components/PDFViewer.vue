@@ -200,6 +200,7 @@ const loadPdf = async () => {
   try {
     const loadingTask = getDocument({
       url: props.src,
+      withCredentials: true,
     });
 
     pdf = await loadingTask.promise;

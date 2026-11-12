@@ -104,6 +104,9 @@ pub fn sanitize_html(input: Option<&str>) -> String {
         "height",
         "type",
         "title",
+        // Fork addition (no Go counterpart): credentialed media fetches for
+        // the authed /api/resources/:id/file reads.
+        "crossorigin",
     ]);
     b.add_generic_attribute_prefixes(&["data-"]);
     // Media / embeds.

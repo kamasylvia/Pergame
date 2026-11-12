@@ -192,6 +192,44 @@ impl S3Storage {
         })
     }
 
+    /// Streaming GET under `{user_id}/{key}` with optional S3 range
+    /// (`bytes=a-b`, suffix and open-ended forms). Returns
+    /// (body, content_length, content_range, etag): `content_range` is
+    /// `Some` only when S3 honored the range (206).
+    pub async fn get_user_object_stream(
+        &self,
+        user_id: Uuid,
+        key: &str,
+        range: Option<&str>,
+    ) -> Result<
+        (
+            aws_sdk_s3::primitives::ByteStream,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ),
+        ApiError,
+    > {
+        let object_key = format!("{}/{}", user_id, key);
+        let mut req = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&object_key);
+        if let Some(r) = range {
+            req = req.range(r);
+        }
+        let resp = req.send().await.map_err(|e| {
+            tracing::warn!(%object_key, error = %e, "get_object failed");
+            ApiError::NotFound("object not found".into())
+        })?;
+        Ok((
+            resp.body,
+            resp.content_length,
+            resp.content_range,
+            resp.e_tag,
+        ))
+    }
     /// Lists keys under `{user_id}/{sub}/` in the main bucket (key, size,
     /// mtime_ms). Used by the inline-zip sweeper.
     pub async fn list_user_prefix(

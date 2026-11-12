@@ -166,7 +166,7 @@ pub async fn public_descendants(pool: &PgPool, node_id: Uuid) -> Result<Vec<Node
                          WHERE nl.node_id = n.id AND nl.parent_id = d.id)
             WHERE n.role IN (1, 2, 3) AND n.deleted_at IS NULL
         )
-        SELECT * FROM descendant_nodes ORDER BY role ASC, "order" DESC, name ASC"#,
+        SELECT * FROM descendant_nodes ORDER BY role ASC, node_order DESC NULLS LAST, name ASC"#,
     )
     .bind(node_id)
     .fetch_all(pool)

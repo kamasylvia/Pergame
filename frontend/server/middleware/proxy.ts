@@ -3,11 +3,10 @@
  *
  * Two prefixes are forwarded to container-internal services so the browser
  * only ever needs the frontend origin — no published backend port, no CORS:
- *
  *   /api/**          → apiProxyTarget  (Rust backend)
- *   <cdnEndpoint>**  → cdnProxyTarget  (S3-compatible object store; the
- *                                       prefix defaults to the bucket name
- *                                       path, NUXT_PUBLIC_CDN_ENDPOINT)
+ *   <cdnEndpoint>**  → cdnProxyTarget  (Rust backend: legacy /pergame/**
+ *                                       embeds, authed reads; no anonymous
+ *                                       S3 access required)
  *
  * Targets are runtime config (NUXT_PUBLIC_API_PROXY_TARGET /
  * NUXT_PUBLIC_CDN_PROXY_TARGET) rather than routeRules so the built image

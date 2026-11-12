@@ -137,8 +137,9 @@ services:
       NUXT_PUBLIC_BASE_CDN: ""
       NUXT_PUBLIC_CDN_ENDPOINT: ${CDN_ENDPOINT:-/pergame/}
       NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
-      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://rustfs:9000"
-      NUXT_PUBLIC_BASE_URL: ${FRONTEND_URL:-http://localhost:8200}
+      # Legacy /pergame/** embeds are served by the backend (authed reads);
+      # anonymous S3 access is no longer required.
+      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://backend:8201"
 
     ports:
       - "${FRONTEND_EXTERNAL_PORT:-8200}:8200"

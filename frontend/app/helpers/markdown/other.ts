@@ -167,11 +167,11 @@ function html5MediaPlugin(md: MarkdownIt) {
     const escSrc = md.utils.escapeHtml(src);
     const escAlt = md.utils.escapeHtml(alt);
     if (src.match(VIDEO_REGEX)) {
-      return `<video controls preload="metadata" style="max-width:100%" src="${escSrc}">${escAlt}</video>`;
+      return `<video controls preload="metadata" style="max-width:100%" crossorigin="use-credentials" src="${escSrc}">${escAlt}</video>`;
     }
 
     if (src.match(AUDIO_REGEX)) {
-      return `<audio controls preload="metadata" style="max-width:100%" src="${escSrc}">${escAlt}</audio>`;
+      return `<audio controls preload="metadata" style="max-width:100%" crossorigin="use-credentials" src="${escSrc}">${escAlt}</audio>`;
     }
 
     if (src.match(PDF_REGEX)) {
@@ -207,14 +207,14 @@ function svgObjectPlugin(md: MarkdownIt) {
       const escapedTitle = md.utils.escapeHtml(title);
 
       return `
-<object 
-  data="${escapedSrc}" 
-  type="image/svg+xml" 
+<object
+  data="${escapedSrc}"
+  type="image/svg+xml"
   aria-label="${escapedAlt}"
   ${escapedTitle ? `title="${escapedTitle}"` : ''}
 >
   ${escapedAlt}
-</object>`;
+  </object>`;
     }
 
     return defaultImageRenderer(tokens, idx, options, env, self);

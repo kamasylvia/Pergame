@@ -71,7 +71,7 @@
             @click="router.push(`/dashboard/cdn/${image.id}/preview`)"
             @contextmenu="event => openContextMenu(event, image)"
           >
-            <img :src="resolvePreviewUrl(image)" :alt="image.name" class="image-preview" />
+            <img :src="resolvePreviewUrl(image)" crossorigin="use-credentials" :alt="image.name" class="image-preview" />
             <div class="image-info">
               <span class="image-name">{{ image.name }}</span>
               <span class="image-size">{{ readableFileSize(image.size ?? 0) }}</span>

@@ -1,8 +1,11 @@
-//! /resources routes — file upload, avatar upload, file update
-//! (Go controllers/resources.controller.go + services/resource.service.go
-//! parity).
+//! /resources routes — file upload, avatar upload, file update, authed file
+//! download (fork: replaces the public-bucket CDN reads; see `download_file`).
 
-use axum::extract::{Multipart, Path, State};
+use axum::body::Body;
+use axum::extract::{Multipart, Path, Query, State};
+use axum::http::{HeaderMap, StatusCode, header};
+use axum::response::Response;
+use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -13,7 +16,6 @@ use crate::error::ApiError;
 use crate::models::NodeRow;
 use crate::repo::nodes as node_repo;
 use crate::response::ApiOk;
-
 const DEFAULT_TYPES: &[&str] = &[
     "image/png",
     "image/jpeg",
@@ -483,4 +485,201 @@ pub async fn update_file(
         .map_err(ApiError::from)?
         .ok_or(ApiError::NotFound("not found".into()))?;
     Ok(ApiOk::ok(json!(updated)))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DownloadQuery {
+    #[serde(default)]
+    pub download: bool,
+}
+
+/// S3 object location resolved from a resource node: the storage key relative
+/// to the `{user_id}/` prefix, the MIME type, and the original filename.
+struct ObjectRef {
+    key: String,
+    mime: String,
+    filename: String,
+}
+
+fn object_ref(node: &NodeRow) -> Option<ObjectRef> {
+    let meta = node.metadata.as_ref()?;
+    let key = meta.get("transformed_path")?.as_str()?;
+    if key.is_empty() {
+        return None;
+    }
+    Some(ObjectRef {
+        key: key.to_string(),
+        mime: meta
+            .get("filetype")
+            .and_then(|v| v.as_str())
+            .unwrap_or("application/octet-stream")
+            .to_string(),
+        filename: meta
+            .get("original_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&node.name)
+            .to_string(),
+    })
+}
+
+/// Authorization for a resource read: owner/app-admin pass; other signed-in
+/// users need node Read (ancestor-chain permission) or a public subtree;
+/// anonymous callers need the node (or an ancestor) to be public
+/// (`get_public`, accessibility = 3), which is what lets public-doc embeds
+/// load without a session.
+async fn authorize_read(
+    state: &AppState,
+    auth: Option<&AuthUser>,
+    node_id: Uuid,
+) -> Result<NodeRow, ApiError> {
+    let node = node_repo::get_by_id(&state.db, node_id)
+        .await
+        .map_err(ApiError::from)?
+        .ok_or(ApiError::NotFound("not found".into()))?;
+    if let Some(a) = auth {
+        let actor: Actor = a.clone().into();
+        if guard::check_node_action(&state.db, &actor, &node, NodeAction::Read)
+            .await
+            .is_ok()
+        {
+            return Ok(node);
+        }
+        // Signed in but no grant: public subtrees stay readable (same rule
+        // as anonymous callers).
+    }
+    node_repo::get_public(&state.db, node_id)
+        .await
+        .map_err(ApiError::from)?
+        .ok_or(ApiError::Forbidden("forbidden".into()))
+}
+
+/// Builds the file response: streams S3 bytes (Range passthrough for
+/// audio/video seeks), sets content-type/length, and forces a download
+/// filename only when `?download=true`.
+async fn serve_object(
+    state: &AppState,
+    user_id: Uuid,
+    obj: &ObjectRef,
+    headers: &HeaderMap,
+    download: bool,
+) -> Result<Response, ApiError> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
+    let range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| v.starts_with("bytes="));
+    let (stream, len, content_range, etag) = storage
+        .get_user_object_stream(user_id, &obj.key, range)
+        .await?;
+    let body = Body::from_stream(tokio_util::io::ReaderStream::new(stream.into_async_read()));
+    let mut builder = Response::builder();
+    if content_range.is_some() {
+        builder = builder.status(StatusCode::PARTIAL_CONTENT);
+    }
+    builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
+    builder = builder.header(header::ACCEPT_RANGES, "bytes");
+    if let Some(n) = len {
+        builder = builder.header(header::CONTENT_LENGTH, n.to_string());
+    }
+    if let Some(cr) = content_range {
+        builder = builder.header(header::CONTENT_RANGE, cr);
+    }
+    if let Some(tag) = etag {
+        builder = builder.header(header::ETAG, tag);
+    }
+    if download {
+        builder = builder.header(
+            header::CONTENT_DISPOSITION,
+            format!(
+                "attachment; filename=\"{}\"",
+                obj.filename.replace('"', "_")
+            ),
+        );
+    }
+    builder
+        .body(body)
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+}
+
+/// GET /resources/:id/file — authed file download (fork addition, no Go
+/// counterpart: upstream served bytes straight off the public bucket).
+/// Anonymous access is allowed only for public-subtree nodes.
+pub async fn download_file(
+    State(state): State<AppState>,
+    auth: Option<AuthUser>,
+    Path(id): Path<String>,
+    Query(q): Query<DownloadQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let node_id =
+        Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
+    let node = authorize_read(&state, auth.as_ref(), node_id).await?;
+    if node.role != 4 {
+        return Err(ApiError::BadRequest("not a resource".into()));
+    }
+    let obj = object_ref(&node).ok_or(ApiError::NotFound("object not found".into()))?;
+    serve_object(&state, node.user_id, &obj, &headers, q.download).await
+}
+
+/// GET /users/:id/avatar — public avatar bytes (no node exists for avatars;
+/// the users row decides: missing/empty `avatar` → 404, frontend falls back
+/// to the placeholder). Unauthenticated by design: author avatars render on
+/// public docs.
+pub async fn download_avatar(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let uid = Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid user ID".into()))?;
+    let mut db = state.toasty.clone();
+    let has_avatar = crate::models::User::filter_by_id(uid)
+        .first()
+        .exec(&mut db)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|u| u.avatar)
+        .is_some_and(|a| !a.is_empty());
+    if !has_avatar {
+        return Err(ApiError::NotFound("not found".into()));
+    }
+    let obj = ObjectRef {
+        key: "avatar".to_string(),
+        mime: "image/*".to_string(),
+        filename: "avatar".to_string(),
+    };
+    serve_object(&state, uid, &obj, &headers, false).await
+}
+
+/// Legacy CDN path compat: old `content_compiled` embeds point at
+/// `/pergame/{user_id}/{transformed_path}`. Resolves the object back to its
+/// node and applies the same authorization as `download_file`.
+pub async fn download_legacy(
+    State(state): State<AppState>,
+    auth: Option<AuthUser>,
+    Path((user_id, file)): Path<(String, String)>,
+    Query(q): Query<DownloadQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let uid =
+        Uuid::parse_str(&user_id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
+    let node_id = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(&file);
+    // Avatar legacy path has no node; same public rule as download_avatar.
+    if node_id == "avatar" {
+        return download_avatar(State(state), Path(user_id), headers).await;
+    }
+    let node_id =
+        Uuid::parse_str(node_id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
+    let node = authorize_read(&state, auth.as_ref(), node_id).await?;
+    if node.role != 4 || node.user_id != uid {
+        return Err(ApiError::NotFound("not found".into()));
+    }
+    let obj = object_ref(&node).ok_or(ApiError::NotFound("object not found".into()))?;
+    if obj.key != file {
+        return Err(ApiError::NotFound("not found".into()));
+    }
+    serve_object(&state, node.user_id, &obj, &headers, q.download).await
 }

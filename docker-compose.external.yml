@@ -81,16 +81,12 @@ services:
       # ---- 同源反代模式(推荐):浏览器只访问前端端口 ----
       # BASE_API/BASE_CDN 留空(默认)走相对路径,由 Nitro 中间件转发:
       #   /api/**      → NUXT_PUBLIC_API_PROXY_TARGET(backend 容器)
-      #   /pergame/**  → NUXT_PUBLIC_CDN_PROXY_TARGET(对象存储)
+      #   /pergame/**  → NUXT_PUBLIC_CDN_PROXY_TARGET(旧 content_compiled 兼容,同样由 backend 鉴权 serve)
       # backend 服务在本 compose 的 pergame 网络内,直接用服务名
       NUXT_PUBLIC_API_PROXY_TARGET: "http://backend:8201"
-      # S3 内网地址:宿主机原生服务,经 host.docker.internal 访问(见 backend extra_hosts)
-      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://host.docker.internal:8010"
+      NUXT_PUBLIC_CDN_PROXY_TARGET: "http://backend:8201"
     ports:
       - "8200:8200"
-    # frontend 的 CDN 代理同样要访问宿主机上的原生 S3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
 networks:

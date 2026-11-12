@@ -388,6 +388,20 @@ async fn main() {
             post(routes::resources::upload_avatar),
         )
         .route("/api/resources/{id}", put(routes::resources::update_file))
+        .route(
+            "/api/resources/{id}/file",
+            get(routes::resources::download_file),
+        )
+        .route(
+            "/api/users/{id}/avatar",
+            get(routes::resources::download_avatar),
+        )
+        // Legacy CDN path: old content_compiled embeds (served same-origin
+        // through the Nitro /pergame/** proxy).
+        .route(
+            "/pergame/{user_id}/{file}",
+            get(routes::resources::download_legacy),
+        )
         .with_state(state)
         .layer(axum::middleware::from_fn(locks::read_only_middleware))
         .layer(cors_layer())

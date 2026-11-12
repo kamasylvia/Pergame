@@ -1264,3 +1264,117 @@ async fn snapshot_targets_lifecycle() {
     );
     cleanup_user(&user_id).await;
 }
+
+/// Raw-bytes GET (file downloads are not the JSON envelope).
+async fn get_bytes(client: &Client, url: &str) -> (u16, Vec<u8>) {
+    let resp = client.http.get(url).send().await.unwrap();
+    let status = resp.status().as_u16();
+    let bytes = resp.bytes().await.unwrap().to_vec();
+    (status, bytes)
+}
+
+/// Hand-rolled multipart upload (reqwest has no multipart feature here).
+async fn upload_file(client: &Client, filename: &str, mime: &str, body: &[u8]) -> (u16, ApiResponse) {
+    let boundary = "----pergame-test-boundary";
+    let mut payload = Vec::new();
+    payload.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    payload.extend_from_slice(
+        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n").as_bytes(),
+    );
+    payload.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
+    payload.extend_from_slice(body);
+    payload.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    let resp = client
+        .http
+        .post(format!("{BASE_URL}/resources"))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .body(payload)
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status().as_u16();
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from POST /resources [{status}]: {text:?} ({e})"));
+    (status, parsed)
+}
+
+/// Authed file reads (fork): owner 200, anonymous/stranger 403 on private,
+/// anonymous 200 once public; legacy /pergame/** path matches; Range → 206.
+#[tokio::test]
+#[ignore]
+async fn resource_file_download_matrix() {
+    let client = Client::new();
+    let (user_id, _) = signup_and_login_tagged(&client, "dl").await;
+    let stranger = Client::new();
+    let (stranger_id, _) = signup_and_login_tagged(&stranger, "dlstr").await;
+    let anon = Client::new();
+
+    let payload = b"proxy-read-bytes";
+    let (status, r) = upload_file(&client, "probe.txt", "text/plain", payload).await;
+    assert_eq!(status, 200, "upload failed: {:?}", r.message);
+    let node_id = result_id_string(&r);
+    let tp = r.result["metadata"]["transformed_path"].as_str().unwrap().to_string();
+    let file_url = format!("{BASE_URL}/resources/{node_id}/file");
+    let legacy_url = format!(
+        "{}/pergame/{}/{}",
+        BASE_URL.trim_end_matches("/api"),
+        user_id,
+        tp
+    );
+
+    // Owner reads full bytes.
+    let (status, bytes) = get_bytes(&client, &file_url).await;
+    assert_eq!(status, 200);
+    assert_eq!(bytes, payload);
+
+    // Private: anonymous + stranger refused.
+    let (status, _) = get_bytes(&anon, &file_url).await;
+    assert_eq!(status, 403, "anon must not read private");
+    let (status, _) = get_bytes(&stranger, &file_url).await;
+    assert_eq!(status, 403, "stranger must not read private");
+    let (status, _) = get_bytes(&anon, &legacy_url).await;
+    assert_eq!(status, 403, "anon must not read private legacy path");
+
+    // Publish (PUT is full-replace: carry the existing fields).
+    let (status, r) = put_json(
+        &client,
+        &format!("/nodes/{node_id}"),
+        &json!({
+            "name": r.result["name"],
+            "role": 4,
+            "content": r.result["content"],
+            "content_compiled": r.result["content_compiled"],
+            "size": r.result["size"],
+            "metadata": r.result["metadata"],
+            "accessibility": 3,
+            "access": 1,
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "publish failed: {:?}", r.message);
+
+    // Public: everyone reads, including the legacy path.
+    let (status, bytes) = get_bytes(&anon, &file_url).await;
+    assert_eq!(status, 200);
+    assert_eq!(bytes, payload);
+    let (status, _) = get_bytes(&stranger, &file_url).await;
+    assert_eq!(status, 200);
+    let (status, bytes) = get_bytes(&anon, &legacy_url).await;
+    assert_eq!(status, 200);
+    assert_eq!(bytes, payload);
+
+    // Range passthrough.
+    let resp = client.http.get(&file_url).header("Range", "bytes=0-4").send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 206);
+    assert!(resp.headers().contains_key("content-range"));
+    let bytes = resp.bytes().await.unwrap();
+    assert_eq!(&bytes[..], &payload[..5]);
+
+    // Avatar: unset → 404.
+    let (status, _) = get_bytes(&anon, &format!("{BASE_URL}/users/{user_id}/avatar")).await;
+    assert_eq!(status, 404);
+
+    cleanup_user(&user_id).await;
+    cleanup_user(&stranger_id).await;
+}

@@ -10,7 +10,7 @@
       </div>
       <div class="images-grid">
         <div v-for="image in filteredImages" :key="image.id" class="image-item" @click="selectImage(image)">
-          <img :src="resolvePreviewUrl(image)" :alt="image.name" class="image-preview" @error="handleImageError" />
+          <img :src="resolvePreviewUrl(image)" crossorigin="use-credentials" :alt="image.name" class="image-preview" @error="handleImageError" />
           <div class="image-info">
             <span class="image-name">{{ image.name }}</span>
             <span class="image-size">{{ readableFileSize(image.size ?? 0) }}</span>

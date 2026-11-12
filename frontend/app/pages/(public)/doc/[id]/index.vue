@@ -13,10 +13,10 @@
 
         <div v-if="hasFile" class="preview">
           <object v-if="resource?.metadata?.drawio" :data="resourceURL(resource)" alt="Preview" />
-          <img v-else-if="isImageFile(mimeType)" :src="resourceURL(resource)" alt="Preview" />
+          <img v-else-if="isImageFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" alt="Preview" />
           <LazyPDFViewer v-else-if="isPdfFile(mimeType)" :src="resourceURL(resource)" />
-          <video v-else-if="isVideoFile(mimeType)" :src="resourceURL(resource)" controls />
-          <audio v-else-if="isAudioFile(mimeType)" :src="resourceURL(resource)" controls />
+          <video v-else-if="isVideoFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
+          <audio v-else-if="isAudioFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
         </div>
 
         <NodeDocumentContentCompiled v-else-if="hasContent" ref="elementComponent" :node="data.node" />
