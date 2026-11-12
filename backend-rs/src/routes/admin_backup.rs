@@ -3,8 +3,10 @@
 //! via /api/backup/targets (routes::user_targets); both families share
 //! target::repo.
 //!
-//! The dr-backup sidecar (pg_dump conf/jobs/cron) was removed 2026-11-12:
-//! snapshots are full backups now, so instance DR rides the same rails.
+//! The dr-backup sidecar (pg_dump conf/jobs/cron) was removed 2026-11-12 and
+//! snapshots became full backups, so instance DR rides the same rails. The
+//! routes moved from `/api/admin/dr-backup/*` to `/api/admin/backup/*` once
+//! nothing but the name was left of that subsystem.
 
 use axum::extract::State;
 use serde_json::json;
@@ -26,7 +28,7 @@ fn require_admin(auth: &AuthUser) -> Result<(), ApiError> {
 
 use crate::target::repo as target_repo;
 
-/// GET /api/admin/dr-backup/targets — list (secrets masked).
+/// GET /api/admin/backup/targets — list (secrets masked).
 pub async fn list_targets(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -37,7 +39,7 @@ pub async fn list_targets(
     Ok(ApiOk::ok(json!(masked)))
 }
 
-/// POST /api/admin/dr-backup/targets — create.
+/// POST /api/admin/backup/targets — create.
 pub async fn create_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -48,7 +50,7 @@ pub async fn create_target(
     Ok(ApiOk::ok(target_repo::mask_row(&row)))
 }
 
-/// PUT /api/admin/dr-backup/targets/:id — edit (gated on connection changes).
+/// PUT /api/admin/backup/targets/:id — edit (gated on connection changes).
 pub async fn update_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -60,7 +62,7 @@ pub async fn update_target(
     Ok(ApiOk::ok(target_repo::mask_row(&row)))
 }
 
-/// POST /api/admin/dr-backup/targets/:id/delete-check — probe before delete.
+/// POST /api/admin/backup/targets/:id/delete-check — probe before delete.
 pub async fn delete_check_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -77,7 +79,7 @@ pub async fn delete_check_target(
     })))
 }
 
-/// DELETE /api/admin/dr-backup/targets/:id — gated delete.
+/// DELETE /api/admin/backup/targets/:id — gated delete.
 pub async fn delete_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -93,7 +95,7 @@ pub async fn delete_target(
     Ok(ApiOk::ok(json!("Target deleted.")))
 }
 
-/// POST /api/admin/dr-backup/targets/:id/test — connectivity probe.
+/// POST /api/admin/backup/targets/:id/test — connectivity probe.
 pub async fn test_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -111,7 +113,7 @@ pub async fn test_target(
     })))
 }
 
-/// POST /api/admin/dr-backup/targets/probe-draft — probe connection fields that
+/// POST /api/admin/backup/targets/probe-draft — probe connection fields that
 /// have not been saved yet (siyuan #15 §9: the save button stays disabled until
 /// a test passes). `***` credentials are resolved against the stored row when
 /// `id` is supplied, so an untouched password still tests the real store.
@@ -155,7 +157,7 @@ pub struct ProbeDraftBody {
     pub target: target_repo::TargetInput,
 }
 
-/// POST /api/admin/dr-backup/targets/:id/take-ownership — explicit takeover
+/// POST /api/admin/backup/targets/:id/take-ownership — explicit takeover
 /// (siyuan #15 §3: "last configured instance wins", but only on request).
 pub async fn take_ownership(
     State(state): State<AppState>,
@@ -174,7 +176,7 @@ pub async fn take_ownership(
     })))
 }
 
-/// POST /api/admin/dr-backup/targets/:id/empty — clear all objects.
+/// POST /api/admin/backup/targets/:id/empty — clear all objects.
 pub async fn empty_target(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -196,7 +198,7 @@ pub struct SyncTargetBody {
     pub user_id: Option<String>,
 }
 
-/// POST /api/admin/dr-backup/targets/:id/sync — run a snapshot now for the
+/// POST /api/admin/backup/targets/:id/sync — run a snapshot now for the
 /// target's users (direct-write: snapshots land on all of each user's
 /// targets, not just this one). Without user_id, snapshots every user
 /// assigned to the target. Returns the spawned job ids.
@@ -251,7 +253,7 @@ pub async fn sync_target(
     Ok(ApiOk::ok(json!(jobs)))
 }
 
-/// GET /api/admin/dr-backup/backup-users — users that own data (candidates
+/// GET /api/admin/backup/users — users that own data (candidates
 /// for target assignment). Admin only; ids are UUID strings on the wire.
 pub async fn list_backup_users(
     State(state): State<AppState>,
@@ -278,7 +280,7 @@ pub async fn list_backup_users(
     Ok(ApiOk::ok(json!(out)))
 }
 
-/// GET /api/admin/dr-backup/status — lock state for the frontend read-only
+/// GET /api/admin/backup/status — lock state for the frontend read-only
 /// banner (also reachable while locked, see the middleware exemptions).
 pub async fn lock_status(
     State(state): State<AppState>,
@@ -288,7 +290,7 @@ pub async fn lock_status(
     Ok(ApiOk::ok(state.locks.snapshot().await))
 }
 
-/// GET /api/admin/dr-backup/targets/:id/export/:snapshot_id — download a
+/// GET /api/admin/backup/targets/:id/export/:snapshot_id — download a
 /// portable zip of one snapshot stored on a target (fork §6 "export zip").
 pub async fn export_target_snapshot(
     State(state): State<AppState>,

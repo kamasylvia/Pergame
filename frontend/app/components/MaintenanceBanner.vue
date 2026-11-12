@@ -25,7 +25,7 @@ async function poll() {
     readOnly.value = false;
     return;
   }
-  const res = await makeRequest<{ read_only: boolean }>('admin/dr-backup/status', 'GET', {});
+  const res = await makeRequest<{ read_only: boolean }>('admin/backup/status', 'GET', {});
   readOnly.value = res.status === 'success' ? Boolean(res.result?.read_only) : false;
 }
 

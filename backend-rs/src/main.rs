@@ -130,8 +130,8 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route(
-            "/api/admin/dr-backup/status",
-            get(routes::admin_dr::lock_status),
+            "/api/admin/backup/status",
+            get(routes::admin_backup::lock_status),
         )
         .route("/api/auth", post(routes::auth::login))
         // POST is the contract (upstream Go registers `POST /refresh` and the
@@ -235,44 +235,44 @@ async fn main() {
                 .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
         )
         .route(
-            "/api/admin/dr-backup/targets",
-            get(routes::admin_dr::list_targets).post(routes::admin_dr::create_target),
+            "/api/admin/backup/targets",
+            get(routes::admin_backup::list_targets).post(routes::admin_backup::create_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}",
-            put(routes::admin_dr::update_target).delete(routes::admin_dr::delete_target),
+            "/api/admin/backup/targets/{id}",
+            put(routes::admin_backup::update_target).delete(routes::admin_backup::delete_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/delete-check",
-            post(routes::admin_dr::delete_check_target),
+            "/api/admin/backup/targets/{id}/delete-check",
+            post(routes::admin_backup::delete_check_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/test",
-            post(routes::admin_dr::test_target),
+            "/api/admin/backup/targets/{id}/test",
+            post(routes::admin_backup::test_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/probe-draft",
-            post(routes::admin_dr::probe_draft_target),
+            "/api/admin/backup/targets/probe-draft",
+            post(routes::admin_backup::probe_draft_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/take-ownership",
-            post(routes::admin_dr::take_ownership),
+            "/api/admin/backup/targets/{id}/take-ownership",
+            post(routes::admin_backup::take_ownership),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/empty",
-            post(routes::admin_dr::empty_target),
+            "/api/admin/backup/targets/{id}/empty",
+            post(routes::admin_backup::empty_target),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/sync",
-            post(routes::admin_dr::sync_target),
+            "/api/admin/backup/targets/{id}/sync",
+            post(routes::admin_backup::sync_target),
         )
         .route(
-            "/api/admin/dr-backup/backup-users",
-            get(routes::admin_dr::list_backup_users),
+            "/api/admin/backup/users",
+            get(routes::admin_backup::list_backup_users),
         )
         .route(
-            "/api/admin/dr-backup/targets/{id}/export/{snapshotId}",
-            get(routes::admin_dr::export_target_snapshot),
+            "/api/admin/backup/targets/{id}/export/{snapshotId}",
+            get(routes::admin_backup::export_target_snapshot),
         )
         // Per-user targets: same store, ownership-scoped (users manage only
         // targets that list them; admins keep the routes above for the rest).
@@ -413,11 +413,21 @@ async fn main() {
             "/pergame/{user_id}/{file}",
             get(routes::resources::download_legacy),
         )
+        // MCP: streamable HTTP at /api/mcp. Mounted before `with_state` so it
+        // stays part of the one router — merging a separately layered router
+        // afterwards would also merge its fallback and answer 401 for every
+        // unknown path.
+        .nest_service("/api/mcp", mcp::service(state.clone()))
         .with_state(state.clone())
-        // MCP: streamable HTTP at /api/mcp, behind its own bearer layer.
         // Every MCP request authenticates with `Authorization: Bearer pgm_…`;
-        // the session cookie is never consulted on this path.
-        .merge(mcp::app(state))
+        // the session cookie is never consulted on this path. The layer scopes
+        // itself to /api/mcp.
+        .layer(axum::middleware::from_fn_with_state(
+            mcp::McpAuthState {
+                db: state.db.clone(),
+            },
+            mcp::bearer_middleware,
+        ))
         .layer(axum::middleware::from_fn(locks::read_only_middleware))
         .layer(cors_layer())
         .layer(tower_http::trace::TraceLayer::new_for_http());

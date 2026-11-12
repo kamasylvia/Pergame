@@ -1,6 +1,6 @@
 //! Per-user backup targets (`/api/backup/targets/*`).
 //!
-//! Same store as the admin targets API (`/api/admin/dr-backup/targets/*`),
+//! Same store as the admin targets API (`/api/admin/backup/targets/*`),
 //! but scoped: a regular user only sees and manages targets that list them,
 //! and can only ever assign themselves. Admins keep the old routes for
 //! instance-wide management (multi-user assignment, takeover).
@@ -139,7 +139,7 @@ pub async fn test_target(
 pub async fn probe_draft_target(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<crate::routes::admin_dr::ProbeDraftBody>,
+    Json(body): Json<crate::routes::admin_backup::ProbeDraftBody>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let mut input = body.target;
     if let Some(id) = body.id {

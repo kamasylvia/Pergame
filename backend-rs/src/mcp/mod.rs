@@ -222,6 +222,12 @@ pub async fn bearer_middleware(
     mut req: Request,
     next: Next,
 ) -> Response {
+    // The layer is installed on the whole app (a router merged after
+    // `with_state` would donate its fallback and turn every unknown path into
+    // a 401), so it scopes itself by path like the read-only layer does.
+    if !is_mcp_path(req.uri().path()) {
+        return next.run(req).await;
+    }
     let Some(token) = bearer_token(&headers) else {
         return unauthorized();
     };
@@ -278,17 +284,9 @@ pub fn service(
     )
 }
 
-/// `/api/mcp` plus the bearer layer, as a state-free router the main app can
-/// merge after `with_state`.
-pub fn app(state: crate::AppState) -> axum::Router {
-    axum::Router::new()
-        .nest_service("/api/mcp", service(state.clone()))
-        .layer(axum::middleware::from_fn_with_state(
-            McpAuthState {
-                db: state.db.clone(),
-            },
-            bearer_middleware,
-        ))
+/// True for the MCP mount and its subpaths.
+pub fn is_mcp_path(path: &str) -> bool {
+    path == "/api/mcp" || path.starts_with("/api/mcp/")
 }
 
 // ---------------------------------------------------------------- errors

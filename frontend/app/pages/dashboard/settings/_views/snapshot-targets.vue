@@ -272,7 +272,7 @@ async function load() {
 async function loadUsers() {
   // Admin user list; the endpoint is admin-guarded upstream.
   const result = await makeRequest<Array<{ id: string; username: string; email?: string }>>(
-    'admin/dr-backup/backup-users',
+    'admin/backup/users',
     'GET',
     {},
   );
@@ -465,7 +465,7 @@ async function testDraft() {
 async function takeOwnership(tg: Target) {
   busy.value = tg.id;
   const result = await makeRequest<{ instance_id: string; previous_instance?: string }>(
-    `admin/dr-backup/targets/${tg.id}/take-ownership`,
+    `admin/backup/targets/${tg.id}/take-ownership`,
     'POST',
     {},
   );

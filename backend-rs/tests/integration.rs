@@ -1128,7 +1128,7 @@ async fn snapshot_targets_lifecycle() {
     let name = format!("tgt-{}", &user_id[user_id.len().saturating_sub(8)..]);
     let (status, r) = post_json(
         &client,
-        "/admin/dr-backup/targets",
+        "/admin/backup/targets",
         &target_body(&name, &user_id, &endpoint, &bucket),
     )
     .await;
@@ -1148,14 +1148,14 @@ async fn snapshot_targets_lifecycle() {
     // Identity dedup: a second config for the same storage is rejected.
     let (status, _) = post_json(
         &client,
-        "/admin/dr-backup/targets",
+        "/admin/backup/targets",
         &target_body(&format!("{name}-dup"), &user_id, &endpoint, &bucket),
     )
     .await;
     assert_eq!(status, 409, "duplicate storage identity must be rejected");
 
     // Masked round-trip: send *** back and keep the stored credential working.
-    let (status, r) = get(&client, "/admin/dr-backup/targets").await;
+    let (status, r) = get(&client, "/admin/backup/targets").await;
     assert_eq!(status, 200);
     let row = r
         .result
@@ -1170,7 +1170,7 @@ async fn snapshot_targets_lifecycle() {
     edit["keep_last"] = json!(7); // retention-only edit must not need probing
     let (status, _) = put_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}"),
+        &format!("/admin/backup/targets/{target_id}"),
         &edit,
     )
     .await;
@@ -1183,7 +1183,7 @@ async fn snapshot_targets_lifecycle() {
     // Manual fan-out replicates the snapshot objects.
     let (status, r) = post_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}/sync"),
+        &format!("/admin/backup/targets/{target_id}/sync"),
         &json!({}),
     )
     .await;
@@ -1199,7 +1199,7 @@ async fn snapshot_targets_lifecycle() {
     // Second sync is a no-op (content-addressed dedup).
     let (_, r) = post_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}/sync"),
+        &format!("/admin/backup/targets/{target_id}/sync"),
         &json!({}),
     )
     .await;
@@ -1214,7 +1214,7 @@ async fn snapshot_targets_lifecycle() {
     // Probe sees the replicated objects.
     let (status, r) = post_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}/test"),
+        &format!("/admin/backup/targets/{target_id}/test"),
         &json!({}),
     )
     .await;
@@ -1232,18 +1232,18 @@ async fn snapshot_targets_lifecycle() {
     // Delete gate refuses while objects exist.
     let (status, _) = post_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}/delete-check"),
+        &format!("/admin/backup/targets/{target_id}/delete-check"),
         &json!({}),
     )
     .await;
     assert_eq!(status, 409, "delete-check must refuse a non-empty target");
-    let (status, _) = del(&client, &format!("/admin/dr-backup/targets/{target_id}")).await;
+    let (status, _) = del(&client, &format!("/admin/backup/targets/{target_id}")).await;
     assert_eq!(status, 409, "delete must refuse a non-empty target");
 
     // Empty then delete succeeds.
     let (status, r) = post_json(
         &client,
-        &format!("/admin/dr-backup/targets/{target_id}/empty"),
+        &format!("/admin/backup/targets/{target_id}/empty"),
         &json!({}),
     )
     .await;
@@ -1256,7 +1256,7 @@ async fn snapshot_targets_lifecycle() {
             > 0,
         "empty must report deletions"
     );
-    let (status, r) = del(&client, &format!("/admin/dr-backup/targets/{target_id}")).await;
+    let (status, r) = del(&client, &format!("/admin/backup/targets/{target_id}")).await;
     assert_eq!(
         status, 200,
         "delete after empty must succeed: {:?}",
@@ -1945,7 +1945,7 @@ async fn mcp_writes_blocked_while_backup_runs() {
 
     // The read-only window is observable through any REST write: an empty
     // name is rejected with 400 while writable and preempted with 423 while
-    // locked, so the probe has no side effects. (`/admin/dr-backup/status`
+    // locked, so the probe has no side effects. (`/admin/backup/status`
     // would need an admin account; this is the same signal for a plain user.)
     async fn write_probe(client: &Client) -> u16 {
         let (status, _) = post_json(client, "/nodes", &json!({ "name": "" })).await;

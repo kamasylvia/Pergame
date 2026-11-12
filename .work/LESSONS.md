@@ -99,3 +99,9 @@
 - **被测 target 的删除门禁会拒绝「不可达 target」**(无法证明已清空),所以测试清理别调 `DELETE /backup/targets/:id`;走 `cleanup_user` 的 `DELETE FROM backup_targets WHERE $uid = ANY(users)`。
 - **target 名唯一约束**:重跑失败的用例会撞 `backup_targets_name_key`,测试里的 target 名要带时间戳后缀(和用户名同款)。
 - 实测结论(2026-11-12,活 pg):备份期内 MCP `create_note` / `update_note` / `move_node` / `delete_node` 全部 `-32023` + `data.reason=backup_in_progress`,正文确实未变;`read_note` / `list_children` / `search_notes` 照常;REST 写同窗口 423;窗口关闭后写恢复。
+
+## 2026-11-12 admin 路由去 dr-backup 名 + 一个真回归
+
+- **`Router::merge` 会把被合并 router 的 fallback 一起带过来**:MCP 曾用 `Router::new().nest_service("/api/mcp", svc).layer(bearer)` 单独构造后 `merge` 进主 router → **所有未知 `/api/*` 路径变成 MCP 的 401**(本该 404)。正确做法 = 把 `nest_service` 直接写在主 router 链上(要在 `with_state` 之前),鉴权 layer 挂在全局但**自己按路径放行**(`is_mcp_path`),与 `read_only_middleware` 同款。
+- **验证路由改名必须区分「路由不存在」与「路由存在但要求鉴权」**:未带凭证时两者都可能 401(全局 extractor 先跑)。有效信号 = 带普通用户 cookie 打 admin 路由:**403 = 路由在、门禁在**;404 = 路由没了。GET 打 POST-only 路由给 405,同属「路由存在」证据。
+- **删子系统后残留的名字也是 bug 面**:`/api/admin/dr-backup/*` 在边车删除后仍存活 4 天,`/backup-users` 这种重复词也随之;改名 = 路由 + 模块文件 + 前端 3 处 + 测试 + 豁免表 + 文档注释一次性换,别留 alias(自己唯一的调用方,无兼容负担)。

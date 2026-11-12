@@ -171,11 +171,10 @@ fn is_exempt(path: &str) -> bool {
     // lock itself (spec features/mcp-server.md), so the read-only window
     // still stops content changes while staying legible to an agent.
     path.starts_with("/api/backup")
-        || path.starts_with("/api/admin/dr-backup")
+        || path.starts_with("/api/admin/backup")
         || path == "/api/health"
         || path.starts_with("/api/auth")
         || path.starts_with("/api/mcp")
-        || path == "/api/admin/dr-backup/status"
 }
 
 fn is_read_method(method: &axum::http::Method) -> bool {
