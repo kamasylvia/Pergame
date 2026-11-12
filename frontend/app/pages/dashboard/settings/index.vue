@@ -38,7 +38,7 @@ import EditorView from './_views/editor.vue';
 import SecurityView from './_views/security.vue';
 import BackupView from './_views/backups.vue';
 import SnapshotTargetsView from './_views/snapshot-targets.vue';
-import ApiTokensView from './_views/api-tokens.vue';
+import McpView from './_views/mcp.vue';
 import ShortcutsView from './_views/shortcuts.vue';
 import SnippetsView from './_views/snippets.vue';
 import MarkdownView from './_views/markdown.vue';
@@ -74,7 +74,7 @@ const pages = {
   security: SecurityView,
   backup: BackupView,
   snapshotTargets: SnapshotTargetsView,
-  apiTokens: ApiTokensView,
+  mcp: McpView,
   shortcuts: ShortcutsView,
   snippets: SnippetsView,
   markdown: MarkdownView,
@@ -129,7 +129,7 @@ const navSections = computed<NavSection[]>(() => [
       { key: 'snippets', label: t('settings.pages.snippets'), icon: 'snippets' },
       { key: 'backup', label: t('settings.pages.backup'), icon: 'backup' },
       { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
-      { key: 'apiTokens', label: t('settings.pages.apiTokens'), icon: 'security' },
+      { key: 'mcp', label: t('settings.pages.mcp'), icon: 'security' },
       { key: 'advanced', label: t('settings.pages.advanced'), icon: 'build' },
       { key: 'teams', label: t('settings.pages.teams'), icon: 'users' },
     ],

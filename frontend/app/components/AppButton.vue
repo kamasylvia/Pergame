@@ -25,7 +25,7 @@ button {
   white-space: nowrap;
 
   &:disabled {
-    opacity: 0.8;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 }
