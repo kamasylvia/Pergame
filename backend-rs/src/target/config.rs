@@ -170,7 +170,7 @@ impl TargetConn {
 
     /// Probe reachability + count snapshot-payload objects + fingerprint.
     /// Unreachable targets report reachable=false with no fingerprint.
-    pub async fn probe(&self, prefix: &str) -> ProbeOutcome {
+    pub async fn probe(&self, _prefix: &str) -> ProbeOutcome {
         let unreachable = ProbeOutcome {
             reachable: false,
             snapshot_objects: -1,
@@ -180,7 +180,9 @@ impl TargetConn {
         };
         let store_result = match self {
             Self::S3 { store, .. } => store.probe().await,
-            Self::WebDav { store, .. } => store.list(prefix).await.map(|_| ()),
+            // list("") lists the store's own scoped root; passing the
+            // scoped prefix in would double it (url_for prepends it again).
+            Self::WebDav { store, .. } => store.list("").await.map(|_| ()),
         };
         if let Err(e) = store_result {
             tracing::warn!(error = %e, "backup target probe failed");

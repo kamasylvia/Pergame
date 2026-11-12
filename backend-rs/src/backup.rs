@@ -109,6 +109,8 @@ pub struct BackupJob {
     pub user_id: String,
     pub options: BackupOptions,
     pub progress: i32,
+    /// pending | processing | completed | failed — derived in update().
+    pub status: String,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub download_url: Option<String>,
@@ -176,6 +178,7 @@ impl BackupStore {
             user_id: user_id.to_string(),
             options,
             progress: 0,
+            status: "pending".into(),
             message: "Initializing backup...".into(),
             download_url: None,
             error: None,

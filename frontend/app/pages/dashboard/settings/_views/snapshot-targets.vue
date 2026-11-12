@@ -185,6 +185,12 @@ const userStore = useUserStore();
 /// their own targets (the API enforces ownership either way).
 const isAdmin = computed(() => userStore.user?.role === 2);
 
+/// AppSelect items need {id, label} — bare strings render an empty list.
+const KINDS = [
+  { id: 's3', label: 'S3' },
+  { id: 'webdav', label: 'WebDAV' },
+];
+
 const targets = ref<Target[]>([]);
 const users = ref<Array<{ id: string; username: string; email?: string }>>([]);
 const loading = ref(false);
