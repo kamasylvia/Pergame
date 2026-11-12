@@ -23,7 +23,7 @@ pub fn resolve_target(param: &str, auth: &AuthUser) -> Result<Uuid, ApiError> {
     if param == "@me" {
         return Ok(auth.id);
     }
-    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).map_err(|_| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// Go `RequireUserAccess`: the actor may act on themselves or be an app admin.

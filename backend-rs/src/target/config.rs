@@ -4,6 +4,7 @@
 //! (fork kernel/backup deletecheck.go/editCheck parity).
 
 use serde::Serialize;
+use uuid::Uuid;
 
 use super::s3::S3Target;
 use super::webdav::WebdavTarget;
@@ -198,9 +199,7 @@ impl TargetConn {
             .count() as i64;
         let owner = super::owner::read_owner(self).await.ok().flatten();
         let mine = super::owner::instance_id();
-        let owned_by_me = owner
-            .as_ref()
-            .is_some_and(|o| o.instance_id == mine);
+        let owned_by_me = owner.as_ref().is_some_and(|o| o.instance_id == mine);
         ProbeOutcome {
             reachable: true,
             snapshot_objects,

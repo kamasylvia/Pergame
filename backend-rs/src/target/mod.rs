@@ -60,7 +60,6 @@ pub struct WebdavStoreParams {
     pub prefix: String,
 }
 
-
 /// Normalized identity string pieces (joined into a Fingerprint upstream).
 pub fn s3_identity(endpoint: &str, bucket: &str) -> String {
     format!(

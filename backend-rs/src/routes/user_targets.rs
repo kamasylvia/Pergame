@@ -50,7 +50,9 @@ pub async fn list_targets(
     let rows = target_repo::list_targets(&state.db).await?;
     let mine: Vec<serde_json::Value> = rows
         .iter()
-        .filter(|r| crate::auth::guard::is_app_admin(auth.role) || r.users.contains(&auth.user_id()))
+        .filter(|r| {
+            crate::auth::guard::is_app_admin(auth.role) || r.users.contains(&auth.user_id())
+        })
         .map(target_repo::mask_row)
         .collect();
     Ok(ApiOk::ok(json!(mine)))
@@ -149,7 +151,8 @@ pub async fn probe_draft_target(
             "new target cannot test with *** credentials".into(),
         ));
     }
-    let candidate = target_repo::row_from_input_pub(&input, crate::auth::service::now_ms(), body.id);
+    let candidate =
+        target_repo::row_from_input_pub(&input, crate::auth::service::now_ms(), body.id);
     let probe = target_repo::probe_row(&candidate).await?;
     Ok(ApiOk::ok(json!({
         "reachable": probe.reachable,

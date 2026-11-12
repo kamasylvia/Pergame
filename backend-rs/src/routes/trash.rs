@@ -20,8 +20,7 @@ fn resolve_id(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Uuid::parse_str(param)
-        .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).map_err(|_| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// Loads a trashed node and enforces owner/app-admin scope. Trashed nodes are
@@ -124,7 +123,7 @@ pub async fn sweep_expired(state: &AppState, retention_days: u64) -> Result<u64,
         return Ok(0);
     }
     let cutoff = node_repo::now_ms() - (retention_days as i64) * 86_400_000;
-    let rows: Vec<(i64,)> = sqlx::query_as(
+    let rows: Vec<(Uuid,)> = sqlx::query_as(
         r#"
         SELECT id FROM nodes n
         WHERE n.deleted_at IS NOT NULL AND n.deleted_at < $1

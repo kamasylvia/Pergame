@@ -41,9 +41,8 @@ pub async fn delete_session(
     auth: AuthUser,
     Path(session_id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let id = Uuid::parse_str(&session_id)
-        .ok_or(ApiError::BadRequest("invalid parameter".into()))?
-        ;
+    let id =
+        Uuid::parse_str(&session_id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
     session_repo::delete_by_id_and_user(&state.db, id, auth.user_id())
         .await
         .map_err(|_| {

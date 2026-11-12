@@ -26,7 +26,7 @@ fn resolve(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).map_err(|_| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// Invitation code alphabet excludes confusable glyphs (Go parity).
@@ -79,7 +79,7 @@ fn parse_invitation_code(input: &str) -> Result<String, ApiError> {
     Ok(candidate)
 }
 
-fn invitation_json(row: &(i64, String, i32, i64, i64)) -> serde_json::Value {
+fn invitation_json(row: &(Uuid, String, i32, Uuid, i64)) -> serde_json::Value {
     json!({
         "id": row.0.to_string(),
         "invitation_code": row.1,
@@ -139,9 +139,8 @@ pub async fn create_permission(
     }
     guard::require_node_action(&state.db, &actor, node, NodeAction::ManagePermissions).await?;
 
-    let user = Uuid::parse_str(&body.user_id)
-        .ok_or(ApiError::BadRequest("invalid user id".into()))?
-        ;
+    let user =
+        Uuid::parse_str(&body.user_id).map_err(|_| ApiError::BadRequest("invalid user id".into()))?;
 
     let id = crate::types::new_id();
     let mut tdb = state.toasty.clone();

@@ -42,7 +42,8 @@ fn as_i64(v: Option<&Value>) -> Option<i64> {
 }
 
 fn as_uuid(v: Option<&Value>) -> Option<Uuid> {
-    v.and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok())
+    v.and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
 }
 
 fn as_opt_uuid(v: Option<&Value>) -> Option<Uuid> {

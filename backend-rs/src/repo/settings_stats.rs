@@ -14,7 +14,10 @@ pub struct SettingsRow {
     pub advanced: serde_json::Value,
 }
 
-pub async fn get_settings(pool: &PgPool, user_id: Uuid) -> Result<Option<SettingsRow>, sqlx::Error> {
+pub async fn get_settings(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<SettingsRow>, sqlx::Error> {
     sqlx::query_as::<_, SettingsRow>(
         "SELECT user_id, general, editor, advanced FROM user_settings WHERE user_id = $1",
     )

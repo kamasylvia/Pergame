@@ -5,8 +5,8 @@
 //! so only new content is transferred (incremental).
 
 use serde::Serialize;
-use uuid::Uuid;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use super::repo;
 use crate::backup::SNAPSHOT_KEEP;
@@ -49,7 +49,7 @@ async fn collect_user_objects(
         }
     }
     tracing::info!(
-        user_id,
+        user_id = %user_id,
         objects = out.len(),
         "fan-out: collected local objects"
     );
@@ -71,7 +71,7 @@ pub async fn fanout_user(pool: &PgPool, storage: &S3Storage, user_id: Uuid) -> V
     let entries = match collect_user_objects(storage, user_id).await {
         Ok(v) => v,
         Err(e) => {
-            tracing::warn!(error = %e, user_id, "fan-out: object collection failed");
+            tracing::warn!(error = %e, user_id = %user_id, "fan-out: object collection failed");
             return results;
         }
     };
@@ -139,21 +139,20 @@ async fn record_result(
         Some(e) => format!("error: {e}"),
         None => format!("copied {}, skipped {}", result.copied, result.skipped),
     };
-    let _ = sqlx::query(
-        "UPDATE backup_targets SET last_result = $2, updated_at = $3 WHERE id = $1",
-    )
-    .bind(target.id)
-    .bind(&summary)
-    .bind(crate::auth::service::now_ms())
-    .execute(pool)
-    .await;
+    let _ =
+        sqlx::query("UPDATE backup_targets SET last_result = $2, updated_at = $3 WHERE id = $1")
+            .bind(target.id)
+            .bind(&summary)
+            .bind(crate::auth::service::now_ms())
+            .execute(pool)
+            .await;
 }
 
 /// Prunes the oldest manifests on a target beyond `keep_last`, then deletes
 /// blobs no longer referenced by any surviving manifest.
 async fn prune_target(
     conn: &super::config::TargetConn,
-    prefix: &str,
+    _prefix: &str,
     keep_last: i32,
 ) -> Result<usize, crate::error::ApiError> {
     let keep = keep_last.max(1) as usize;

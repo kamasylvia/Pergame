@@ -6,6 +6,7 @@ use aws_sdk_s3::config::{Builder as S3ConfigBuilder, Credentials};
 use aws_sdk_s3::primitives::ByteStream;
 
 use super::{Fingerprint, ObjectRow, S3StoreParams, internal, join_prefix};
+use uuid::Uuid;
 
 pub struct S3Target {
     client: Client,

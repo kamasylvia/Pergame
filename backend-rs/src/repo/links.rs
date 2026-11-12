@@ -9,8 +9,8 @@
 //! query model does not express.
 
 use sqlx::PgPool;
-use uuid::Uuid;
 use toasty::Db;
+use uuid::Uuid;
 
 use crate::models::{LinkRow, NodeLink};
 

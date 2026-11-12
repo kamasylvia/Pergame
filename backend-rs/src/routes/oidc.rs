@@ -154,14 +154,7 @@ pub async fn callback(
 
     // Link flow: logged-in user redeeming a link state.
     if state_data.is_link {
-        oidc_repo::link_provider(
-            &state.db,
-            
-            state_data.user_id,
-            &provider,
-            &user_info.sub,
-        )
-        .await?;
+        oidc_repo::link_provider(&state.db, state_data.user_id, &provider, &user_info.sub).await?;
         return Ok(ok_json(json!({
             "linked": true,
             "provider": provider,
@@ -309,14 +302,7 @@ async fn oidc_login_or_create(
         .ok_or(ApiError::Unauthorized("linked user not found".into()))?;
 
     if is_new {
-        oidc_repo::link_provider(
-            &state.db,
-            
-            user_id,
-            provider,
-            &user_info.sub,
-        )
-        .await?;
+        oidc_repo::link_provider(&state.db, user_id, provider, &user_info.sub).await?;
     }
 
     crate::auth::totp::create_login_session_type(
@@ -339,7 +325,7 @@ async fn oidc_login_or_create(
 /// avatar (≤2048 bytes), role 1.
 async fn create_user_from_oidc(
     db: &mut toasty::Db,
-    state: &AppState,
+    _state: &AppState,
     user_info: &UserInfo,
 ) -> Result<Uuid, ApiError> {
     let user_id = crate::types::new_id();

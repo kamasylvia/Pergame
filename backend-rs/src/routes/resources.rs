@@ -196,8 +196,7 @@ pub async fn upload_file(
 
     let parent_id: Option<Uuid> = fields
         .get("parent_id")
-        .and_then(|v| Uuid::parse_str(v))
-        .map(|s| s);
+        .and_then(|v| Uuid::parse_str(v).ok());
     let metadata: Option<serde_json::Value> = fields
         .get("metadata")
         .and_then(|v| serde_json::from_str(v).ok());
@@ -357,8 +356,8 @@ pub async fn update_file(
         .clone()
         .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
 
-    let resource_id = Uuid::parse_str(&id)
-        .ok_or(ApiError::BadRequest("invalid resource id".into()))?;
+    let resource_id =
+        Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("invalid resource id".into()))?;
 
     let actor: Actor = auth.into();
     let mut file: Option<UploadedPart> = None;

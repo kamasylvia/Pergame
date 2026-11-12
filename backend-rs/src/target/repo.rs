@@ -110,11 +110,10 @@ pub fn mask_row(row: &BackupTargetRow) -> serde_json::Value {
 /// on every list so a deployment upgrading from an older build self-heals
 /// instead of writing those targets' objects into the shared root scope.
 async fn backfill_namespaces(pool: &PgPool) -> Result<(), ApiError> {
-    let rows: Vec<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM backup_targets WHERE namespace = ''")
-            .fetch_all(pool)
-            .await
-            .unwrap_or_default();
+    let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM backup_targets WHERE namespace = ''")
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
     for (id,) in rows {
         let _ = sqlx::query("UPDATE backup_targets SET namespace = $2 WHERE id = $1")
             .bind(id)
@@ -459,11 +458,7 @@ pub fn resolve_secret_pub(incoming: &str, previous: &str) -> String {
 }
 
 /// Public wrapper for the draft-probe route (build a candidate row).
-pub fn row_from_input_pub(
-    input: &TargetInput,
-    now: i64,
-    id: Option<Uuid>,
-) -> BackupTargetRow {
+pub fn row_from_input_pub(input: &TargetInput, now: i64, id: Option<Uuid>) -> BackupTargetRow {
     row_from_input(input, now, id)
 }
 
@@ -510,7 +505,7 @@ mod tests {
             max_age_days: 0,
             schedule: String::new(),
             enabled: true,
-            users: vec![1],
+            users: vec![Uuid::nil()],
             namespace: String::new(),
             connection_token: None,
         };
@@ -526,7 +521,7 @@ mod tests {
             t.name = "renamed".into();
             t.keep_last = 3;
             t.schedule = "0 3 * * *".into();
-            t.users = vec![1, 2];
+            t.users = vec![Uuid::nil(), Uuid::max()];
         }));
         assert_eq!(base, display_only);
         // Connection fields do change it.

@@ -28,7 +28,7 @@ fn resolve(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Uuid::parse_str(param).ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).map_err(|_| ApiError::BadRequest("invalid parameter".into()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,9 +49,8 @@ pub async fn create_link(
     let actor: Actor = auth.into();
     let node = resolve(&node_id)?;
 
-    let parent = Uuid::parse_str(&body.parent_id)
-        .ok_or(ApiError::BadRequest("invalid parent_id".into()))?
-        ;
+    let parent =
+        Uuid::parse_str(&body.parent_id).map_err(|_| ApiError::BadRequest("invalid parent_id".into()))?;
     if parent == node {
         return Err(ApiError::BadRequest(
             "cannot link a note into itself".into(),

@@ -4,8 +4,8 @@
 //! stay in sqlx (CTE / composite tuples).
 
 use sqlx::PgPool;
-use uuid::Uuid;
 use toasty::Db;
+use uuid::Uuid;
 
 use crate::models::{NodeRow, Permission, PermissionRow};
 

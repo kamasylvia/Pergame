@@ -24,10 +24,11 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
 
     // Demote existing admins that are not in the current list (sqlx escape
     // hatch: toasty 0.11 lacks a generic list-by-field query surface).
-    let rows = sqlx::query_as::<_, (Uuid, String)>("SELECT id, username FROM users WHERE role = $1")
-        .bind(ROLE_ADMIN)
-        .fetch_all(sql)
-        .await;
+    let rows =
+        sqlx::query_as::<_, (Uuid, String)>("SELECT id, username FROM users WHERE role = $1")
+            .bind(ROLE_ADMIN)
+            .fetch_all(sql)
+            .await;
     let Ok(rows) = rows else {
         tracing::warn!("app-admins: failed to load existing admin users");
         return;
@@ -53,11 +54,7 @@ pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
             tracing::warn!(%id_str, "app-admins: invalid admin user ID");
             continue;
         };
-        match crate::models::User::filter_by_id(id)
-            .first()
-            .exec(db)
-            .await
-        {
+        match crate::models::User::filter_by_id(id).first().exec(db).await {
             Ok(Some(user)) => {
                 if user.role != ROLE_ADMIN {
                     match crate::models::User::filter_by_id(user.id)

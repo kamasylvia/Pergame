@@ -767,7 +767,8 @@ pub async fn probe_draft_target(
             "new target cannot test with *** credentials".into(),
         ));
     }
-    let candidate = target_repo::row_from_input_pub(&input, crate::auth::service::now_ms(), body.id);
+    let candidate =
+        target_repo::row_from_input_pub(&input, crate::auth::service::now_ms(), body.id);
     let probe = target_repo::probe_row(&candidate).await?;
     Ok(ApiOk::ok(json!({
         "reachable": probe.reachable,

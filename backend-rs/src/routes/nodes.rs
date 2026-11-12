@@ -138,8 +138,8 @@ pub async fn get_public_node(
 
 #[derive(Debug, Deserialize)]
 pub struct NodeInput {
-    #[serde(default, with = "crate::models::sf_opt")]
-    pub parent_id: Option<i64>,
+    #[serde(default)]
+    pub parent_id: Option<Uuid>,
     #[serde(default)]
     pub name: String,
     #[serde(default)]
@@ -223,8 +223,7 @@ fn resolve_id(param: &str) -> Result<Uuid, ApiError> {
     if param.is_empty() {
         return Err(ApiError::BadRequest("parameter is empty".into()));
     }
-    Uuid::parse_str(param)
-        .ok_or_else(|| ApiError::BadRequest("invalid parameter".into()))
+    Uuid::parse_str(param).map_err(|_| ApiError::BadRequest("invalid parameter".into()))
 }
 
 /// User-scoped path param: "@me" resolves to the authenticated caller

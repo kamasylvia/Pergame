@@ -682,7 +682,7 @@ pub fn spawn_snapshot_scheduler(
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            let users: Vec<(i64,)> = sqlx::query_as("SELECT DISTINCT user_id FROM nodes")
+            let users: Vec<(Uuid,)> = sqlx::query_as("SELECT DISTINCT user_id FROM nodes")
                 .fetch_all(&sql)
                 .await
                 .unwrap_or_default();
@@ -693,7 +693,7 @@ pub fn spawn_snapshot_scheduler(
                     && job.error.is_none()
                     && job.progress < 100
                 {
-                    tracing::info!(user_id, "scheduled snapshot skipped: job in progress");
+                    tracing::info!(user_id = %user_id, "scheduled snapshot skipped: job in progress");
                     continue;
                 }
                 let options = BackupOptions {

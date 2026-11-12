@@ -240,7 +240,7 @@ pub async fn list_snapshots(
             "format": "v1",
         }));
     }
-    rows.sort_by_key(|r| -r.get("last_modified").and_then(|v| v).unwrap_or(0));
+    rows.sort_by_key(|r| -r.get("last_modified").and_then(|v| v.as_i64()).unwrap_or(0));
     Ok(ApiOk::ok(json!(rows)))
 }
 
@@ -383,8 +383,7 @@ pub async fn restore_snapshot(
             }
         })?;
     let passphrase = body.and_then(|b| b.0.passphrase);
-    let bytes =
-        load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
+    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
     let mut report = crate::restore::restore_from_zip(
         state.db.clone(),
         Some(storage.clone()),
@@ -486,8 +485,7 @@ pub async fn preview_snapshot(
         .clone()
         .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let passphrase = body.and_then(|b| b.0.passphrase);
-    let bytes =
-        load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
+    let bytes = load_snapshot_bytes(&storage, auth.user_id(), &id, passphrase.as_deref()).await?;
     let plan = crate::restore::plan_from_zip(state.db.clone(), auth.user_id(), bytes).await?;
     Ok(ApiOk::ok(plan))
 }

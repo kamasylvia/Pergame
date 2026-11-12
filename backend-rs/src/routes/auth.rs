@@ -138,11 +138,10 @@ pub async fn login(
             refresh_token,
         } => {
             let cfg = crate::config::global();
-            let token =
-                jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
-                    .map_err(|_| {
-                        ApiError::Internal(Box::new(std::io::Error::other("failed to sign token")))
-                    })?;
+            let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
+                .map_err(|_| {
+                    ApiError::Internal(Box::new(std::io::Error::other("failed to sign token")))
+                })?;
             Ok(envelope_with_cookies(
                 StatusCode::OK,
                 serde_json::to_value(&user).unwrap_or(json!(null)),

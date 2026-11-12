@@ -114,7 +114,7 @@
           <legend>{{ t('settings.snapshotTargets.users') }}</legend>
           <p class="hint">{{ t('settings.snapshotTargets.usersHint') }}</p>
           <label v-for="u in users" :key="u.id" class="user-row">
-            <input v-model="form.users" type="checkbox" :value="Number(u.id)" />
+            <input v-model="form.users" type="checkbox" :value="u.id" />
             <span>{{ u.username }}</span>
             <span class="user-mail">{{ u.email }}</span>
           </label>
@@ -164,7 +164,7 @@ interface Target {
   schedule: string;
   enabled: boolean;
   last_result: string;
-  users: number[];
+  users: string[];
 }
 
 interface Probe {
@@ -204,7 +204,7 @@ const form = reactive({
   keep_last: 10,
   schedule: '',
   enabled: true,
-  users: [] as number[],
+  users: [] as string[],
   region: 'us-east-1',
   provider: 'Other',
 });

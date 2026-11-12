@@ -105,8 +105,7 @@ pub async fn get_user(
     _auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<crate::models::User>, ApiError> {
-    let uid =
-        Uuid::parse_str(&id).ok_or_else(|| ApiError::BadRequest("Invalid user ID".into()))?;
+    let uid = Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid user ID".into()))?;
     let mut db = state.toasty.clone();
     let user = fetch_user(&mut db, uid).await?;
     Ok(ApiOk::ok(user))

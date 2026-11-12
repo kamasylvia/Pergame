@@ -67,7 +67,6 @@ async fn resolve_user_id(
         .filter(|t| !t.is_empty())
         .ok_or(ApiError::BadRequest("pre_auth_token is required".into()))?;
     jwt::verify_pre_auth_token(&token)
-        .map(|id| id)
         .map_err(|_| ApiError::Unauthorized("invalid pre-authentication token".into()))
 }
 
@@ -130,8 +129,7 @@ pub async fn confirm_activation(
     let user_id = resolve_user_id(&state, auth, pre_token).await?;
 
     let mut db = state.toasty.clone();
-    let plain_codes =
-        totp::enable_totp(&mut db, user_id, &body.secret, &body.code).await?;
+    let plain_codes = totp::enable_totp(&mut db, user_id, &body.secret, &body.code).await?;
     Ok(ok_envelope(json!({ "backup_codes": plain_codes })))
 }
 
@@ -159,8 +157,7 @@ pub async fn verify_totp(
     let user = totp::verify_pre_auth_and_user(&mut db, &body.pre_auth_token, &body.code).await?;
 
     let refresh_token =
-        totp::create_login_session(&mut db, user.id, &ctx.ip, &ctx.user_agent)
-            .await?;
+        totp::create_login_session(&mut db, user.id, &ctx.ip, &ctx.user_agent).await?;
 
     let cfg = crate::config::global();
     let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)

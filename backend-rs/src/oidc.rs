@@ -3,8 +3,8 @@
 //! generation with one-time states, code exchange, userinfo, login-or-create.
 
 use std::collections::HashMap;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -171,7 +171,7 @@ impl OidcManager {
         &self,
         provider_name: &str,
         redirect_uri: &str,
-        link_user_id: Option<i64>,
+        link_user_id: Option<Uuid>,
     ) -> Result<(String, String), String> {
         let provider = self.get_provider(provider_name)?;
         let state_bytes: [u8; 32] = rand::random();
@@ -186,7 +186,7 @@ impl OidcManager {
             StateData {
                 expiry_ms: now + STATE_TTL_MS,
                 is_link: link_user_id.is_some(),
-                user_id: link_user_id.unwrap_or(0),
+                user_id: link_user_id.unwrap_or_else(Uuid::nil),
             },
         );
         drop(states);
