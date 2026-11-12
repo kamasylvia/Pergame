@@ -112,3 +112,10 @@
 - 修法:`proxyRequest(event, target, { headers: { accept: <原值> } })`(显式 opts.headers 覆盖 h3 的剥离)。
 - 教训:**「本地直连后端 200」不等于「用户路径可用」**,验证要走真实入口(Nitro 代理 / 反代),尤其是依赖内容协商或流式的端点。
 - 附带确认:UI 端到端可用 —— 建 token → 明文一次性展示 → 列表显示 `last_used`(MCP 调用后刷新)→ 吊销 → 同 token 立刻 401;`lint:css` 与 typecheck 仍全绿。
+
+## 2026-11-12 本地进程连生产库前必查三件
+
+- **`ADMIN_ACCOUNTS` 未设 = 把所有 admin 降级成 role 1**(`auth/admins.rs`:空名单 → 全部降级)。本地起一个连生产库的 backend 前,先 `SELECT id FROM users WHERE role=2` 并把名单传进 `ADMIN_ACCOUNTS`;生产若无 admin 才可省略。
+- **本地跑 migration 会让该文件在生产库"冻结"**:`_sqlx_migrations` 记 checksum,之后改同一个 `.sql` 部署必失败,只能追加新文件。临时连生产库验证前想清楚这个代价。
+- **sweeper 类后台任务会真删数据**:连生产库时用 `TRASH_RETENTION_DAYS=0` 关回收站清理;`SNAPSHOT_INTERVAL_HOURS` 不设即关;`backup_targets.schedule` 非空会触发 target 调度器(生产无 target 时安全)。
+- 验证用的 token 该直插库(算 sha256 即可)而不是绕 UI;用完 `DELETE FROM api_tokens WHERE name='...'`,与本批笔记一起清,`logs` 里的 `mcp.tool.*` 审计行保留即可。

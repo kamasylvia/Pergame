@@ -12,7 +12,7 @@
 
 - [ ] **Rust 后端重写 + PostgreSQL**:issue #1;db 层 = Toasty + sqlx 逃逸层(P1 spike 验证不过则回退 sqlx 为主);全新空库;pg GIN + tsvector。**P0 前置已完成(2026-11-08,见 `rust-migration/RESEARCH.md` §8)**;下一步 = P1(骨架 + Toasty spike),待开工令。
   - [ ] P0 集成测试运行时验证(待人工:需 mysql + minio + 活后端;`go test ./tests/...`)
-- [~] **MCP server**:issue #3;spec = `features/mcp-server.md`(实现定稿已落盘)。**已实现待验证**:`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具(create/update/move/delete + search/list/read)+ `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens`。**活体验证已过(2026-11-12,隔离库 `pergame_mcp_lock` + 真实 pg)**:`mcp_token_lifecycle_and_tools`(七工具全链/越权/环校验/回收站/吊销)+ `mcp_writes_blocked_while_backup_runs`(备份锁期四写工具 -32023、三读放行、REST 同窗 423、解锁后恢复)。
+- [x] **MCP server** ✅(2026-11-12,issue #3 保持开启待用户确认):`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具 + `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens` + docs `use/mcp`。**已实测**:隔离库全链(token 生命周期/7 工具/越权 -32003/环 -32602/回收站/吊销 401)+ 只读窗口(四写 -32023、三读放行、REST 同窗 423)+ 生产库真数据(list/read/search/create/update/delete 全通)。**未做**:速率限制(P1 裁决不做);docker 镜像未含(下次 release 才上 QNAP)。
 - [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
 - [ ] **Dataview 查询引擎**:issue #5;DQL 子集、内置字段+metadata JSONB、`POST /api/nodes/query`、前端容器块;spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。
@@ -40,7 +40,7 @@
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 
-**明确未实现(按批次,非 bug)**:批次 A 剩余(Joplin md 特性 / Obsidian 语法兼容;媒体播放器 ✅2026-11-12)、MCP server、目录索引、Dataview、插件系统、Pergamena 改名。
+**明确未实现(按批次,非 bug)**:批次 A 剩余(Joplin md 特性 / Obsidian 语法兼容;媒体播放器 ✅2026-11-12)、目录索引、Dataview、插件系统、Pergamena 改名。
 
 ### 建议测试顺序
 
@@ -58,6 +58,12 @@
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
 - [x] ~~`scripts/dr-backup.sh` 实机验证~~ —— **作废**(2026-11-12 边车删除,脚本/镜像/文档同批移除;实例 DR 由快照直写替代)。
 - [ ] push 51+ commits 到 origin(kamasylvia/Pergame)——待拍板(公开仓 push 前可按全局规则压缩重组)。(2026-11-09:首 15 个已压缩为 5 主题 commits 并推上 origin/main `6e0abd8a`;此后增量照常。)
+
+## 运维约束(2026-11-12)
+
+- **migration `0007_api_tokens.sql` 已在生产库 `pergame` 落库 → 文件冻结**:改动会让下次部署 checksum 校验失败。要调整 token 表结构,只能追加 `0008_*`。
+- 生产库当前 4 用户**均非 admin**,`/api/admin/backup/*` 对所有人 403;恢复需 `ADMIN_ACCOUNTS=<uuid>` 或改库。
+- 生产回收站存有更早的测试遗留(用户在 2026-11-12 明确:**不用清,以后统一清库**)。
 
 ## 维护说明
 
