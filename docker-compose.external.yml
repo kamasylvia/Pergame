@@ -1,15 +1,13 @@
 # ==============================================================================
 # Pergame — 精简版(复用已有 PostgreSQL + S3)
 #
-# 只跑三个服务:backend / frontend / dr-backup。
+# 只跑两个服务:backend / frontend。
 # pg 与对象存储用外部已有的,通过名为 postgres 的外部 Docker 网络接入。
 #
 # 所有配置直接写在本文件里,**不需要 .env**。改配置 = 编辑本文件后
 #   docker compose -f docker-compose.external.yml up -d
 #
-# 与 docker-compose.yml 的区别:那个是自包含版(pg + RustFS 一起起,5 个服务
-# 5 个卷,配 .env 使用);这个只跑应用本身(3 个服务 2 个卷)。精简版的好处:
-# down -v 只删 DR 配置,不会碰 pg 数据或 S3 对象。
+# 与 docker-compose.yml 的区别:那个是自包含版(pg + RustFS 一起起,配 .env 使用);这个只跑应用本身,无本地卷。
 #
 # 前置:
 #   1) 确认外部网络存在:docker network inspect postgres
@@ -56,10 +54,6 @@ services:
       S3_ACCESSKEY: "CHANGE-ME-s3-access-key"
       S3_SECRETKEY: "CHANGE-ME-s3-secret-key"
 
-      # ---------- DR sidecar 共享卷 ----------
-      # 与下方 dr_conf/dr_jobs 挂载对应;不部署 DR 就连这两行带卷一起删
-      DR_CONF_DIR: "/conf"
-      DR_JOBS_DIR: "/jobs"
       # 时区:影响 target cron 调度与日志墙钟(镜像含 tzdata)。
       # 不设 = UTC;要按本地墙钟跑 `0 2 * * *` 这类调度就解开注释
       # TZ: "Asia/Shanghai"
@@ -73,9 +67,6 @@ services:
     # (Linux 必需,不加此映射 host.docker.internal 无法解析)
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    volumes:
-      - dr_conf:/conf
-      - dr_jobs:/jobs
     networks:
       - default   # 应用网络(top-level 里改名为 pergame)
       - postgres
@@ -102,35 +93,6 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - backend
-
-  # --------------------------------------------------------------- dr-backup
-  # 实例 DR sidecar:执行 backend 通过共享卷交付的 pg_dump 任务。
-  # 不需要实例级备份就删掉本服务 + backend 的 /conf,/jobs 挂载。
-  dr-backup:
-    # 版本钉死,不用浮动 tag:pg_dump 行为必须按 release 可复现。
-    # 当前钉 v0.0.4(基底 postgres:18-alpine,匹配活库 PostgreSQL 18);
-    # workflow 同时发布等价的 pg18-v0.0.4 别名,两个 tag 同一镜像。
-    # pg 升级或 fork 升版时手动改这里的 tag,与同文件另两个服务同步。
-    image: ghcr.nju.edu.cn/kamasylvia/pergame-dr-backup:v0.0.4
-    container_name: pergame-dr-backup
-    restart: unless-stopped
-    # 镜像自带全部默认值(SCHEDULE_HOURS=0 仅手动 / SCAN_INTERVAL_SECONDS=2 /
-    # JOBS_DIR=/jobs / CONF_DIR=/conf);要定时 dump 或改路径时才需要显式 env
-    # (见 docs/content/6.deploy/6.configurations-list.md 的 DR sidecar 节)。
-    environment:
-      # 时区:备份 stamp 目录(如 2026-11-11_020000)与 job 时间戳跟它走。
-      # 与 backend 的 TZ 保持一致,人工核对异地目录时不用换算时差
-      TZ: "Asia/Shanghai"
-    # rclone 目的地若指向宿主机上的 S3,同样需要 host.docker.internal
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - dr_conf:/conf
-      - dr_jobs:/jobs
-    networks:
-      - default
-      - postgres   # sidecar 要连 pg 做 dump
-
 networks:
   # 应用内部网络 = compose 的 default 网络,显式改名为 pergame。
   # 未在服务里声明 networks 的服务自动加入它;声明了的要显式带上 default。
@@ -139,11 +101,3 @@ networks:
   # 已有的外部网络,pg 容器在其中;compose 不创建也不删除它
   postgres:
     external: true
-
-# 卷名显式固定:compose 默认会加「目录名_」前缀,目录改名/移动后
-# 会生成一套全新的空卷(旧数据还在但容器挂的是新卷)。显式命名避免这种漂移。
-volumes:
-  dr_conf:
-    name: pergame-dr-conf
-  dr_jobs:
-    name: pergame-dr-jobs

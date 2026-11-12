@@ -25,9 +25,6 @@ use std::net::SocketAddr;
 
 use axum::Router;
 
-/// One-shot global handle to the app pool for background workers (fan-out,
-/// scheduled snapshots) that are spawned without an AppState argument.
-pub(crate) static APP_DB: std::sync::OnceLock<sqlx::PgPool> = std::sync::OnceLock::new();
 use axum::routing::{delete, get, patch, post, put};
 
 pub use state::AppState;
@@ -83,7 +80,6 @@ async fn main() {
         None
     };
 
-    let _ = APP_DB.set(pool.clone());
     let state = AppState {
         db: pool,
         toasty: toasty_db,
@@ -116,7 +112,7 @@ async fn main() {
     };
 
     // Scheduled user-level snapshots (SNAPSHOT_INTERVAL_HOURS; disabled when
-    // unset). Instance-level 3-2-1 backup stays with the dr-backup sidecar.
+    // unset). Snapshots are full backups direct-written to user targets.
     if let Some(storage) = state.storage.clone() {
         backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage.clone());
         target::fanout::spawn_target_scheduler(state.db.clone(), state.backups.clone(), storage);
@@ -124,10 +120,6 @@ async fn main() {
 
     // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).
     spawn_trash_sweeper(state.clone());
-
-    // Per-destination DR cron (conf cron fields; fires dr-backup.sh -T <name>
-    // job files; Siyuan scheduler parity). Inert without the sidecar volumes.
-    routes::admin_dr::spawn_dr_cron_scheduler(state.clone());
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
@@ -235,23 +227,6 @@ async fn main() {
             "/api/backup/restore/upload/preview",
             post(routes::backup::preview_upload)
                 .layer(axum::extract::DefaultBodyLimit::max(256 * 1024 * 1024)),
-        )
-        .route(
-            "/api/admin/dr-backup/config",
-            get(routes::admin_dr::get_config).put(routes::admin_dr::put_config),
-        )
-        .route(
-            "/api/admin/dr-backup/config/structured",
-            get(routes::admin_dr::get_structured_config)
-                .put(routes::admin_dr::put_structured_config),
-        )
-        .route(
-            "/api/admin/dr-backup/jobs",
-            post(routes::admin_dr::create_job),
-        )
-        .route(
-            "/api/admin/dr-backup/jobs/{id}",
-            get(routes::admin_dr::get_job),
         )
         .route(
             "/api/admin/dr-backup/targets",

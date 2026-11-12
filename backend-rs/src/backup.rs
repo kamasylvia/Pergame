@@ -37,7 +37,7 @@ pub struct BackupOptions {
     pub include_metadata: bool,
     #[serde(default)]
     pub include_settings: bool,
-    /// Snapshot annotation, stored in the manifest and sidecar (max 200 chars,
+    /// Snapshot annotation, stored in the manifest (max 200 chars,
     /// trimmed at the API boundary).
     #[serde(default)]
     pub memo: Option<String>,
@@ -821,7 +821,7 @@ pub(crate) fn hex_sha(bytes: &[u8]) -> String {
 }
 
 /// Scheduled snapshot ticker (spec backup-restore.md: automatic user-level
-/// snapshots; instance-level 3-2-1 backup stays in dr-backup). Runs every
+/// snapshots; each snapshot is a full backup direct-written to targets). Runs every
 /// SNAPSHOT_INTERVAL_HOURS (env, 0/absent = disabled) and snapshots each user
 /// that has data, memoed "Scheduled snapshot". Retention/GC from the normal
 /// backup path applies, and a user's in-flight manual job is never clobbered.

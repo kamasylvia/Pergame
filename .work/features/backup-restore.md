@@ -237,3 +237,63 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 **测试**:3 个新单测(connection_token 忽略展示/保留字段、不泄露密钥、namespace 字符集)+ 既有 54 全绿;clippy/eslint/stylelint 0;typecheck 无新增。
 
 **待人工**:两实例共用一桶的实机认领验证、namespace 隔离的对象树核对、保存门禁的浏览器走查(UI 已接但本机 IAB 按钮 actionability 受限)。
+
+## 16 全备份重构(2026-11-12,用户裁决:快照 = 全备份,dr-backup 删除)
+
+**背景**:快照只导用户文档/附件/偏好,权限/邀请/回收站/档案全不在备份里;实例灾备靠 dr-backup 边车(pg_dump 整库)。用户裁决:快照扩容成全备份,边车删除;备份默认无——只在用户配了自己的 S3/WebDAV 后才有异地,服务 S3 零备份字节。
+
+### 16.1 UUIDv7 id 统一(破坏性,借清库窗口)
+
+- 三选一(Snowflake/ULID/UUIDv7,不考虑存量):用户先要求可读性→ ULID;去掉可读性后改判 **UUIDv7**(pg 原生 16B 类型 + RFC 标准 + 零协调;Snowflake 两种情况都不选:8 字节省的量级无意义,买来机器 id 协调 + JS 精度坑)。
+- 全表主键/外键 BIGINT → UUID;`types/snowflake.rs` + `models::sf/sf_opt` 删除;`types::new_id()` = `Uuid::now_v7()` 唯一生成器;JWT sub/ADMIN_ACCOUNTS 走 UUID 字符串。
+- migration 压缩:0001/0003 改 UUID;0006 吸收 0007/0008(users UUID[]/schedule/namespace 进 baseline);0007/0008 文件删除。`_sqlx_migrations` 已清,新链当全新库跑。
+- 前端零改(id 线上本就是 string),除 target users 复选框 `Number(u.id)` → 直传 string。
+
+### 16.2 快照直写用户 target(替代 fan-out)
+
+- `run_backup`:收集不变,写段改逐 target 全写(claim → replicate → prune,失败记 warning 继续;全失败则 job 失败)。服务桶不再写任何快照字节。
+- 零 target = fork §4「save zip locally」:内存组 portable zip → `BackupStore.inline_zips`(256MB 上限) → `GET /api/backup/:jobId/download` 一次性下载。
+- 读路径(list/download/delete/restore/preview)读首个可达 target;delete 删全部可达 target;全不可达 = 快照不可见(空列表,不报错)。
+- 删除:`fanout_user`/`fetch_user_from_target` + 两边 fetch 路由;`spawn_target_scheduler` 改直写快照;`export_portable_zip`(S3 版)删除,代之以 conn 版 + 内存版。
+- 存量服务桶快照成孤儿:不迁移、不回落(用户明确)。
+
+### 16.3 用户级快照密码(方案 A:口令传参)
+
+- 口令只活在用户手里:`POST /backup` 传 passphrase → 加密;还原/下载/组装同样传参;后端永不存储。定时/安全快照传 env fallback(`PERGAME_SNAPSHOT_PASSPHRASE`,一般未设 = 明文):「没口令就跳过加密快照」。
+- 附带修复:`safety_snapshot` 之前 create job 后从不 spawn runner,永远超时、从未真正执行。改为 inline 同步跑 + `BackupStore::register`(不抢用户当前 job)。
+
+### 16.4 全量导出(六成员)
+
+- `permissions.json`:(node_id, grantee_username, permission)。存用户名不存 id:被授权人 id 跨实例悬空,纯垃圾占带宽;用户名可解析、可跳过。
+- `invitations.json`:整行(邀请码自包含,无悬空引用)。
+- `trash.json`:{nodes}(带 deleted_at),与活 documents.json 分离,还原 merge 语义。
+- `profile.json`:展示字段(username/names/avatar/email),无密码/TOTP/role/type。
+- 还原:permissions 按用户名回查(skip unknown + ON CONFLICT 去重);invitations 按 code 去重;trash ON CONFLICT(id) DO NOTHING;profile 逐字段 collision 门(username/email 撞则保留现状 + warning)。
+- preview 加四组成员计数器 + profile_in_archive;restore 加 force 门(非空工作区无 force 拒绝,fork §5;trash 不计入非空)。
+
+### 16.5 Target 配置权下放 + PG 删除
+
+- 新开 `/api/backup/targets/*`(10 路由):同 store,归属鉴权(users 含我或 admin);普通用户创建/编辑强制 users=[self];takeover 留 admin 独占。前端视图搬出 admin 区到工具区,users 框/takeover 按钮 admin 可见。
+- PG target 删除(fork §1 已删:与主库同故障域):`target/pg.rs` + 全部分支 + 前端 kind 选项 + 8 语言 schema 键/subtitle。存量 pg 行因 kind() 拒绝而惰性失效(可列可删,不可连)。
+- 启动不再建 `pergame-backups` 桶(主桶保留,附件用)。
+
+### 16.6 账户删除(补缺失的 handler)
+
+- `DELETE /users/:id` 之前根本不存在(前端调进 404)。补 handler:self 或 admin;三门禁:①任一归属 target 有 manifest → 409(先 empty);②不可达 target 同样拒绝(无法证明清空,fork §8);③不能删最后一个 admin。
+- 删除清主桶 `{uid}/` 前缀 + users 行(FK 级联清其余);target 对象不动(用户自己的 S3)。
+
+### 16.7 fork §4 锁对齐
+
+- 同 target 重入拒绝:`acquire_backup(targets)` 登记在飞 target 集,交集非空返回 TargetBusy(列冲突 id);guard drop 时同步释放。`LockSnapshot` 加 busy_targets。
+- 只读收紧:删 `/api/users/@me` 豁免(备份时改设置 = 快照不一致;GET 照旧放行)。
+- 删除锁:delete_snapshot + 两边 empty_target 在 restoring 时 409。
+
+### 16.8 dr-backup 删除
+
+- 快照全备份后,边车存在的唯一理由(补 pg 那一半)消失。删除:`scripts/dr-backup.sh` + sidecar Dockerfile/entrypoint/conf.example + `routes/dr_config.rs` + admin conf/job/cron handler + `instance-dr.vue` + 菜单 + compose 服务 + DR env + docs 相关节 + spec §10/§13(标已移除,历史保留)。
+- 失去的能力:整库单事务一致性点(逐用户快照是 N 个时间点;单用户实例无影响)。
+
+### 16.9 前端
+
+- targets 视图搬迁 + API 换前缀 + admin 元素隐藏;backups 页:无 target 提示条 + 跳转、快照密码框、加密锁标、还原口令/force 确认框、plan 新行、full 明细 toast、upload 强制 force。
+- i18n:12 新键 en + zh-CN + zh-TW(余者 fallback en)。

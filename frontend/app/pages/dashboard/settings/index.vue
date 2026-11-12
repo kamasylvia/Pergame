@@ -37,7 +37,6 @@ import DocumentsView from './_views/documents.vue';
 import EditorView from './_views/editor.vue';
 import SecurityView from './_views/security.vue';
 import BackupView from './_views/backups.vue';
-import InstanceDrView from './_views/instance-dr.vue';
 import SnapshotTargetsView from './_views/snapshot-targets.vue';
 import ShortcutsView from './_views/shortcuts.vue';
 import SnippetsView from './_views/snippets.vue';
@@ -73,7 +72,6 @@ const pages = {
   editor: EditorView,
   security: SecurityView,
   backup: BackupView,
-  instanceDr: InstanceDrView,
   snapshotTargets: SnapshotTargetsView,
   shortcuts: ShortcutsView,
   snippets: SnippetsView,
@@ -133,16 +131,6 @@ const navSections = computed<NavSection[]>(() => [
       { key: 'teams', label: t('settings.pages.teams'), icon: 'users' },
     ],
   },
-  ...(store.user?.role === 2
-    ? [
-        {
-          title: t('settings.nav.admin'),
-          items: [
-            { key: 'instanceDr', label: t('settings.pages.instanceDr'), icon: 'backup' },
-          ],
-        },
-      ]
-    : []),
   {
     title: t('settings.nav.guides'),
     items: [

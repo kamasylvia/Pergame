@@ -48,7 +48,7 @@ services:
 
   # Pergame Backend (Rust rewrite; image built and published by GHCR)
   #
-  # Images come from ghcr.io/<owner>/<repo>-{backend,frontend,dr-backup}
+  # Images come from ghcr.io/<owner>/<repo>-{backend,frontend}
   # (see .github/workflows/docker-image-release.yml). Pin PERGAME_TAG to a
   # release tag for reproducible deploys (`latest` follows releases).
   # Upgrade flow: `docker compose pull && docker compose up -d`.
@@ -105,20 +105,11 @@ services:
       SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
 
-      # DR sidecar shared volumes — must match the dr_conf/dr_jobs mounts
-      # below; without these the backend's DR admin API always reports
-      # "sidecar not deployed" even though the volumes are mounted.
-      DR_CONF_DIR: /conf
-      DR_JOBS_DIR: /jobs
-
     # No published port by default: browsers reach the API through the
     # frontend's same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET). Set
     # BACKEND_DIRECT_PORT in .env to publish it for debugging.
     ports:
       - "${BACKEND_DIRECT_PORT:-}:8201"
-    volumes:
-      - dr_conf:/conf
-      - dr_jobs:/jobs
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
@@ -154,24 +145,6 @@ services:
     depends_on:
       - backend
 
-  # Instance DR sidecar (spec backup-restore.md §10): executes dr-backup.sh
-  # jobs handed over by the backend through the shared volumes. Optional -
-  # remove this service (and the backend's /conf,/jobs mounts) to disable.
-  dr-backup:
-    # 版本钉死,不用浮动 tag:pg_dump 行为必须按 release 可复现。当前钉
-    # pg18-v8.15.0(基底 postgres:18.2-alpine,匹配活库 PostgreSQL 18.2)。
-    # pg 升级或 fork 升版时手动改这里的 tag。workflow 只发布
-    # <tag> 与 pg18-<tag>,不再有 latest/pg18-latest。
-    image: ghcr.nju.edu.cn/kamasylvia/pergame-dr-backup:pg18-${PERGAME_TAG:-latest}
-    container_name: pergame-dr-backup
-    restart: unless-stopped
-    environment:
-      SCHEDULE_HOURS: "${DR_BACKUP_SCHEDULE_HOURS:-0}"
-      SCAN_INTERVAL_SECONDS: 2
-    volumes:
-      - dr_conf:/conf
-      - dr_jobs:/jobs
-
 # The compose default network, explicitly named so the deployment is
 # independent of the directory the compose file lives in.
 networks:
@@ -182,5 +155,3 @@ volumes:
   postgres_data:
   rustfs_data:
   rustfs_logs:
-  dr_conf:
-  dr_jobs:
