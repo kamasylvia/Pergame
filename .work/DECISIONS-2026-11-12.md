@@ -51,3 +51,8 @@
 
 - v0.0.5 上线验证时创建 target 直接 500:`created_at` 绑到了 namespace(string)槽。这是**旧代码就有的 bug**(VALUES `$17,$17,$18` vs bind 顺序错位),之前集成测试居然过了——因为测试可能没走 create 全路径,或者旧测试库容忍?没深究。
 - 教训:sqlx 非宏 `query` 的占位符是纯运行时检查,编译器不救。以后凡手写 INSERT,review 时数一遍。
+
+## 11. S3 get 404 映射缺失(线上抓到,已修 v0.0.7)
+
+- `S3Target::has` 有 404→false 映射(之前修过),但 `get` 没有:空桶读 owner.json 直接硬错,导致首个备份认领失败、整 job 失败。
+- 同一文件内两个函数行为不一致,review 漏了。以后 Store trait 实现要逐个对齐错误语义。

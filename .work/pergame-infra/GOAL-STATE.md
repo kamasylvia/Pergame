@@ -78,7 +78,13 @@
 
 ### 最近完成的批次(供考古)
 
-- **v0.0.5 发版中(2026-11-12,release `v0.0.5`)**:全备份重构后的首个镜像。workflow `43160746394` 构建中(backend/frontend,无 sidecar)。部署计划:Portainer stack 42 换新 compose(2 服务,钉 v0.0.5) → 删孤儿 dr-backup 容器 + `pergame-dr-conf/jobs` 卷 → 健康验证。本条待部署完成翻账。
+- **v0.0.5→v0.0.7 发版 + 部署(2026-11-12)**:
+  - v0.0.5 首发:backend 起不来——清库只清了数据,旧 BIGINT 表结构还在,新 0001 建表撞名。删全表后 migration 重跑通过。教训:清库 = 删表,不止删行。
+  - v0.0.6 hotfix:backup_targets INSERT 占位符错位(旧 bug,创建 target 500)+ target id 改 v7。
+  - v0.0.7 hotfix:S3 get 缺 404→NotFound 映射(空桶认领硬错,首个备份失败)。
+  - Portainer stack 42 = backend/frontend 双 v0.0.7;孤儿 dr-backup 容器 + `pergame-dr-conf/jobs` 卷已删。
+  - 活测全链通过:注册/登录/建文档/零 target 快照(zip 内容核对)/配 S3 target/直写快照/列表/下载/preview/force 门(400 拒绝)/force 还原(含安全快照)/删账户门禁(409)/删 target 门禁(409)/empty/删 target/删账户。测试桶 prefix 已清干净。
+  - 遗留:QuObjects 目录占位符 key(`dir/` 零字节)需逐层删,empty 只删对象不管占位符(实现细节,不影响门禁计数——is_snapshot_key 已排除)。
 
 - **全备份重构(2026-11-12,commits `3f5009cc`→`06a30906`,7 个提交)**:
   - **UUIDv7 全统一**:三选一裁决(UUIDv7;Snowflake 出局)。全表 id→UUID,migration 压缩(0006 吸 0007/0008,文件删除),snowflake/sf 删除,`Uuid::now_v7()` 唯一生成器。前端零改(除 target users 传 string)。pg+S3 全清(`users` 2 行/`pergame-backups` 120 对象),`_sqlx_migrations` 清空当新库跑。
