@@ -115,7 +115,12 @@ async fn main() {
     // unset). Snapshots are full backups direct-written to user targets.
     if let Some(storage) = state.storage.clone() {
         backup::spawn_snapshot_scheduler(state.backups.clone(), state.db.clone(), storage.clone());
-        target::fanout::spawn_target_scheduler(state.db.clone(), state.backups.clone(), storage);
+        target::fanout::spawn_target_scheduler(
+            state.db.clone(),
+            state.backups.clone(),
+            storage.clone(),
+        );
+        backup::spawn_inline_zip_sweeper(state.backups.clone(), state.db.clone(), storage);
     }
 
     // Trash retention sweep (TRASH_RETENTION_DAYS, 0/unset = keep forever).

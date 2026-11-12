@@ -31,6 +31,10 @@ pub struct BackupBody {
     /// restore or download.
     #[serde(default)]
     pub passphrase: Option<String>,
+    /// Zero-target zip lifetime: "1h" | "1d" | "1w" (default "1h").
+    /// Unknown values fall back to the default.
+    #[serde(default)]
+    pub expires_in: Option<String>,
 }
 
 fn options_from(body: BackupBody) -> BackupOptions {
@@ -54,6 +58,11 @@ pub async fn create_backup(
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let body = body.map(|b| b.0).unwrap_or_default();
     let passphrase = body.passphrase.clone();
+    let ttl_ms = match body.expires_in.as_deref().unwrap_or("1h") {
+        "1d" => 24 * 3600 * 1000,
+        "1w" => 7 * 24 * 3600 * 1000,
+        _ => crate::backup::INLINE_ZIP_TTL_MS, // "1h" + unknown
+    };
     let options = options_from(body);
 
     let job_id = state
@@ -78,6 +87,7 @@ pub async fn create_backup(
                 spawn_job_id,
                 options,
                 passphrase,
+                ttl_ms,
             )
             .await;
         });
@@ -133,9 +143,13 @@ pub async fn download_job_zip(
     if job_id.is_empty() {
         return Err(ApiError::BadRequest("job ID is required".into()));
     }
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::NotFound("storage not configured".into()))?;
     let bytes = state
         .backups
-        .take_inline_zip(auth.user_id(), &job_id)
+        .take_inline_zip(&storage, auth.user_id(), &job_id)
         .await?;
     let disposition = format!("attachment; filename=\"pergame-snapshot-{job_id}.zip\"");
     Ok((
@@ -375,6 +389,7 @@ async fn safety_snapshot(state: &AppState, user_id: Uuid) -> Option<String> {
         job_id,
         options,
         None,
+        crate::backup::INLINE_ZIP_TTL_MS,
     )
     .await;
     // run_backup reports via the job row; confirm a fresh manifest landed on

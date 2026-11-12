@@ -209,7 +209,17 @@ pub async fn sync_target(
     let uid = auth.user_id();
     let spawn_job_id = job_id.clone();
     tokio::spawn(async move {
-        crate::backup::run_backup(store, sql, storage, uid, spawn_job_id, options, None).await;
+        crate::backup::run_backup(
+            store,
+            sql,
+            storage,
+            uid,
+            spawn_job_id,
+            options,
+            None,
+            crate::backup::INLINE_ZIP_TTL_MS,
+        )
+        .await;
     });
     Ok(ApiOk::ok(json!({ "job_id": job_id })))
 }

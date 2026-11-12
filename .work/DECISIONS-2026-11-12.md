@@ -66,3 +66,15 @@
 
 - `TargetConn::probe` 把 scoped prefix 传给 `WebdavTarget::list`,而 `url_for` 又拼一遍 prefix → 请求打到 `<prefix>/<prefix>`。S3 没这 bug(`probe()` 不走 list)。修:list("")。
 - 另:容器内连不上 `qnap.elf-balance.ts.net`,WebDAV endpoint 要填 `host.docker.internal:5007`。这是部署知识,已记;不是 bug。
+
+## 14. WebDAV list 语义双 bug(v0.0.9 修,活测抓到)
+
+- list 返回裸文件名而非全 key:所有读路径(get/delete)全断,列表空。S3 返回全 key,两边不一致。
+- self-skip 恒失败:path 尾斜杠时比较空串,collection 自身永不跳过。连带导致安全快照确认取到 `.../manifests/manifests`,warnings 空。
+- 另:BackupJob.status 在 update() 里派生(之前字段加了没派生,零 target 下载区不显示)。
+- 另:MKCOL 不检查 HTTP 状态(只看 transport err),QNAP 失败静默吞掉。
+- WebDAV 全链已在本地后端+QNAP DAV(home)跑通;测试账号/目录/桶 prefix 全清。
+
+## 15. AppButton disabled 全站失效(v0.0.9 修)
+
+- 组件不透传 disabled,11 处调用全是假禁态。target 保存门禁(后端 409 一直在,前端拦不住)。

@@ -131,14 +131,13 @@ struct JobEntry {
 pub struct BackupStore {
     jobs: Mutex<HashMap<String, JobEntry>>,
     user_jobs: Mutex<HashMap<Uuid, String>>,
-    /// Zero-target snapshots: the portable zip bytes, held in memory for a
-    /// single download (fork §4 "save zip locally" semantics). Bounded by
-    /// MAX_INLINE_ZIP_BYTES; larger snapshots require a configured target.
-    inline_zips: Mutex<HashMap<String, Vec<u8>>>,
 }
 
 /// Largest zero-target snapshot kept in memory (matches the upload cap).
 pub const MAX_INLINE_ZIP_BYTES: usize = 256 * 1024 * 1024;
+
+/// Zero-target zip lifetime: 1 hour, then the sweeper drops the bytes.
+pub const INLINE_ZIP_TTL_MS: i64 = 3600 * 1000;
 
 fn rfc3339_now() -> String {
     time::OffsetDateTime::now_utc()
@@ -261,30 +260,118 @@ impl BackupStore {
         Ok(())
     }
 
-    /// Stores a zero-target snapshot zip for later download.
-    pub async fn put_inline_zip(&self, job_id: &str, bytes: Vec<u8>) {
-        self.inline_zips
-            .lock()
+    /// Stores a zero-target snapshot zip in the main bucket
+    /// (`{uid}/inline-zips/{job_id}.zip` + `.json` expiry sidecar).
+    /// Returns the expiry instant (epoch ms) so the job row can advertise it.
+    pub async fn put_inline_zip(
+        &self,
+        storage: &crate::storage::S3Storage,
+        user_id: Uuid,
+        job_id: &str,
+        bytes: Vec<u8>,
+        ttl_ms: i64,
+    ) -> i64 {
+        let expires_at = crate::auth::service::now_ms() + ttl_ms;
+        let base = format!("inline-zips/{job_id}");
+        if storage
+            .put_user_object(
+                user_id,
+                &format!("{base}.zip"),
+                bytes,
+                Some("application/zip"),
+            )
             .await
-            .insert(job_id.to_string(), bytes);
+            .is_err()
+        {
+            return 0;
+        }
+        let _ = storage
+            .put_user_object(
+                user_id,
+                &format!("{base}.json"),
+                serde_json::to_vec(&serde_json::json!({ "expires_at": expires_at }))
+                    .unwrap_or_default(),
+                Some("application/json"),
+            )
+            .await;
+        expires_at
     }
 
     /// Takes (and removes) a stored zip; ownership-checked against the job.
+    /// Expired entries behave as missing (and are cleaned up).
     pub async fn take_inline_zip(
         &self,
+        storage: &crate::storage::S3Storage,
         user_id: Uuid,
         job_id: &str,
     ) -> Result<Vec<u8>, crate::error::ApiError> {
         use crate::error::ApiError;
         // Ownership first: the zip belongs to whoever owns the job row.
         self.get(user_id, job_id).await?;
-        self.inline_zips
-            .lock()
+        let base = format!("inline-zips/{job_id}");
+        let expired = match storage
+            .get_user_object(user_id, &format!("{base}.json"))
             .await
-            .remove(job_id)
-            .ok_or(ApiError::NotFound(
-                "snapshot zip expired or already downloaded".into(),
-            ))
+        {
+            Ok(raw) => serde_json::from_slice::<serde_json::Value>(&raw)
+                .ok()
+                .and_then(|v| v.get("expires_at").and_then(|n| n.as_i64()))
+                .is_some_and(|exp| exp <= crate::auth::service::now_ms()),
+            Err(_) => false, // no sidecar (old zip): allow one download
+        };
+        let bytes = storage
+            .get_user_object(user_id, &format!("{base}.zip"))
+            .await
+            .map_err(|_| ApiError::NotFound("snapshot zip expired or already downloaded".into()))?;
+        // Single-download semantics: remove both objects after a good read.
+        // Expired zips are removed too (lazy sweep on access).
+        storage
+            .delete_user_object(user_id, &format!("{base}.zip"))
+            .await;
+        storage
+            .delete_user_object(user_id, &format!("{base}.json"))
+            .await;
+        if expired {
+            return Err(ApiError::NotFound("snapshot zip expired".into()));
+        }
+        Ok(bytes)
+    }
+
+    /// Drops expired inline zips for one user (called by the sweeper).
+    /// Returns the number of zips reclaimed.
+    pub async fn sweep_expired_zips(
+        &self,
+        storage: &crate::storage::S3Storage,
+        user_id: Uuid,
+    ) -> usize {
+        let now = crate::auth::service::now_ms();
+        let Ok(objects) = storage.list_user_prefix(user_id, "inline-zips").await else {
+            return 0;
+        };
+        let mut reclaimed = 0usize;
+        for (key, _, _) in objects {
+            if !key.ends_with(".json") {
+                continue;
+            }
+            let rel = match key.strip_prefix(&format!("{user_id}/")) {
+                Some(r) => r.to_string(),
+                None => continue,
+            };
+            let expired = storage
+                .get_user_object(user_id, &rel)
+                .await
+                .ok()
+                .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
+                .and_then(|v| v.get("expires_at").and_then(|n| n.as_i64()))
+                .is_some_and(|exp| exp <= now);
+            if expired {
+                let zip_rel = rel.trim_end_matches(".json").to_string() + ".zip";
+                storage.delete_user_object(user_id, &zip_rel).await;
+                storage.delete_user_object(user_id, &rel).await;
+                reclaimed += 1;
+            }
+        }
+        reclaimed
     }
 }
 
@@ -318,6 +405,9 @@ struct NodeLinkBackup {
 /// = plain snapshot. The passphrase is never stored; unattended schedulers
 /// pass the deployment fallback (`passphrase_from_env`), which is usually
 /// unset — an unconfigured scheduler simply produces plain snapshots.
+/// `zip_ttl_ms`: zero-target zip lifetime in the main bucket (user-chosen
+/// 1h/1d/1w; unattended callers pass the 1h default).
+#[allow(clippy::too_many_arguments)] // backup entrypoint: handles + ids + knobs, splitting buys nothing
 pub async fn run_backup(
     store: Arc<BackupStore>,
     sql: sqlx::PgPool,
@@ -326,6 +416,7 @@ pub async fn run_backup(
     job_id: String,
     options: BackupOptions,
     passphrase: Option<String>,
+    zip_ttl_ms: i64,
 ) {
     macro_rules! progress {
         ($p:expr, $msg:expr) => {
@@ -719,13 +810,16 @@ pub async fn run_backup(
             &file_payloads,
         ) {
             Ok(zip) if zip.len() <= MAX_INLINE_ZIP_BYTES => {
-                store.put_inline_zip(&job_id, zip).await;
+                let expires_ms = store
+                    .put_inline_zip(&storage, user_id, &job_id, zip, zip_ttl_ms)
+                    .await;
                 store
                     .update(&job_id, |j| {
                         j.progress = 100;
                         j.message =
                             "Snapshot packaged for download (no targets configured).".into();
                         j.download_url = Some(format!("/api/backup/{job_id}/download"));
+                        j.expires_at = Some(expires_ms.to_string());
                     })
                     .await;
                 return;
@@ -900,9 +994,39 @@ pub fn spawn_snapshot_scheduler(
                         job_id,
                         options,
                         crate::snapcrypto::passphrase_from_env(),
+                        INLINE_ZIP_TTL_MS,
                     )
                     .await;
                 });
+            }
+        }
+    });
+}
+
+/// Sweeps expired zero-target zips from the main bucket every 10 minutes.
+/// Iterates all users (cheap: one user list + one prefix list per user with
+/// objects; empty prefixes return fast).
+pub fn spawn_inline_zip_sweeper(
+    store: Arc<BackupStore>,
+    sql: sqlx::PgPool,
+    storage: crate::storage::S3Storage,
+) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(600));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ticker.tick().await; // skip the immediate tick
+        loop {
+            ticker.tick().await;
+            let users: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM users")
+                .fetch_all(&sql)
+                .await
+                .unwrap_or_default();
+            let mut total = 0usize;
+            for (uid,) in users {
+                total += store.sweep_expired_zips(&storage, uid).await;
+            }
+            if total > 0 {
+                tracing::info!(reclaimed = total, "inline zip sweep reclaimed expired zips");
             }
         }
     });

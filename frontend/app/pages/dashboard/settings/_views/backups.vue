@@ -51,6 +51,11 @@
             <input v-model="options.passphrase" class="memo-input" type="password" autocomplete="new-password" />
             <small class="hint">{{ t('settings.backups.passphraseHint') }}</small>
           </label>
+          <label v-if="targetCount === 0" class="passphrase-row">
+            <span>{{ t('settings.backups.expiresInLabel') }}</span>
+            <AppSelect v-model="options.expiresIn" :items="EXPIRY_OPTIONS" :searchable="false" />
+            <small class="hint">{{ t('settings.backups.expiresInHint') }}</small>
+          </label>
         </div>
       </div>
 
@@ -229,7 +234,14 @@ const options = reactive({
   includeMetadata: true,
   memo: '',
   passphrase: '',
+  expiresIn: '1h',
 });
+
+const EXPIRY_OPTIONS = computed(() => [
+  { id: '1h', label: t('settings.backups.expiry1h') },
+  { id: '1d', label: t('settings.backups.expiry1d') },
+  { id: '1w', label: t('settings.backups.expiry1w') },
+]);
 
 const { t } = useI18nT();
 const { numericDate } = useDateFormatters();
@@ -423,6 +435,7 @@ async function startBackup() {
     include_metadata: options.includeMetadata,
     memo: options.memo.trim() || undefined,
     passphrase: options.passphrase.trim() || undefined,
+    expires_in: options.expiresIn,
   });
 
   if (result.status !== 'success' || !result.result?.job_id) {
@@ -450,7 +463,11 @@ async function checkStatus(jobId: string) {
     stopPolling();
 
     if (result.result.status === 'completed') {
-      notifications.add({ type: 'success', title: t('settings.backups.notifications.completedTitle'), message: t('settings.backups.notifications.completed') });
+      if (result.result.download_url) {
+        notifications.add({ type: 'info', title: t('settings.backups.notifications.packagedTitle'), message: t('settings.backups.notifications.packaged') });
+      } else {
+        notifications.add({ type: 'success', title: t('settings.backups.notifications.completedTitle'), message: t('settings.backups.notifications.completed') });
+      }
       await loadSnapshots();
     } else if (result.result.status === 'failed') {
       error(result.result.message, result.result.error);

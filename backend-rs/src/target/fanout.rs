@@ -311,6 +311,7 @@ pub fn spawn_target_scheduler(
                             job_id,
                             options,
                             crate::snapcrypto::passphrase_from_env(),
+                            crate::backup::INLINE_ZIP_TTL_MS,
                         )
                         .await;
                     });

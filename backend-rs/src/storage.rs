@@ -192,6 +192,38 @@ impl S3Storage {
         })
     }
 
+    /// Lists keys under `{user_id}/{sub}/` in the main bucket (key, size,
+    /// mtime_ms). Used by the inline-zip sweeper.
+    pub async fn list_user_prefix(
+        &self,
+        user_id: Uuid,
+        sub: &str,
+    ) -> Result<Vec<(String, i64, i64)>, ApiError> {
+        let prefix = format!("{user_id}/{sub}/");
+        let mut out = Vec::new();
+        let resp = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "list user prefix failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to list objects")))
+            })?;
+        for obj in resp.contents() {
+            let Some(key) = obj.key() else { continue };
+            let size = obj.size().unwrap_or(0);
+            let mtime = obj
+                .last_modified()
+                .and_then(|t| t.to_millis().ok())
+                .unwrap_or(0);
+            out.push((key.to_string(), size, mtime));
+        }
+        Ok(out)
+    }
+
     /// Head-checks a blob; true when it already exists (content-addressed
     /// dedup: skip the PUT).
     pub async fn blob_exists(

@@ -163,7 +163,8 @@ onBeforeUnmount(() => {
 
   .name {
     display: flex;
-    align-items: center;
+    align-items: baseline;
+    gap: 6px;
     font-size: 1rem;
     font-weight: 400;
   }
