@@ -222,22 +222,20 @@ export default defineNuxtConfig({
       description: 'App for taking beautiful notes in extended Markdown format.',
       display: 'standalone',
       icons: [
-        {
-          purpose: 'maskable',
-          sizes: '144x144',
-          src: '/icons/icon-m-144.png',
-          type: 'image/png',
-        },
+        // Maskable icons must be full-bleed: the platform crops them to its
+        // own shape, so a transparent margin would expose background. These
+        // are accent-filled squares with the mark inside the safe circle.
+        // The icon-m-*.png files remain as the dark-theme "any" variant.
         {
           purpose: 'maskable',
           sizes: '192x192',
-          src: '/icons/icon-m-192.png',
+          src: '/icons/icon-maskable-192.png',
           type: 'image/png',
         },
         {
           purpose: 'maskable',
           sizes: '512x512',
-          src: '/icons/icon-m-512.png',
+          src: '/icons/icon-maskable-512.png',
           type: 'image/png',
         },
         {
