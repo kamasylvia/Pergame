@@ -126,8 +126,9 @@ function footNotePlugin(md: MarkdownIt) {
   };
 }
 
-const VIDEO_REGEX = /\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv)(\?.*)?$/i;
-const AUDIO_REGEX = /\.(mp3|wav|ogg|m4a|flac|aac)(\?.*)?$/i;
+const VIDEO_REGEX = /\.(mp4|webm|ogg|ogv|mov|avi|mkv|flv|wmv)([?#].*)?$/i;
+const AUDIO_REGEX = /\.(mp3|wav|ogg|m4a|flac|aac)([?#].*)?$/i;
+const PDF_REGEX = /\.pdf([?#].*)?$/i;
 
 function html5MediaPlugin(md: MarkdownIt) {
   const defaultImageRenderer =
@@ -163,12 +164,20 @@ function html5MediaPlugin(md: MarkdownIt) {
       }
     }
 
+    const escSrc = md.utils.escapeHtml(src);
+    const escAlt = md.utils.escapeHtml(alt);
     if (src.match(VIDEO_REGEX)) {
-      return `<video controls alt="${md.utils.escapeHtml(alt)}" src="${md.utils.escapeHtml(src)}"></video>`;
+      return `<video controls preload="metadata" style="max-width:100%" src="${escSrc}">${escAlt}</video>`;
     }
 
     if (src.match(AUDIO_REGEX)) {
-      return `<audio controls alt="${md.utils.escapeHtml(alt)}" src="${md.utils.escapeHtml(src)}"></audio>`;
+      return `<audio controls preload="metadata" style="max-width:100%" src="${escSrc}">${escAlt}</audio>`;
+    }
+
+    if (src.match(PDF_REGEX)) {
+      // Placeholder: ContentCompiled mounts PDFViewer here after render
+      // (same post-mount pattern as mermaid diagrams).
+      return `<div class="pdf-embed" data-src="${escSrc}" data-alt="${escAlt}"></div>`;
     }
 
     return defaultImageRenderer(tokens, idx, options, env, self);

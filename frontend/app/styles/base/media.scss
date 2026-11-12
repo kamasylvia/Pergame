@@ -17,6 +17,13 @@ video {
 	background: var(--surface-transparent);
 }
 
+.pdf-embed {
+	width: 100%;
+	min-height: 200px;
+	margin: 10px 0;
+	border-radius: var(--radius-sm);
+}
+
 iframe {
 	max-width: 100%;
 	margin: 10px 0;

@@ -14,6 +14,7 @@
 import compile from '~/helpers/markdown';
 import { rerenderImages } from '~/helpers/DOM';
 import { renderMermaidDiagrams } from '~/helpers/mermaid-render';
+import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ node?: Partial<Node> }>();
@@ -127,13 +128,20 @@ function runMermaidRender() {
   renderMermaidDiagrams(rootElement.value, { dark: colorMode.value === 'dark' });
 }
 
+function runPdfEmbeds() {
+  if (!rootElement.value) return;
+  renderPdfEmbeds(rootElement.value);
+}
+
 onMounted(() => {
   runMermaidRender();
+  runPdfEmbeds();
   const unsub = subscribeDrawioCacheInvalidated(() => {
     rerenderImages(rootElement.value!);
   });
   onUnmounted(() => {
     unsub();
+    if (rootElement.value) unmountPdfEmbeds(rootElement.value);
   });
 });
 
@@ -142,6 +150,7 @@ watch(
   async () => {
     await nextTick();
     runMermaidRender();
+    runPdfEmbeds();
   },
 );
 
