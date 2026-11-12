@@ -189,7 +189,7 @@
         <div class="upload-restore">
           <input ref="uploadInput" type="file" accept=".zip" class="hidden-input" @change="onRestoreFile" />
           <AppButton type="secondary" :disabled="isRestoring" @click="uploadInput?.click()">
-            <Icon name="upload" display="sm" />
+            <Icon name="import" display="sm" />
             {{ isRestoring ? t('settings.backups.restoring') : t('settings.backups.uploadRestore') }}
           </AppButton>
           <p class="upload-hint">{{ t('settings.backups.uploadRestoreHint') }}</p>
@@ -798,7 +798,7 @@ input[type='text'] {
 
 .upload-restore {
   margin-top: 1rem;
-  text-align: left;
+  text-align: center;
 }
 
 .hidden-input {
