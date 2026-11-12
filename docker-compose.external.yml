@@ -27,7 +27,7 @@
 services:
   # ---------------------------------------------------------------- backend
   backend:
-    image: ghcr.nju.edu.cn/kamasylvia/pergame-backend:v0.0.10
+    image: ghcr.nju.edu.cn/kamasylvia/pergame-backend:v0.0.11
     container_name: pergame-backend
     restart: unless-stopped
     environment:
@@ -73,7 +73,7 @@ services:
 
   # --------------------------------------------------------------- frontend
   frontend:
-    image: ghcr.nju.edu.cn/kamasylvia/pergame-frontend:v0.0.10
+    image: ghcr.nju.edu.cn/kamasylvia/pergame-frontend:v0.0.11
     container_name: pergame-frontend
     restart: unless-stopped
     environment:
