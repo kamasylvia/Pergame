@@ -73,7 +73,7 @@ const { data, pending } = await useAsyncData(
 );
 
 /** Check if node has displayable content */
-const hasContent = computed(() => !!data.value?.node?.content_compiled?.trim());
+const hasContent = computed(() => !!(data.value?.node?.content_compiled?.trim() || data.value?.node?.content?.trim()));
 const resource = computed(() => data.value?.node);
 const mimeType = computed(() => data.value?.node?.metadata?.filetype || '');
 const hasFile = computed(() => data.value?.node?.role === 4);

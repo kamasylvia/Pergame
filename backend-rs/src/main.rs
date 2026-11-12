@@ -393,15 +393,31 @@ async fn main() {
             "/api/users/{id}/password",
             patch(routes::users_patch::update_password),
         )
-        .route("/api/resources", post(routes::resources::upload_file))
+        // Upload endpoints carry file bodies: axum's default 2 MB cap sits far
+        // below the configured per-file limit (Cdn.MaxSize, 20 MB by default),
+        // so it has to be raised or every non-trivial upload dies as a
+        // multipart parse error. The handler still enforces the real limits.
+        .route(
+            "/api/resources",
+            post(routes::resources::upload_file).layer(upload_body_limit()),
+        )
         .route(
             "/api/resources/avatar",
-            post(routes::resources::upload_avatar),
+            post(routes::resources::upload_avatar).layer(upload_body_limit()),
         )
-        .route("/api/resources/{id}", put(routes::resources::update_file))
+        .route(
+            "/api/resources/{id}",
+            put(routes::resources::update_file).layer(upload_body_limit()),
+        )
         .route(
             "/api/resources/{id}/file",
             get(routes::resources::download_file),
+        )
+        // Same bytes with the filename in the path, so the URL ends in the real
+        // extension (PDF embeds, "save as" names).
+        .route(
+            "/api/resources/{id}/file/{name}",
+            get(routes::resources::download_file_named),
         )
         .route(
             "/api/users/{id}/avatar",
@@ -433,6 +449,13 @@ async fn main() {
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
+
+    /// Body cap for upload routes: the configured per-file limit plus room for
+    /// multipart framing. The handler's own size check remains authoritative.
+    fn upload_body_limit() -> axum::extract::DefaultBodyLimit {
+        let max = crate::config::global().cdn.max_size;
+        axum::extract::DefaultBodyLimit::max((max + 1024 * 1024) as usize)
+    }
 
     /// CORS parity with the Go `frontendCORSConfig`: only the configured frontend
     /// origin may read credentialed API responses; public asset hosts are never

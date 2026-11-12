@@ -624,6 +624,20 @@ pub async fn download_file(
     serve_object(&state, node.user_id, &obj, &headers, q.download).await
 }
 
+/// GET /resources/:id/file/:name — same bytes, with the original filename in
+/// the path. Markdown renderers (and browsers saving a file) decide by the
+/// extension: `/file` alone cannot tell a PDF from an image, so an embedded
+/// PDF would render as a plain link.
+pub async fn download_file_named(
+    State(state): State<AppState>,
+    auth: Option<AuthUser>,
+    Path((id, _name)): Path<(String, String)>,
+    Query(q): Query<DownloadQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    download_file(State(state), auth, Path(id), Query(q), headers).await
+}
+
 /// GET /users/:id/avatar — public avatar bytes (no node exists for avatars;
 /// the users row decides: missing/empty `avatar` → 404, frontend falls back
 /// to the placeholder). Unauthenticated by design: author avatars render on

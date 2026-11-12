@@ -6,7 +6,7 @@
     :style="{ fontSize: documentFontSize + 'px', fontFamily: documentFontFamily, lineHeight: documentLineHeight }"
     @change="handleCheckboxChange"
     @click="handleClick"
-    v-html="node?.content_compiled"
+    v-html="html"
   />
 </template>
 
@@ -34,6 +34,16 @@ const documentLineHeight = preferences.get('documentLineHeight');
 const documentTitlesNumbering = preferences.get('documentTitlesNumbering');
 
 const rootElement = ref<HTMLElement>();
+
+// Documents written by an API client (MCP `create_note`, imports) carry the
+// markdown source but no compiled HTML — the editor only compiles on save.
+// Rendering straight from the source keeps such a note readable instead of
+// blank, without re-compiling what the editor already produced.
+const html = computed(() => {
+  if (props.node?.content_compiled?.trim()) return props.node.content_compiled;
+  if (!props.node?.content?.trim()) return '';
+  return compile(props.node.content, id => nodesStore.getById(id)?.name);
+});
 
 defineExpose({ rootElement });
 
@@ -146,7 +156,7 @@ onMounted(() => {
 });
 
 watch(
-  () => props.node?.content_compiled,
+  html,
   async () => {
     await nextTick();
     runMermaidRender();
