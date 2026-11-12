@@ -20,6 +20,10 @@ use tokio::sync::RwLock;
 pub struct WorkspaceLocks {
     /// Shared guard: one permit per running backup (refcounted by clones).
     backup_permits: RwLock<usize>,
+    /// Target ids currently written by in-flight backups (fork §4: the same
+    /// target never runs twice — a new backup whose targets intersect this
+    /// set is rejected with the conflicting ids).
+    busy_targets: RwLock<std::collections::HashSet<uuid::Uuid>>,
     /// Exclusive restore flag.
     restoring: RwLock<bool>,
 }
@@ -29,12 +33,33 @@ impl WorkspaceLocks {
         Arc::new(Self::default())
     }
 
-    /// Enters a shared (backup) lock; returns a guard that releases on drop.
-    pub async fn acquire_backup(self: &Arc<Self>) -> BackupGuard {
-        *self.backup_permits.write().await += 1;
-        BackupGuard {
-            locks: self.clone(),
+    /// Enters a shared (backup) lock over `targets`; returns a guard that
+    /// releases on drop. Rejected when any target is already being written
+    /// (the caller lists the conflict and retries later).
+    pub async fn acquire_backup(
+        self: &Arc<Self>,
+        targets: &[uuid::Uuid],
+    ) -> Result<BackupGuard, LockError> {
+        {
+            let busy = self.busy_targets.read().await;
+            let conflict: Vec<uuid::Uuid> = targets
+                .iter()
+                .filter(|t| busy.contains(t))
+                .copied()
+                .collect();
+            if !conflict.is_empty() {
+                return Err(LockError::TargetBusy(conflict));
+            }
         }
+        *self.backup_permits.write().await += 1;
+        self.busy_targets
+            .write()
+            .await
+            .extend(targets.iter().copied());
+        Ok(BackupGuard {
+            locks: self.clone(),
+            targets: targets.to_vec(),
+        })
     }
 
     /// Enters the exclusive (restore) lock, waiting for backups to drain.
@@ -65,12 +90,20 @@ impl WorkspaceLocks {
         *self.restoring.read().await || *self.backup_permits.read().await > 0
     }
 
+    /// True while a restore holds the exclusive lock. Snapshot deletion and
+    /// target emptying refuse while this holds (fork §4: restores are
+    /// exclusive over deletes too).
+    pub async fn is_restoring(&self) -> bool {
+        *self.restoring.read().await
+    }
+
     /// Snapshot of the current lock state for the status endpoint.
     pub async fn snapshot(&self) -> LockSnapshot {
         LockSnapshot {
             backups_in_flight: *self.backup_permits.read().await,
             restore_in_flight: *self.restoring.read().await,
             read_only: self.is_read_only().await,
+            busy_targets: self.busy_targets.read().await.iter().copied().collect(),
         }
     }
 }
@@ -80,24 +113,32 @@ pub struct LockSnapshot {
     pub backups_in_flight: usize,
     pub restore_in_flight: bool,
     pub read_only: bool,
+    pub busy_targets: Vec<uuid::Uuid>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum LockError {
     RestoreInFlight,
     BackupBusy,
+    TargetBusy(Vec<uuid::Uuid>),
 }
 
 pub struct BackupGuard {
     locks: Arc<WorkspaceLocks>,
+    targets: Vec<uuid::Uuid>,
 }
 
 impl Drop for BackupGuard {
     fn drop(&mut self) {
         let locks = self.locks.clone();
+        let targets = std::mem::take(&mut self.targets);
         tokio::spawn(async move {
             let mut permits = locks.backup_permits.write().await;
             *permits = permits.saturating_sub(1);
+            let mut busy = locks.busy_targets.write().await;
+            for t in targets {
+                busy.remove(&t);
+            }
         });
     }
 }
@@ -121,11 +162,13 @@ impl Drop for RestoreGuard {
 /// meant to stop *content* writes, not the backup/restore machinery itself
 /// (which would deadlock the very operation that set the lock).
 fn is_exempt(path: &str) -> bool {
+    // Fork §4 parity: setting writes are NOT exempt — a setting changed
+    // mid-backup would silently miss the snapshot. GETs pass via
+    // is_read_method, so dropping /api/users/@me only blocks writes.
     path.starts_with("/api/backup")
         || path.starts_with("/api/admin/dr-backup")
         || path == "/api/health"
         || path.starts_with("/api/auth")
-        || path.starts_with("/api/users/@me")
         || path == "/api/admin/dr-backup/status"
 }
 
@@ -180,8 +223,13 @@ mod tests {
         let locks = WorkspaceLocks::new();
         assert!(!locks.is_read_only().await);
 
-        let b1 = locks.acquire_backup().await;
-        let b2 = locks.acquire_backup().await;
+        let t1 = uuid::Uuid::now_v7();
+        let t2 = uuid::Uuid::now_v7();
+        let b1 = locks.acquire_backup(&[t1]).await.expect("first wins");
+        // Same target twice is rejected (fork §4); disjoint targets run free.
+        let clash = locks.acquire_backup(&[t1]).await;
+        assert!(matches!(clash, Err(LockError::TargetBusy(_))));
+        let b2 = locks.acquire_backup(&[t2]).await.expect("disjoint ok");
         assert!(
             locks.is_read_only().await,
             "backups make the workspace read-only"
@@ -191,13 +239,19 @@ mod tests {
         // Guards release asynchronously; give the tasks a tick.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         assert!(!locks.is_read_only().await);
+        // Released targets accept new backups again.
+        let b3 = locks.acquire_backup(&[t1]).await.expect("released");
+        drop(b3);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         let restore = locks.acquire_restore().await.expect("first restore wins");
         assert!(locks.is_read_only().await);
+        assert!(locks.is_restoring().await);
         let second = locks.acquire_restore().await;
         assert!(matches!(second, Err(LockError::RestoreInFlight)));
         drop(restore);
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         assert!(!locks.is_read_only().await);
+        assert!(!locks.is_restoring().await);
     }
 }

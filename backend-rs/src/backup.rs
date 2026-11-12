@@ -338,9 +338,28 @@ pub async fn run_backup(
         }};
     }
 
-    // Shared lock: concurrent backups allowed, workspace becomes read-only
-    // for the duration (released when this guard drops at function exit).
-    let _lock = crate::locks::global().acquire_backup().await;
+    // Shared lock over this run's targets (fork §4): concurrent backups
+    // allowed, but the same target never twice. The workspace is read-only
+    // for the duration (released when the guard drops at function exit).
+    // Targets resolve before locking: a collection-phase failure must not
+    // hold anybody else's targets.
+    let target_ids: Vec<Uuid> =
+        match crate::target::repo::list_targets_for_user(&sql, user_id).await {
+            Ok(t) => t.into_iter().map(|r| r.id).collect(),
+            Err(_) => fail!("Failed to list backup targets"),
+        };
+    let _lock = match crate::locks::global().acquire_backup(&target_ids).await {
+        Ok(g) => g,
+        Err(crate::locks::LockError::TargetBusy(conflict)) => fail!(format!(
+            "Backup target(s) busy: {}; retry when the running backup finishes",
+            conflict
+                .iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        Err(_) => fail!("Failed to acquire backup lock"),
+    };
     if store.is_cancelled(&job_id) {
         return;
     }
@@ -677,12 +696,8 @@ pub async fn run_backup(
     // Direct-write: the snapshot lands on the user's own targets, never on
     // the service bucket. Zero targets = fork §4 "save zip locally": the
     // portable set is held in memory for one download, nothing is persisted.
-    let targets = crate::target::repo::list_targets_for_user(&sql, user_id).await;
-    let targets = match targets {
-        Ok(t) => t,
-        Err(e) => fail!(format!("Failed to list backup targets: {e}")),
-    };
-    if targets.is_empty() {
+    // (Target ids come from the lock-time query above — same list we hold.)
+    if target_ids.is_empty() {
         let manifest_bytes = serde_json::to_vec_pretty(&manifest).unwrap_or_default();
         match crate::restore::build_portable_zip_in_memory(
             &manifest,

@@ -308,6 +308,11 @@ pub async fn delete_snapshot(
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    if crate::locks::global().is_restoring().await {
+        return Err(ApiError::Conflict(
+            "a restore is running; snapshot deletion must wait".into(),
+        ));
+    }
     if id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(ApiError::BadRequest("invalid snapshot id".into()));
     }
@@ -408,6 +413,9 @@ pub async fn restore_snapshot(
             crate::locks::LockError::BackupBusy => {
                 ApiError::Conflict("a backup is still running; retry shortly".into())
             }
+            crate::locks::LockError::TargetBusy(_) => {
+                ApiError::Conflict("a backup is still running; retry shortly".into())
+            }
         })?;
     let body = body.map(|b| b.0).unwrap_or_default();
     let bytes =
@@ -474,6 +482,9 @@ pub async fn restore_upload(
                 ApiError::Conflict("another restore is already running".into())
             }
             crate::locks::LockError::BackupBusy => {
+                ApiError::Conflict("a backup is still running; retry shortly".into())
+            }
+            crate::locks::LockError::TargetBusy(_) => {
                 ApiError::Conflict("a backup is still running; retry shortly".into())
             }
         })?;

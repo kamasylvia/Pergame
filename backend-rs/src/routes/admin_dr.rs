@@ -813,6 +813,11 @@ pub async fn empty_target(
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
+    if crate::locks::global().is_restoring().await {
+        return Err(ApiError::Conflict(
+            "a restore is running; target emptying must wait".into(),
+        ));
+    }
     let deleted = target_repo::empty_target(&state.db, id).await?;
     Ok(ApiOk::ok(json!({ "deleted_objects": deleted })))
 }
