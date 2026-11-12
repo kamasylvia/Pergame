@@ -1,13 +1,11 @@
 <template>
-  <svg xmlns="http://www.w3.org/2000/svg" width="50" viewBox="0 0 164.000000 160.000000" preserveAspectRatio="xMidYMid meet">
-    <g transform="translate(0.000000,160.000000) scale(0.100000,-0.100000)" :fill="fill || 'var(--text-body)'" stroke="none">
-      <path
-        d="M688 1190 c-21 -16 -243 -392 -313 -529 -35 -70 15 -151 94 -151 39 0 87 30 236 146 124 97 256 135 352 101 24 -8 41 -12 39 -8 -72 136 -246 427 -264 441 -34 27 -110 27 -144 0z"
-      />
-      <path
-        d="M921 729 c-24 -4 -64 -18 -89 -30 -36 -18 -42 -24 -31 -33 8 -6 51 -38 94 -72 44 -33 90 -66 102 -72 86 -46 189 41 152 129 -23 57 -138 96 -228 78z"
-      />
-    </g>
+  <!-- Pergame brand mark: abstract P. Same path as public/Logo/Pergame-logo-*.svg, cropped viewBox. -->
+  <svg xmlns="http://www.w3.org/2000/svg" width="32" viewBox="140 88 226 336" preserveAspectRatio="xMidYMid meet">
+    <path
+      :fill="fill || 'var(--text-body)'"
+      fill-rule="evenodd"
+      d="M150 128 A30 30 0 0 1 210 128 L210 384 A30 30 0 0 1 150 384 Z M178 98 C288 98 356 136 356 205 C356 274 288 312 178 312 Z M254 170 C236 170 222 184 222 202 C222 220 236 234 254 234 L288 234 C306 234 318 220 318 202 C318 184 306 170 288 170 Z"
+    />
   </svg>
 </template>
 
