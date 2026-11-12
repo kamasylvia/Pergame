@@ -57,6 +57,12 @@ pub struct BackupStats {
     pub total_links: i64,
     pub total_files: i64,
     pub total_size_bytes: i64,
+    #[serde(default)]
+    pub total_permissions: i64,
+    #[serde(default)]
+    pub total_invitations: i64,
+    #[serde(default)]
+    pub total_trashed: i64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skipped_files: Vec<SkippedFile>,
 }
@@ -407,6 +413,61 @@ pub async fn run_backup(
             .unwrap_or_default(),
         ));
     }
+    // ---------------- permissions + invitations (self-owned only) --------
+    // Permissions store (node_id, grantee_username, permission): usernames,
+    // not user ids — grantee ids would dangle cross-instance and waste
+    // bytes. Restore resolves usernames back to local users, skipping
+    // unknown ones. Invitations are self-contained rows (the code is the
+    // identity), exported whole.
+    if options.include_documents {
+        #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+        struct PermissionBackup {
+            node_id: String,
+            grantee: String,
+            permission: i32,
+            created_timestamp: i64,
+        }
+        let permissions: Vec<PermissionBackup> = sqlx::query_as::<_, PermissionBackup>(
+            "SELECT p.node_id::text AS node_id, u.username AS grantee, p.permission, \
+             p.created_timestamp \
+             FROM permissions p \
+             JOIN nodes n ON n.id = p.node_id \
+             JOIN users u ON u.id = p.user_id \
+             WHERE n.user_id = $1 AND n.deleted_at IS NULL ORDER BY p.node_id",
+        )
+        .bind(user_id)
+        .fetch_all(&sql)
+        .await
+        .unwrap_or_default();
+        stats.total_permissions = permissions.len() as i64;
+        members.push((
+            "permissions.json".into(),
+            serde_json::to_vec_pretty(&permissions).unwrap_or_default(),
+        ));
+
+        #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+        struct InvitationBackup {
+            invitation_code: String,
+            permission_level: i32,
+            node_id: String,
+            created_timestamp: i64,
+        }
+        let invitations: Vec<InvitationBackup> = sqlx::query_as::<_, InvitationBackup>(
+            "SELECT ni.invitation_code, ni.permission_level, ni.node_id::text AS node_id, \
+             ni.created_timestamp \
+             FROM node_invitations ni JOIN nodes n ON n.id = ni.node_id \
+             WHERE n.user_id = $1 AND n.deleted_at IS NULL ORDER BY ni.node_id",
+        )
+        .bind(user_id)
+        .fetch_all(&sql)
+        .await
+        .unwrap_or_default();
+        stats.total_invitations = invitations.len() as i64;
+        members.push((
+            "invitations.json".into(),
+            serde_json::to_vec_pretty(&invitations).unwrap_or_default(),
+        ));
+    }
     if store.is_cancelled(&job_id) {
         return;
     }
@@ -495,7 +556,85 @@ pub async fn run_backup(
         ));
     }
 
-    // ---------------- manifest + blobs upload ----------------
+    // ---------------- trash.json (soft-deleted nodes, merge on restore) --
+    // Live documents.json stays live-only; trashed rows ride separately so
+    // restore can replace live data while merging trash (never clobbering
+    // a node the user already recovered).
+    if options.include_documents {
+        #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+        struct TrashNodeBackup {
+            id: Uuid,
+            user_id: Uuid,
+            parent_id: Option<Uuid>,
+            name: String,
+            description: Option<String>,
+            tags: Option<String>,
+            role: i32,
+            color: Option<i32>,
+            icon: Option<String>,
+            thumbnail: Option<String>,
+            theme: Option<String>,
+            accessibility: Option<i32>,
+            access: i32,
+            display: Option<i32>,
+            #[serde(rename = "order")]
+            #[sqlx(rename = "node_order")]
+            node_order: Option<i32>,
+            content: Option<String>,
+            content_compiled: Option<String>,
+            size: Option<i64>,
+            metadata: Option<serde_json::Value>,
+            created_timestamp: i64,
+            updated_timestamp: i64,
+            deleted_at: i64,
+        }
+        let trashed: Vec<TrashNodeBackup> = sqlx::query_as::<_, TrashNodeBackup>(
+            "SELECT id, user_id, parent_id, name, description, tags, role, color, icon, thumbnail, \
+             theme, accessibility, access, display, \"order\" AS node_order, content, content_compiled, size, \
+             metadata, created_timestamp, updated_timestamp, deleted_at FROM nodes WHERE user_id = $1 \
+             AND deleted_at IS NOT NULL",
+        )
+        .bind(user_id)
+        .fetch_all(&sql)
+        .await
+        .unwrap_or_default();
+        stats.total_trashed = trashed.len() as i64;
+        if !trashed.is_empty() {
+            members.push((
+                "trash.json".into(),
+                serde_json::to_vec_pretty(&json!({ "nodes": trashed })).unwrap_or_default(),
+            ));
+        }
+    }
+
+    // ---------------- profile.json (display fields only) ------------------
+    // No credentials, no role/type: restoring a profile must never change
+    // who you are or what you can do — only how your name looks.
+    if options.include_settings {
+        #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+        struct ProfileBackup {
+            username: String,
+            firstname: Option<String>,
+            lastname: Option<String>,
+            avatar: Option<String>,
+            email: Option<String>,
+            created_timestamp: i64,
+        }
+        if let Ok(Some(profile)) =
+            sqlx::query_as::<_, ProfileBackup>(
+                "SELECT username, firstname, lastname, avatar, email, created_timestamp \
+                 FROM users WHERE id = $1",
+            )
+            .bind(user_id)
+            .fetch_optional(&sql)
+            .await
+        {
+            members.push((
+                "profile.json".into(),
+                serde_json::to_vec_pretty(&profile).unwrap_or_default(),
+            ));
+        }
+    }
     let snapshot_id = crate::auth::service::now_ms();
     let manifest = BackupManifest {
         version: BACKUP_VERSION.into(),
