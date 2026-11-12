@@ -24,7 +24,17 @@ export default defineEventHandler(async (event) => {
   if (path === "/api" || path.startsWith("/api/")) {
     const target = cfg.public.apiProxyTarget;
     if (!target) return; // proxy disabled — fall through to normal handling
-    return proxyRequest(event, `${target}${path}`);
+    // h3's `getProxyRequestHeaders` lists `accept` as ignored, so the
+    // upstream only ever saw undici's `*/*`. That is fatal for content
+    // negotiation the API does care about: `/api/mcp` answers 406 unless the
+    // client accepts both application/json and text/event-stream. Forward the
+    // client's accept explicitly (it wins over the merged defaults).
+    const accept = event.node.req.headers.accept;
+    return proxyRequest(
+      event,
+      `${target}${path}`,
+      accept ? { headers: { accept } } : undefined,
+    );
   }
 
   const cdnTarget = cfg.public.cdnProxyTarget;

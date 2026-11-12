@@ -105,3 +105,10 @@
 - **`Router::merge` 会把被合并 router 的 fallback 一起带过来**:MCP 曾用 `Router::new().nest_service("/api/mcp", svc).layer(bearer)` 单独构造后 `merge` 进主 router → **所有未知 `/api/*` 路径变成 MCP 的 401**(本该 404)。正确做法 = 把 `nest_service` 直接写在主 router 链上(要在 `with_state` 之前),鉴权 layer 挂在全局但**自己按路径放行**(`is_mcp_path`),与 `read_only_middleware` 同款。
 - **验证路由改名必须区分「路由不存在」与「路由存在但要求鉴权」**:未带凭证时两者都可能 401(全局 extractor 先跑)。有效信号 = 带普通用户 cookie 打 admin 路由:**403 = 路由在、门禁在**;404 = 路由没了。GET 打 POST-only 路由给 405,同属「路由存在」证据。
 - **删子系统后残留的名字也是 bug 面**:`/api/admin/dr-backup/*` 在边车删除后仍存活 4 天,`/backup-users` 这种重复词也随之;改名 = 路由 + 模块文件 + 前端 3 处 + 测试 + 豁免表 + 文档注释一次性换,别留 alias(自己唯一的调用方,无兼容负担)。
+
+## 2026-11-12 MCP 走前端同源代理 406(h3 丢 accept)
+
+- **h3 1.15 的 `getProxyRequestHeaders` 把 `accept` 列入 `ignoredHeaders` 直接剥掉**,上游 fetch 于是只带 undici 默认 `*/*`。对普通 JSON 接口无感,但 `/api/mcp` 的 streamable HTTP **强制要求客户端同时接受 `application/json` 与 `text/event-stream`**,否则 406 `Client must accept both...`。生产部署正是「浏览器/客户端只连前端端口,backend 不发布」,所以 MCP 上线即挂 —— 只有把请求真的走一遍前端才发现。
+- 修法:`proxyRequest(event, target, { headers: { accept: <原值> } })`(显式 opts.headers 覆盖 h3 的剥离)。
+- 教训:**「本地直连后端 200」不等于「用户路径可用」**,验证要走真实入口(Nitro 代理 / 反代),尤其是依赖内容协商或流式的端点。
+- 附带确认:UI 端到端可用 —— 建 token → 明文一次性展示 → 列表显示 `last_used`(MCP 调用后刷新)→ 吊销 → 同 token 立刻 401;`lint:css` 与 typecheck 仍全绿。
