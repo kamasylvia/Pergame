@@ -162,12 +162,14 @@ impl BackupStore {
     }
 }
 
-/// Optional passphrase carrier for snapshot read paths (restore / download /
-/// preview): encrypted snapshots need it, plain ones ignore it.
+/// Restore request body: passphrase unlocks encrypted snapshots; force
+/// confirms overwriting a non-empty workspace (fork §5: preview first).
 #[derive(Debug, Deserialize, Default)]
 pub struct PassphraseBody {
     #[serde(default)]
     pub passphrase: Option<String>,
+    #[serde(default)]
+    pub force: bool,
 }
 
 /// Loads a snapshot as restorable zip bytes from the first reachable target,
@@ -407,13 +409,15 @@ pub async fn restore_snapshot(
                 ApiError::Conflict("a backup is still running; retry shortly".into())
             }
         })?;
-    let passphrase = body.and_then(|b| b.0.passphrase);
-    let bytes = load_snapshot_bytes(&state.db, auth.user_id(), &id, passphrase.as_deref()).await?;
+    let body = body.map(|b| b.0).unwrap_or_default();
+    let bytes =
+        load_snapshot_bytes(&state.db, auth.user_id(), &id, body.passphrase.as_deref()).await?;
     let mut report = crate::restore::restore_from_zip(
         state.db.clone(),
         Some(storage.clone()),
         auth.user_id(),
         bytes,
+        body.force,
     )
     .await?;
     if let Some(safety_id) = safety_snapshot(&state, auth.user_id()).await {
@@ -425,25 +429,35 @@ pub async fn restore_snapshot(
 }
 
 /// POST /backup/restore/upload — restore from an uploaded backup zip
-/// (multipart field "file"; ≤256MB body limit on this route).
+/// (multipart fields "file" + optional "force=true"; ≤256MB body limit).
 pub async fn restore_upload(
     State(state): State<AppState>,
     auth: AuthUser,
     mut multipart: Multipart,
 ) -> Result<ApiOk<crate::restore::RestoreReport>, ApiError> {
     let mut bytes: Option<Vec<u8>> = None;
+    let mut force = false;
     while let Some(field) = multipart
         .next_field()
         .await
         .map_err(|e| ApiError::BadRequest(format!("multipart: {e}")))?
     {
-        if field.name() == Some("file") {
-            let data = field
-                .bytes()
-                .await
-                .map_err(|e| ApiError::BadRequest(format!("file read: {e}")))?;
-            bytes = Some(data.to_vec());
-            break;
+        match field.name() {
+            Some("file") => {
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| ApiError::BadRequest(format!("file read: {e}")))?;
+                bytes = Some(data.to_vec());
+            }
+            Some("force") => {
+                force = field
+                    .text()
+                    .await
+                    .map(|t| t.trim().eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+            }
+            _ => {}
         }
     }
     let mut bytes = bytes.ok_or(ApiError::BadRequest(
@@ -472,6 +486,7 @@ pub async fn restore_upload(
         state.storage.clone(),
         auth.user_id(),
         bytes,
+        force,
     )
     .await?;
     Ok(ApiOk::ok(report))

@@ -28,6 +28,13 @@ pub struct RestoreReport {
     pub files: usize,
     pub files_skipped: Vec<String>,
     pub settings: bool,
+    pub permissions: usize,
+    pub permissions_skipped: Vec<String>,
+    pub invitations: usize,
+    pub invitations_skipped: Vec<String>,
+    pub trashed: usize,
+    pub trashed_skipped: Vec<String>,
+    pub profile: bool,
     pub warnings: Vec<String>,
 }
 
@@ -69,7 +76,24 @@ pub async fn restore_from_zip(
     storage: Option<S3Storage>,
     user_id: Uuid,
     bytes: Vec<u8>,
+    force: bool,
 ) -> Result<RestoreReport, ApiError> {
+    // Fork §5 parity: refuse to overwrite a non-empty workspace unless the
+    // caller explicitly forces it (after seeing the dry-run preview). Trash
+    // does not count — restoring over trash is always allowed.
+    if !force {
+        let (live,): (i64,) =
+            sqlx::query_as("SELECT count(*) FROM nodes WHERE user_id = $1 AND deleted_at IS NULL")
+                .bind(user_id)
+                .fetch_one(&sql)
+                .await
+                .unwrap_or((0,));
+        if live > 0 {
+            return Err(ApiError::BadRequest(format!(
+                "workspace has {live} live node(s); preview the restore, then retry with force to overwrite"
+            )));
+        }
+    }
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = ZipArchive::new(cursor)
         .map_err(|e| ApiError::BadRequest(format!("invalid zip archive: {e}")))?;
@@ -149,6 +173,45 @@ pub async fn restore_from_zip(
         ),
         _ => return Err(ApiError::BadRequest("documents.json shape invalid".into())),
     };
+
+    // ---- optional members (absent in older archives: skip silently) ----
+    let read_member =
+        |archive: &mut ZipArchive<std::io::Cursor<Vec<u8>>>, name: &str| -> Vec<Value> {
+            let mut f = match archive.by_name(name) {
+                Ok(f) => f,
+                Err(_) => return Vec::new(),
+            };
+            if f.size() > MAX_ENTRY_BYTES {
+                return Vec::new();
+            }
+            let mut s = String::new();
+            use std::io::Read as _;
+            if f.read_to_string(&mut s).is_err() {
+                return Vec::new();
+            }
+            match serde_json::from_str::<Value>(&s) {
+                Ok(Value::Array(arr)) => arr,
+                Ok(Value::Object(obj)) if name == "trash.json" => obj
+                    .get("nodes")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            }
+        };
+    let permissions_raw = read_member(&mut archive, "permissions.json");
+    let invitations_raw = read_member(&mut archive, "invitations.json");
+    let trash_raw = read_member(&mut archive, "trash.json");
+    let profile_raw: Option<Value> = (|| {
+        let mut f = archive.by_name("profile.json").ok()?;
+        if f.size() > MAX_ENTRY_BYTES {
+            return None;
+        }
+        let mut s = String::new();
+        use std::io::Read as _;
+        f.read_to_string(&mut s).ok()?;
+        serde_json::from_str(&s).ok()
+    })();
 
     let mut report = RestoreReport::default();
     report.warnings.append(&mut warnings);
@@ -270,6 +333,156 @@ pub async fn restore_from_zip(
         report.links += 1;
     }
 
+    // ---- permissions: node must be in the archive; grantee resolved by
+    // username (unknown users skipped, never fabricated). ON CONFLICT skips
+    // duplicates inside the archive itself.
+    {
+        let mut user_cache: std::collections::HashMap<String, Option<Uuid>> =
+            std::collections::HashMap::new();
+        for p in &permissions_raw {
+            let (Some(node_id), Some(grantee), level) = (
+                as_uuid(p.get("node_id")),
+                as_string(p.get("grantee")),
+                as_i64(p.get("permission")).unwrap_or(1) as i32,
+            ) else {
+                report.permissions_skipped.push("missing fields".into());
+                continue;
+            };
+            if !node_ids.contains(&node_id) {
+                report
+                    .permissions_skipped
+                    .push(format!("{grantee}:node not in archive"));
+                continue;
+            }
+            let grantee_id = match user_cache.get(&grantee) {
+                Some(cached) => *cached,
+                None => {
+                    let found: Option<(Uuid,)> =
+                        sqlx::query_as("SELECT id FROM users WHERE username = $1")
+                            .bind(&grantee)
+                            .fetch_optional(&mut *tx)
+                            .await
+                            .unwrap_or(None);
+                    let id = found.map(|r| r.0);
+                    user_cache.insert(grantee.clone(), id);
+                    id
+                }
+            };
+            let Some(grantee_id) = grantee_id else {
+                report
+                    .permissions_skipped
+                    .push(format!("{grantee}:unknown user"));
+                continue;
+            };
+            let inserted = sqlx::query(
+                r#"INSERT INTO permissions (id, node_id, user_id, permission, created_timestamp)
+                   VALUES ($1,$2,$3,$4,$5) ON CONFLICT (node_id, user_id) DO NOTHING"#,
+            )
+            .bind(crate::types::new_id())
+            .bind(node_id)
+            .bind(grantee_id)
+            .bind(level)
+            .bind(as_i64(p.get("created_timestamp")).unwrap_or(0))
+            .execute(&mut *tx)
+            .await
+            .map(|r| r.rows_affected())
+            .unwrap_or(0);
+            if inserted == 0 {
+                report
+                    .permissions_skipped
+                    .push(format!("{grantee}:duplicate"));
+            } else {
+                report.permissions += 1;
+            }
+        }
+    }
+
+    // ---- invitations: self-contained rows, deduped by code. A conflicting
+    // code means the same invitation already exists — skip, the old code
+    // stays valid and nothing is lost.
+    for inv in &invitations_raw {
+        let (Some(code), Some(node_id)) = (
+            as_string(inv.get("invitation_code")),
+            as_uuid(inv.get("node_id")),
+        ) else {
+            report.invitations_skipped.push("missing fields".into());
+            continue;
+        };
+        if !node_ids.contains(&node_id) {
+            report
+                .invitations_skipped
+                .push(format!("{code}:node not in archive"));
+            continue;
+        }
+        let inserted = sqlx::query(
+            r#"INSERT INTO node_invitations (id, invitation_code, permission_level, node_id, created_timestamp)
+               VALUES ($1,$2,$3,$4,$5) ON CONFLICT (invitation_code) DO NOTHING"#,
+        )
+        .bind(crate::types::new_id())
+        .bind(&code)
+        .bind(as_i64(inv.get("permission_level")).unwrap_or(1) as i32)
+        .bind(node_id)
+        .bind(as_i64(inv.get("created_timestamp")).unwrap_or(0))
+        .execute(&mut *tx)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+        if inserted == 0 {
+            report.invitations_skipped.push(format!("{code}:duplicate"));
+        } else {
+            report.invitations += 1;
+        }
+    }
+
+    // ---- trash: merge, never replace. A trashed row is only inserted when
+    // its id is absent — the user may have recovered it since the snapshot.
+    for n in &trash_raw {
+        let Some(id) = as_uuid(n.get("id")) else {
+            report.trashed_skipped.push("missing id".into());
+            continue;
+        };
+        let inserted = sqlx::query(
+            r#"INSERT INTO nodes (id, user_id, parent_id, name, description, tags, role, color,
+                   icon, thumbnail, theme, accessibility, access, display, "order",
+                   content, content_compiled, size, metadata, created_timestamp, updated_timestamp,
+                   deleted_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+                       $19::jsonb,$20,$21,$22)
+               ON CONFLICT (id) DO NOTHING"#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(as_opt_uuid(n.get("parent_id")))
+        .bind(as_string(n.get("name")).unwrap_or_default())
+        .bind(opt_str!(n, "description"))
+        .bind(opt_str!(n, "tags"))
+        .bind(as_i64(n.get("role")).unwrap_or(3) as i32)
+        .bind(as_opt_i64(n.get("color")).map(|v| v as i32))
+        .bind(opt_str!(n, "icon"))
+        .bind(opt_str!(n, "thumbnail"))
+        .bind(opt_str!(n, "theme"))
+        .bind(as_opt_i64(n.get("accessibility")).map(|v| v as i32))
+        .bind(as_i64(n.get("access")).unwrap_or(0) as i32)
+        .bind(as_opt_i64(n.get("display")).map(|v| v as i32))
+        .bind(as_opt_i64(n.get("order")).map(|v| v as i32))
+        .bind(opt_str!(n, "content"))
+        .bind(opt_str!(n, "content_compiled"))
+        .bind(as_opt_i64(n.get("size")))
+        .bind(n.get("metadata").cloned().unwrap_or(Value::Null))
+        .bind(as_i64(n.get("created_timestamp")).unwrap_or(0))
+        .bind(as_i64(n.get("updated_timestamp")).unwrap_or(0))
+        .bind(as_i64(n.get("deleted_at")).unwrap_or(0))
+        .execute(&mut *tx)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+        if inserted == 0 {
+            report.trashed_skipped.push(format!("{id}:already present"));
+        } else {
+            report.trashed += 1;
+        }
+    }
+
     tx.commit()
         .await
         .map_err(ApiError::from)
@@ -310,7 +523,73 @@ pub async fn restore_from_zip(
         }
     }
 
-    // ---- files/ + files_index.json (objects back into the user's store) ----
+    // ---- profile.json: display fields only. username/email apply only when
+    // they collide with nobody else's row; role/type/password are never
+    // touched (restoring a profile must not change identity or powers).
+    if let Some(profile) = &profile_raw {
+        let username = as_string(profile.get("username")).unwrap_or_default();
+        let email = match profile.get("email") {
+            Some(Value::Null) | None => None,
+            Some(v) => v.as_str().map(|s| s.to_string()),
+        };
+        // Gate each unique field on non-collision; NULL email always applies.
+        let username_ok = if username.is_empty() {
+            false
+        } else {
+            let (taken,): (bool,) = sqlx::query_as(
+                "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id <> $2)",
+            )
+            .bind(&username)
+            .bind(user_id)
+            .fetch_one(&sql)
+            .await
+            .unwrap_or((true,));
+            !taken
+        };
+        if !username.is_empty() && !username_ok {
+            report.warnings.push(format!(
+                "profile: username '{username}' taken, kept current"
+            ));
+        }
+        let email_ok = match &email {
+            None => true,
+            Some(e) => {
+                let (taken,): (bool,) = sqlx::query_as(
+                    "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND id <> $2)",
+                )
+                .bind(e)
+                .bind(user_id)
+                .fetch_one(&sql)
+                .await
+                .unwrap_or((true,));
+                !taken
+            }
+        };
+        if let Some(e) = &email
+            && !email_ok
+        {
+            report
+                .warnings
+                .push(format!("profile: email '{e}' taken, kept current"));
+        }
+        let applied = sqlx::query(
+            "UPDATE users SET username = COALESCE($2, username), firstname = COALESCE($3, firstname), \
+             lastname = COALESCE($4, lastname), avatar = COALESCE($5, avatar), email = COALESCE($6, email), \
+             updated_timestamp = $7 WHERE id = $1",
+        )
+        .bind(user_id)
+        .bind(if username_ok { Some(username) } else { None::<String> })
+        .bind(opt_str!(profile, "firstname"))
+        .bind(opt_str!(profile, "lastname"))
+        .bind(opt_str!(profile, "avatar"))
+        .bind(if email_ok { email } else { None })
+        .bind(crate::auth::service::now_ms())
+        .execute(&sql)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+        report.profile = applied > 0;
+    }
     let files_entries: Option<Vec<Value>> = (|| {
         let mut idx_file = archive.by_name("files_index.json").ok()?;
         let mut s = String::new();
@@ -403,6 +682,13 @@ pub struct RestorePlan {
     pub incoming_files: usize,
     pub files_colliding: usize,
     pub settings_in_archive: bool,
+    pub incoming_permissions: usize,
+    pub permissions_unresolvable: usize, // node missing or grantee unknown
+    pub incoming_invitations: usize,
+    pub invitations_conflicting: usize, // code already exists
+    pub incoming_trashed: usize,
+    pub trashed_present: usize, // ids already in the live table (merge skips)
+    pub profile_in_archive: bool,
     pub warnings: Vec<String>,
 }
 
@@ -467,8 +753,26 @@ pub async fn plan_from_zip(
 
     plan.incoming_nodes = nodes.len();
     plan.incoming_links = links.len();
-    plan.settings_in_archive = archive.by_name("user_settings.json").is_ok();
 
+    // New members: permissions / invitations / trash (absent in old archives).
+    let permissions: Vec<Value> = read_member("permissions.json")
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let invitations: Vec<Value> = read_member("invitations.json")
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let trash_nodes: Vec<Value> = read_member("trash.json")
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.get("nodes").and_then(|n| n.as_array()).cloned())
+        .unwrap_or_default();
+    let settings_present = read_member("user_settings.json").is_some();
+    let profile_present = read_member("profile.json").is_some();
+    drop(read_member);
+    plan.settings_in_archive = settings_present;
+    plan.profile_in_archive = profile_present;
+    plan.incoming_permissions = permissions.len();
+    plan.incoming_invitations = invitations.len();
+    plan.incoming_trashed = trash_nodes.len();
     let mut incoming_ids = std::collections::HashSet::new();
     let mut incoming_parents_missing = 0usize;
     for n in &nodes {
@@ -578,6 +882,56 @@ pub async fn plan_from_zip(
                     plan.files_colliding += 1;
                 }
             }
+        }
+    }
+
+    // Permissions: node must be incoming, grantee must exist.
+    {
+        let (usernames,): (Vec<String>,) =
+            sqlx::query_as("SELECT COALESCE(array_agg(username), '{}') FROM users")
+                .fetch_one(&sql)
+                .await
+                .unwrap_or((Vec::new(),));
+        let known: std::collections::HashSet<&str> = usernames.iter().map(|s| s.as_str()).collect();
+        for p in &permissions {
+            let node_ok = as_uuid(p.get("node_id")).is_some_and(|id| incoming_ids.contains(&id));
+            let user_ok = p
+                .get("grantee")
+                .and_then(|v| v.as_str())
+                .is_some_and(|g| known.contains(g));
+            if !(node_ok && user_ok) {
+                plan.permissions_unresolvable += 1;
+            }
+        }
+    }
+
+    // Invitations: codes already present will be skipped on restore.
+    {
+        let (codes,): (Vec<String>,) = sqlx::query_as(
+            "SELECT COALESCE(array_agg(invitation_code), '{}') FROM node_invitations",
+        )
+        .fetch_one(&sql)
+        .await
+        .unwrap_or((Vec::new(),));
+        let existing: std::collections::HashSet<&str> = codes.iter().map(|s| s.as_str()).collect();
+        for inv in &invitations {
+            let node_ok = as_uuid(inv.get("node_id")).is_some_and(|id| incoming_ids.contains(&id));
+            let fresh = inv
+                .get("invitation_code")
+                .and_then(|v| v.as_str())
+                .is_some_and(|c| !existing.contains(c));
+            if !(node_ok && fresh) {
+                plan.invitations_conflicting += 1;
+            }
+        }
+    }
+
+    // Trash: ids already live are merge-skipped (user recovered them).
+    for n in &trash_nodes {
+        if let Some(id) = as_uuid(n.get("id"))
+            && current_set.contains(&id)
+        {
+            plan.trashed_present += 1;
         }
     }
 

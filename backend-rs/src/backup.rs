@@ -620,14 +620,13 @@ pub async fn run_backup(
             email: Option<String>,
             created_timestamp: i64,
         }
-        if let Ok(Some(profile)) =
-            sqlx::query_as::<_, ProfileBackup>(
-                "SELECT username, firstname, lastname, avatar, email, created_timestamp \
+        if let Ok(Some(profile)) = sqlx::query_as::<_, ProfileBackup>(
+            "SELECT username, firstname, lastname, avatar, email, created_timestamp \
                  FROM users WHERE id = $1",
-            )
-            .bind(user_id)
-            .fetch_optional(&sql)
-            .await
+        )
+        .bind(user_id)
+        .fetch_optional(&sql)
+        .await
         {
             members.push((
                 "profile.json".into(),
