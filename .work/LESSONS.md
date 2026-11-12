@@ -72,3 +72,12 @@
 - **用户可见的「作用域名」是多余的设计负担**:最初把 namespace 做成用户可填字段(字符集校验 + 创建后不可改的错误提示),而它的唯一用途是让多个实例在同一存储上隔离——这本来就是机器该决定的事。siyuan 的定稿是内核分配 ULID、前端完全不显示。**判据:一个字段如果用户无法据此做出更好的决策,就不该出现在表单里**。
 - ULID 的确定性部分(前 10 位时间戳)让同批创建的 id 天然有序,调试时能一眼看出创建先后;随机部分 16 位足够避免同毫秒碰撞。
 - 存量数据必须自愈:`namespace` 列引入前创建的行是空值,若不管,它们的对象会落进共享根作用域。在 `list_targets` 里做**幂等补发**(`WHERE namespace = ''`)比写一次性迁移脚本更稳——多实例部署时每台都会自我修复。
+
+## 2026-11-12 pull 遗留清理(33 commits 横跨 UUIDv7/直写/边车删除/CDN)
+
+- **破坏性重构必须带「残留扫描」收尾**:边车删除漏了 `.env.example` 3 处、`docs` 4 处、TODO 3 条;直写漏了 `storage.rs` 11 个 dead 方法 + `backup_bucket` 字段 + 模块注释。规则:删子系统后全仓 grep 其专属标识(服务名/env 前缀/桶名),代码+docs+compose+TODO 同批清。
+- **i18n 新键只翻 3 语言会炸 typecheck**:`MessageSchema = typeof en` + 各语言 `satisfies` 要求键集全等,fallbackLocale 只救运行时不救类型。5 语言同缺 20 键,CI typecheck 全红。规则:加 en 键 = 同批给 8 语言补齐(机翻+标注待校),或改用 Partial 约束。另:回填脚本注意逗号——notif 块尾 `,,` 让 5 文件齐报 TS1136。
+- **Nuxt `imports.dirs: ['stores/**']` 让 stores 下类型全局可用**:`ANode` 真身在 `stores/preferences/constants.ts`,CloneTo 从 `~/stores` barrel 显式 import 反而错( barrel 只 re-export 4 个模块)。用裸 `ANode` 即可,删显式 import。
+- **`APIResult.result` 是 optional**:`makeRequest<T>` 成功也可能无 result,赋值给非空 ref 必须 `&& plan.result` 守卫。360/385 行用 `?.` 属同类已安全写法。
+- **CI 只在 backend-rs/** 变更时跑 Rust 门**:fmt/clippy 红只在碰 Rust 文件的 push 上暴露;`drop(non-Drop)` warning 在 `-D warnings` 下即失败。本地门 = `cargo fmt --check && cargo clippy --all-targets && cargo test`。
+- **`set_public_policy` 随 CDN 鉴权读失去存在理由**:桶保持 Private,启动时调 PutBucketPolicy 在 QuObjects 上每启一 warn。删函数 + docs 同批改(CDN_PROXY_TARGET 指向 backend)。

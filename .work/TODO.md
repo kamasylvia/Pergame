@@ -33,30 +33,30 @@
 > 认证/2FA/OIDC/节点/软链接/回收站/快照/还原/fan-out/只读锁均已对真实 pg + 对象存储活测。
 > 部署步骤 = 思源 `Pergame 外部基础设施部署指南`(id 20261111085400-74zeey6);旧版指南已删。
 
-**三个拦验收不拦测试的缺口:**
+**拦验收不拦测试的缺口:**
 
-1. **external compose 已跑通;自包含版仍未跑过**——2026-11-12:v0.0.4 三镜像在 QNAP Portainer stack 42 上常驻(backend/frontend/dr-backup 全 `running`),health、静态资源、SSR 已核验;此前「镜像构建从未验证」随 v0.0.4 发布解除。**仍未知**:自包含版(`docker-compose.yml`,pg + RustFS 一起起)的卷挂载与 healthcheck 依赖链。
-2. **dr-backup 真实备份从未跑成**——本机无 `pg_dump`/`rclone`,只验到 job 协议 + 脚本被调用 + 错误回传;真实 dump→上传→`-l`→`-R` 一次未走。**注意**:sidecar 现已在 QNAP 常驻(连接真实 pg18),具备实跑条件。
+1. **自包含版 compose 仍未跑过**——2026-11-12:external 版随 v0.0.4→v0.0.11 在 QNAP Portainer stack 42 常驻(backend/frontend 双容器,镜像钉 tag),health/静态/SSR/备份全链/WebDAV/CDN 鉴权读均已活测。**仍未知**:自包含版(`docker-compose.yml`,pg + RustFS 一起起)的卷挂载与 healthcheck 依赖链。
+2. ~~**dr-backup 真实备份从未跑成**~~ —— **已失效(2026-11-12 快照=全备份,边车删除 `06a30906`)**:实例 DR 改由用户级快照直写 targets 覆盖,本条作废。
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 
-**明确未实现(按批次,非 bug)**:批次 A 全部(媒体播放器 / Joplin md 特性 / Obsidian 语法兼容)、MCP server、目录索引、Dataview、插件系统、Pergamena 改名。
+**明确未实现(按批次,非 bug)**:批次 A 剩余(Joplin md 特性 / Obsidian 语法兼容;媒体播放器 ✅2026-11-12)、MCP server、目录索引、Dataview、插件系统、Pergamena 改名。
 
 ### 建议测试顺序
 
-- [x] **1. compose 起全栈**:external 版(3 服务)✅ 2026-11-12 于 QNAP Portainer stack 42,镜像钉 `v0.0.4`,三容器 running,`/api/health` → `{"database":true,"status":"ok"}`。自包含版(6 服务 + build)仍待测。
-- [ ] **2. 核心 CRUD**:注册 → 登录 → 建 workspace → 写文档 → 传附件(验 CDN 链路 `/pergame/` → RustFS)。
+- [x] **1. compose 起全栈**:external 版(2 服务)✅ 2026-11-12 于 QNAP Portainer stack 42(镜像钉 tag,随 v0.0.4→v0.0.11 逐版跟进),`/api/health` → `{"database":true,"status":"ok"}`。自包含版(4 服务,pg+RustFS+backend+frontend)仍待测。
+- [ ] **2. 核心 CRUD**:注册 → 登录 → 建 workspace → 写文档 → 传附件(验 CDN 鉴权读 `/api/resources/:id/file`)。
 - [ ] **3. 回收站**:删文档 → `/dashboard/trash` 看到 → 恢复 → 回树。
 - [ ] **4. 快照全链**:建快照 → 列表 → 下载 zip(验 `meta.json`/`manifest.json`/`blobs/`)→ 改数据 → 还原(验二次确认统计 + 只读提示条)→ 上传该 zip 回灌。
 - [ ] **5. 异地目标**:建 target(S3)→ Test(可达 + 对象数)→ Sync now → 目标桶出现 `manifests/`+`blobs/` → 有对象时 Delete 被拒 → Empty 后才可删。
-- [ ] **6. 实例 DR**:配置 dr-backup.conf → Back up now → 看输出;真实目的地跑 `-l` / `-R`。
+- [ ] **6. ~~实例 DR(dr-backup)~~ 已随边车删除作废** → 改为:零 target 快照(S3 inline zip + 有效期 + token 链接下载)。
 - [ ] **7. 进阶**:2FA(enroll/verify/recovery)、OIDC(Keycloak 环境已有)、SMTP 邮件。
 
 ### 旧条目
 
 - [ ] 自托管 smoke(本机无 docker):`docker compose up --build` 后端正常启动(`S3_*` 链路)、注册/登录可用。改名后默认值已切 `pergame`(DB/桶/CDN 路径),首次起库即新名。
 - [ ] GitHub repo secrets:`MINIO_ACCESSKEY`/`MINIO_SECRETKEY` 手动改名 `S3_ACCESSKEY`/`S3_SECRETKEY`(deploy_to_prod.yml 引用已改)。
-- [ ] `scripts/dr-backup.sh` 实机验证(需 pg_dump + rclone + 真实目的地):dry-run 全链路 + 一次真实 dump/copy/prune;conf 复制自 `dr-backup.conf.example`(chmod 600)。conf 里库名/桶前缀已随改名切 `pergame-*`。还原用 `-R <source> [-t <stamp>]`(非交互加 `-y`;`-l` 列快照)。
+- [x] ~~`scripts/dr-backup.sh` 实机验证~~ —— **作废**(2026-11-12 边车删除,脚本/镜像/文档同批移除;实例 DR 由快照直写替代)。
 - [ ] push 51+ commits 到 origin(kamasylvia/Pergame)——待拍板(公开仓 push 前可按全局规则压缩重组)。(2026-11-09:首 15 个已压缩为 5 主题 commits 并推上 origin/main `6e0abd8a`;此后增量照常。)
 
 ## 维护说明
