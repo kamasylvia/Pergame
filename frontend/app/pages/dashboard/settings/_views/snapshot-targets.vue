@@ -35,7 +35,7 @@
               {{ t('settings.snapshotTargets.syncNow') }}
             </AppButton>
             <AppButton
-              v-if="isForeign(tg.id)"
+              v-if="isForeign(tg.id) && isAdmin"
               type="danger"
               small
               :disabled="busy === tg.id"
@@ -109,8 +109,8 @@
           </label>
         </div>
 
-        <!-- owning users -->
-        <fieldset class="users-box">
+        <!-- owning users (admin only; regular users always own their targets) -->
+        <fieldset v-if="isAdmin" class="users-box">
           <legend>{{ t('settings.snapshotTargets.users') }}</legend>
           <p class="hint">{{ t('settings.snapshotTargets.usersHint') }}</p>
           <label v-for="u in users" :key="u.id" class="user-row">
@@ -179,8 +179,11 @@ interface Probe {
 
 const { t } = useI18nT();
 const notifications = useNotifications();
+const userStore = useUserStore();
 
-const KINDS = ['s3', 'webdav'] as unknown as never[];
+/// Admins manage every target + user assignment; regular users only see
+/// their own targets (the API enforces ownership either way).
+const isAdmin = computed(() => userStore.user?.role === 2);
 
 const targets = ref<Target[]>([]);
 const users = ref<Array<{ id: string; username: string; email?: string }>>([]);
@@ -244,12 +247,13 @@ const bucketLabel = computed(() => t('settings.snapshotTargets.bucket'));
 const bucketHint = 'pergame-offsite';
 
 onMounted(async () => {
-  await Promise.all([load(), loadUsers()]);
+  await load();
+  if (isAdmin.value) await loadUsers();
 });
 
 async function load() {
   loading.value = true;
-  const result = await makeRequest<Target[]>('admin/dr-backup/targets', 'GET', {});
+  const result = await makeRequest<Target[]>('backup/targets', 'GET', {});
   loading.value = false;
   if (result.status === 'success') {
     targets.value = result.result ?? [];
@@ -306,7 +310,7 @@ function isForeign(id: string): boolean {
 
 async function probe(tg: Target) {
   busy.value = tg.id;
-  const result = await makeRequest<Probe>(`admin/dr-backup/targets/${tg.id}/test`, 'POST', {});
+  const result = await makeRequest<Probe>(`backup/targets/${tg.id}/test`, 'POST', {});
   busy.value = '';
   if (result.status === 'success' && result.result) {
     probeResults.value = { ...probeResults.value, [tg.id]: result.result };
@@ -317,7 +321,7 @@ async function probe(tg: Target) {
 
 async function sync(tg: Target) {
   busy.value = tg.id;
-  const result = await makeRequest(`admin/dr-backup/targets/${tg.id}/sync`, 'POST', {});
+  const result = await makeRequest(`backup/targets/${tg.id}/sync`, 'POST', {});
   busy.value = '';
   if (result.status === 'success') {
     notifications.add({ type: 'success', title: t('settings.snapshotTargets.syncDone') });
@@ -331,7 +335,7 @@ async function removeTarget(tg: Target) {
   busy.value = tg.id;
   // Gate first: an unclean target refuses deletion with the reason.
   const check = await makeRequest(
-    `admin/dr-backup/targets/${tg.id}/delete-check`,
+    `backup/targets/${tg.id}/delete-check`,
     'POST',
     {},
   );
@@ -344,7 +348,7 @@ async function removeTarget(tg: Target) {
     });
     return;
   }
-  const del = await makeRequest(`admin/dr-backup/targets/${tg.id}`, 'DELETE', {});
+  const del = await makeRequest(`backup/targets/${tg.id}`, 'DELETE', {});
   busy.value = '';
   if (del.status === 'success') {
     notifications.add({ type: 'success', title: t('settings.snapshotTargets.deleted') });
@@ -431,7 +435,7 @@ async function testDraft() {
       users: form.users,
     },
   };
-  const result = await makeRequest<Probe>('admin/dr-backup/targets/probe-draft', 'POST', body);
+  const result = await makeRequest<Probe>('backup/targets/probe-draft', 'POST', body);
   testing.value = false;
   if (result.status === 'success' && result.result) {
     draftProbe.value = result.result;
@@ -496,8 +500,8 @@ async function save() {
     connection_token: draftProbe.value?.connection_token ?? null,
   };
   const result = editing.value
-    ? await makeRequest(`admin/dr-backup/targets/${editing.value.id}`, 'PUT', body)
-    : await makeRequest('admin/dr-backup/targets', 'POST', body);
+    ? await makeRequest(`backup/targets/${editing.value.id}`, 'PUT', body)
+    : await makeRequest('backup/targets', 'POST', body);
   saving.value = false;
   if (result.status === 'success') {
     notifications.add({ type: 'success', title: t('settings.snapshotTargets.saved') });

@@ -4,6 +4,13 @@
     <p class="page-subtitle">{{ t('settings.backups.subtitle') }}</p>
 
     <div class="main">
+      <!-- No-targets hint: snapshots package for download only -->
+      <p v-if="targetsChecked && targetCount === 0" class="hint no-targets">
+        {{ t('settings.backups.noTargetsHint') }}
+        <AppButton type="secondary" small @click="goToTargets">
+          {{ t('settings.backups.goToTargets') }}
+        </AppButton>
+      </p>
       <!-- Backup Options -->
       <div class="options-section">
         <h3>{{ t('settings.backups.options') }}</h3>
@@ -39,6 +46,11 @@
               {{ t('settings.backups.includeMetadata') }}
             </span>
           </AppCheck>
+          <label class="passphrase-row">
+            <span>{{ t('settings.backups.passphraseLabel') }}</span>
+            <input v-model="options.passphrase" class="memo-input" type="password" autocomplete="new-password" />
+            <small class="hint">{{ t('settings.backups.passphraseHint') }}</small>
+          </label>
         </div>
       </div>
 
@@ -116,6 +128,7 @@
             <span class="snapshot-date">
               {{ numericDate(snap.last_modified) }}
               <small v-if="snap.memo" class="snapshot-memo">{{ snap.memo }}</small>
+              <small v-if="snap.encrypted" class="snapshot-encrypted" :title="t('settings.backups.encryptedBadge')">🔒</small>
             </span>
             <span class="snapshot-size">{{ fmtSize(snap.size) }}</span>
             <span class="snapshot-actions">
@@ -150,6 +163,26 @@
           <p v-if="pendingPlan && pendingPlan.files_colliding > 0" class="restore-plan">
             {{ t('settings.backups.planFiles', { count: pendingPlan.files_colliding }) }}
           </p>
+          <p v-if="pendingPlan && pendingPlan.incoming_permissions > 0" class="restore-plan">
+            {{ t('settings.backups.planPermissions', { count: pendingPlan.incoming_permissions, unresolvable: pendingPlan.permissions_unresolvable }) }}
+          </p>
+          <p v-if="pendingPlan && pendingPlan.incoming_invitations > 0" class="restore-plan">
+            {{ t('settings.backups.planInvitations', { count: pendingPlan.incoming_invitations, conflicting: pendingPlan.invitations_conflicting }) }}
+          </p>
+          <p v-if="pendingPlan && pendingPlan.incoming_trashed > 0" class="restore-plan">
+            {{ t('settings.backups.planTrash', { count: pendingPlan.incoming_trashed, present: pendingPlan.trashed_present }) }}
+          </p>
+          <p v-if="pendingPlan && pendingPlan.profile_in_archive" class="restore-plan">
+            {{ t('settings.backups.planProfile') }}
+          </p>
+          <label v-if="pendingSnapEncrypted" class="passphrase-row">
+            <span>{{ t('settings.backups.restorePassphraseLabel') }}</span>
+            <input v-model="restorePassphrase" class="memo-input" type="password" autocomplete="off" />
+          </label>
+          <label class="force-row">
+            <input v-model="restoreForce" type="checkbox" />
+            <span>{{ t('settings.backups.forceConfirm') }}</span>
+          </label>
         </div>
 
         <!-- Upload restore -->
@@ -195,6 +228,7 @@ const options = reactive({
   includeSettings: true,
   includeMetadata: true,
   memo: '',
+  passphrase: '',
 });
 
 const { t } = useI18nT();
@@ -209,6 +243,7 @@ interface BackupSnapshot {
   size: number;
   last_modified: number;
   memo?: string;
+  encrypted?: boolean;
 }
 
 interface RestorePlan {
@@ -218,6 +253,13 @@ interface RestorePlan {
   nodes_added: number;
   nodes_removed: number;
   files_colliding: number;
+  incoming_permissions: number;
+  permissions_unresolvable: number;
+  incoming_invitations: number;
+  invitations_conflicting: number;
+  incoming_trashed: number;
+  trashed_present: number;
+  profile_in_archive: boolean;
   warnings?: string[];
 }
 
@@ -226,7 +268,12 @@ const pendingPlan = ref<RestorePlan | null>(null);
 const snapshots = ref<BackupSnapshot[]>([]);
 const loadingSnapshots = ref(false);
 const pendingRestore = ref<string | null>(null);
+const restorePassphrase = ref('');
+const restoreForce = ref(false);
+const pendingSnapEncrypted = computed(() => snapshots.value.find(s => s.id === pendingRestore.value)?.encrypted === true);
 const isRestoring = ref(false);
+const targetCount = ref(-1);
+const targetsChecked = computed(() => targetCount.value >= 0);
 const uploadInput = ref<HTMLInputElement | null>(null);
 
 let restoreConfirmTimer: ReturnType<typeof setTimeout> | null = null;
@@ -276,7 +323,9 @@ async function restoreSnapshot(snap: BackupSnapshot) {
       pendingPlan.value = null;
     }, 8000);
     // Dry-run plan while the user reads the warning (best-effort).
-    const plan = await makeRequest<RestorePlan>(`backup/snapshots/${snap.id}/preview`, 'POST', {});
+    const plan = await makeRequest<RestorePlan>(`backup/snapshots/${snap.id}/preview`, 'POST', {
+      passphrase: restorePassphrase.value.trim() || undefined,
+    });
     if (pendingRestore.value === snap.id && plan.status === 'success') {
       pendingPlan.value = plan.result;
     }
@@ -287,17 +336,20 @@ async function restoreSnapshot(snap: BackupSnapshot) {
   pendingRestore.value = null;
   isRestoring.value = true;
   try {
-    const result = await makeRequest<{ nodes: number; links: number; files: number; links_skipped: string[]; files_skipped: string[] }>(
+    const result = await makeRequest<{ nodes: number; links: number; files: number; permissions: number; invitations: number; trashed: number; links_skipped: string[]; files_skipped: string[] }>(
       `backup/snapshots/${snap.id}/restore`,
       'POST',
-      {},
+      {
+        passphrase: restorePassphrase.value.trim() || undefined,
+        force: restoreForce.value,
+      },
     );
     if (result.status === 'success') {
       const r = result.result;
       notifications.add({
         type: 'success',
         title: t('settings.backups.restored'),
-        message: t('settings.backups.restoredDetail', { nodes: r?.nodes ?? 0, links: r?.links ?? 0, files: r?.files ?? 0 }),
+        message: t('settings.backups.restoredDetailFull', { nodes: r?.nodes ?? 0, links: r?.links ?? 0, files: r?.files ?? 0, permissions: r?.permissions ?? 0, invitations: r?.invitations ?? 0, trashed: r?.trashed ?? 0 }),
       });
     } else {
       notifications.add({ type: 'error', title: t('settings.backups.restoreFailed'), message: result.message });
@@ -315,6 +367,7 @@ async function onRestoreFile(event: Event) {
   try {
     const form = new FormData();
     form.append('file', file);
+    form.append('force', 'true');
     const result = await makeRequest<{ nodes: number; links: number; files: number }>('backup/restore/upload', 'POST', form);
     if (result.status === 'success') {
       const r = result.result;
@@ -369,6 +422,7 @@ async function startBackup() {
     include_settings: options.includeSettings,
     include_metadata: options.includeMetadata,
     memo: options.memo.trim() || undefined,
+    passphrase: options.passphrase.trim() || undefined,
   });
 
   if (result.status !== 'success' || !result.result?.job_id) {
@@ -455,9 +509,21 @@ function error(message?: string, error?: string) {
   };
 }
 
-onMounted(() => {
-  loadSnapshots();
+onMounted(async () => {
+  await loadSnapshots();
+  try {
+    const result = await makeRequest<unknown[]>('backup/targets', 'GET', {});
+    targetCount.value = result.status === 'success' ? (result.result ?? []).length : 0;
+  } catch {
+    targetCount.value = 0;
+  }
 });
+
+function goToTargets() {
+  const router = useRouter();
+  const route = useRoute();
+  router.push({ query: { ...route.query, p: 'snapshotTargets' } });
+}
 
 // Cleanup on unmount
 onUnmounted(() => {
@@ -499,6 +565,33 @@ onUnmounted(() => {
   margin-left: 0.5rem;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.snapshot-encrypted {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.no-targets {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.passphrase-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.force-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .restore-warning p {

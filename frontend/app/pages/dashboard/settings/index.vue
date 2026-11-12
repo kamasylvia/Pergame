@@ -128,6 +128,7 @@ const navSections = computed<NavSection[]>(() => [
     items: [
       { key: 'snippets', label: t('settings.pages.snippets'), icon: 'snippets' },
       { key: 'backup', label: t('settings.pages.backup'), icon: 'backup' },
+      { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
       { key: 'advanced', label: t('settings.pages.advanced'), icon: 'build' },
       { key: 'teams', label: t('settings.pages.teams'), icon: 'users' },
     ],
@@ -138,7 +139,6 @@ const navSections = computed<NavSection[]>(() => [
           title: t('settings.nav.admin'),
           items: [
             { key: 'instanceDr', label: t('settings.pages.instanceDr'), icon: 'backup' },
-            { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
           ],
         },
       ]
