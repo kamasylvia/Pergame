@@ -125,7 +125,7 @@
           <LoaderSpinner />
         </p>
         <p v-else-if="snapshots.length === 0" class="snapshot-empty">
-          {{ t('settings.backups.snapshotsEmpty') }}
+          {{ targetCount === 0 ? t('settings.backups.snapshotsEmptyNoTargets') : t('settings.backups.snapshotsEmpty') }}
         </p>
         <ul v-else class="snapshot-list">
           <li v-for="snap in snapshots" :key="snap.id" class="snapshot-row">

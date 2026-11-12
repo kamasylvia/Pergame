@@ -154,6 +154,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   height: 50px;
+  margin-bottom: 8px;
 
   .btn {
     width: 30px;
