@@ -78,3 +78,8 @@
 ## 15. AppButton disabled 全站失效(v0.0.9 修)
 
 - 组件不透传 disabled,11 处调用全是假禁态。target 保存门禁(后端 409 一直在,前端拦不住)。
+
+## 16. 下载链接 token 化(v0.0.10)
+
+- 现象:复制下载链接稍后打开 → 401。根因:链接依赖 session cookie,access token 30 分钟过期,裸导航不 refresh。
+- 修:job 完成时生成 32hex token 进 sidecar,URL 带 ?token=,路由验 token 不验 session(可选 AuthUser)。错 token/过期/已下载统一 404(防枚举)。

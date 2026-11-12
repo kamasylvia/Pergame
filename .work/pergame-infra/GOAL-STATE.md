@@ -78,6 +78,8 @@
 
 ### 最近完成的批次(供考古)
 
+- **v0.0.8→v0.0.10 发版 + WebDAV 活测(2026-11-12)**:v0.0.8(WebDAV probe 双 prefix 修 + KINDS 下拉 + status 字段);v0.0.9 未单独发(直接合入 v0.0.10);v0.0.10(token 下载 + S3 zip + 有效期 + UI 修)。WebDAV 全链在 QNAP DAV(home)跑通,抓 4 bug:MKCOL 不查 status、list 裸 tail、self-skip 恒失败、status 未派生。下载 401 根因 = cookie 过期,改 token 授权。测试账号/目录全清。
+
 - **v0.0.5→v0.0.7 发版 + 部署(2026-11-12)**:
   - v0.0.5 首发:backend 起不来——清库只清了数据,旧 BIGINT 表结构还在,新 0001 建表撞名。删全表后 migration 重跑通过。教训:清库 = 删表,不止删行。
   - v0.0.6 hotfix:backup_targets INSERT 占位符错位(旧 bug,创建 target 500)+ target id 改 v7。
