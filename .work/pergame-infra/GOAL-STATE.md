@@ -59,10 +59,12 @@
 ### 下一步动作(按序)
 
 1. ~~**回收站机制**~~ ✅ **已完成(2026-11-09)**:`migration 0005` + repo 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + 前端 `/dashboard/trash` + 保留期 sweeper(`TRASH_RETENTION_DAYS` 默认 30)。spec = `features/trash.md`。**待活环境验证**:集成用例 `trash_lifecycle`(`cargo test --test integration -- --ignored`)。
-2. **镜像发布 → NAS 部署**(2026-11-10 定型的部署模型):镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`;backend/sidecar 双架构,frontend 仅 amd64,见最近批次),**NAS 只 pull 不 build**。**前置**:必须先在 GitHub 打一个 Release 触发 workflow,否则 `docker compose pull` 拉不到镜像(当前 GHCR 上还没有这三镜像)。
-   - 已验证:backend 镜像本地构建后在真 compose 栈(pg+rustfs)里跑通 migration/建桶/health/注册登录/快照/portable zip 下载/还原。
-   - **未验证**:前端镜像(GHCR 上不存在,本机 `bun install`+`nuxt build` 构建超时未完成)、dr-backup sidecar 镜像(同)。
-3. 部署 smoke:按思源笔记 `Pergame 外部基础设施部署指南`(id `20261111085400-74zeey6`)的清单执行;NAS 上只需 `docker-compose.external.yml`(配置全内联,不需要 .env,不需要 clone 仓库)。旧版指南(id `20261110165052-x8mgczs`,自包含 5 服务 + .env 模型)已过时,2026-11-11 经用户确认删除。
+2. **镜像发布 → NAS 部署** ✅ **已落地(2026-11-12,v0.0.4)**:镜像由 GitHub Actions 在**发布 Release 时**构建推送 GHCR(`pergame-{backend,frontend,dr-backup}`,全 amd64),**NAS 只 pull 不 build**。v0.0.4 三个镜像已构建成功并经 `ghcr.nju.edu.cn` 拉到 QNAP。
+   - **部署载体 = Portainer stack `pergame`(id 42)**,三步走完并核验:①端口 9000 API 用 Infisical `PORTAINER_URL/ACCESS_TOKEN` 直达;②`PUT /api/stacks/42?endpointId=1` 换 stack file(tag 钉 v0.0.4);③三容器全 `running` 且镜像 `v0.0.4`。活环境 = `http://qnap.elf-balance.ts.net:8200`。
+   - 核验证据:`/api/health` → `{"database":true,"status":"ok"}`;backend 日志 `database ready` / `S3 storage configured` / `listening 0.0.0.0:8201`;`/favicon.ico` 与仓库文件 md5 一致(8333B)、`/favicon-dark.ico` 同;`/Logo/Pergame-logo-light.svg` 为 512 新 P;首页 SSR HTML 含 P path;`/apple-icon-180.png` 404(死文件已删)。
+   - 前端镜像、sidecar 镜像"未验证"状态一并解除(两者均随 v0.0.4 上栈)。
+   - **仍未验证**:自包含 5 服务 compose(`docker-compose.yml`,pg + RustFS 一起起)。
+3. 部署 smoke:external 3 服务栈已在 QNAP 常驻;按思源笔记 `Pergame 外部基础设施部署指南`(id `20261111085400-74zeey6`)的剩余清单走功能项;NAS 上只需 `docker-compose.external.yml`(配置全内联,不需要 .env,不需要 clone 仓库)。旧版指南(id `20261110165052-x8mgczs`,自包含 5 服务 + .env 模型)已过时,2026-11-11 经用户确认删除。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
 5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
 
@@ -75,6 +77,14 @@
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **品牌收口 v0.0.4 + 首发 Portainer 部署(2026-11-12,`2ee12817`/`1fc7b477`,release `v0.0.4`)**:
+  - **`IconApp.vue` 换标**:此前只换了 `public/Logo/*` 与 `/icons/*`,应用内联的仍是上游 A path(hero/about/sidebar/登录/import/footer 全中招)。改为同一 evenodd P path + 紧贴 viewBox(`140 88 226 336`),调用方仍按 width 定尺寸;默认宽 50→32 保持侧栏 header 原光学尺寸,`fill` 默认 `var(--text-body)`、两个 hero 仍显式 white。
+  - **favicon 重造**:`favicon.ico`(白圆角底 + accent P,16–128 共 6 帧)、`favicon-dark.ico`(透明底白 P,16–256 共 7 帧)、`docs/public/favicon.ico` 同白底;`apple-icon-180.png`(旧 A、零引用)删除。Pillow 写 ICO 的坑:`sizes` 里超过底图像素的一律 skip,`append_images` 在不传 `sizes` 时会被默认尺寸表过滤 → 走默认尺寸表 + 足够大的底图才拿到多帧。
+  - **版本号对齐 release 线**:`frontend/package.json`、`backend-rs/Cargo.toml`(+`Cargo.lock` 根条目)0.0.1→0.0.4;About 页 `version` 直接 import package.json,此前 v0.0.3 部署仍显示 0.0.1。
+  - **external compose 钉 v0.0.4**(自包含版仍走 `${PERGAME_TAG:-latest}`),并修 sidecar 注释(v0.0.3 行配 v8.15.0 注释的自相矛盾)。
+  - **发布链**:`gh release create v0.0.4` → workflow `43129276874` 成功(build-and-push 10m54s,三个 amd64 镜像 v0.0.4 + latest)→ Portainer API 预拉镜像 + `PUT /api/stacks/42` → 3 容器重建完成,健康核验见续接点第 2 条。
+  - **运维口径**:Portainer 在 `http://qnap.elf-balance.ts.net:9000`,凭证 = Infisical DEVOPS `PORTAINER_URL`/`PORTAINER_ACCESS_TOKEN`(本机 `~/.agents/config.toml` 被 macOS TCC 拒读,改从 vault `03-Workspace/Global/.env` 取 Infisical Machine Identity 再拉);镜像预拉走 `/api/endpoints/1/docker/images/create?fromImage=…&tag=…`,避免 stack update 时卡在 pull。
 
 - **前端镜像改 amd64-only(2026-11-11,`1de5dfd2`)**:QEMU 模拟 arm64 下 `bun run build`(Nuxt bundling)永久卡死——两轮实测 amd64 ~1 分钟 DONE,arm64 在 "Bundling app" 空转 2.5h(run 42951029301)/6h(run 42932797492)后手工 cancel。workflow 里 "缓存损坏致 hang" 的旧判断是误判,`no_frontend_cache` 逃生开关一并删除(卡的是构建进程本身,不是 cache restore)。frontend 步骤只打 `linux/amd64`,backend/sidecar 保持双架构;arm64 恢复须走原生 arm64 runner,永不 QEMU。**dispatch 坑**:tag 输入传短 SHA 会 checkout 失败(actions/checkout 按分支/tag 名解析),必须传 40 位全 SHA 或 tag 名(run 42991020525 翻车,`bb60cb2f` 已在 input 描述里注明)。新构建 run 42991467196。
 

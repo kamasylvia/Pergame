@@ -35,8 +35,8 @@
 
 **三个拦验收不拦测试的缺口:**
 
-1. **`docker compose` 从未真正跑起来过**(最大未知)——全部验证都是 `cargo run` + `bun dev` 直连 NAS 的 pg/对象存储;镜像构建、6 服务编排(含 dr-backup sidecar)、卷挂载、healthcheck 依赖全为纸面设计。**测这个优先**。
-2. **dr-backup 真实备份从未跑成**——本机无 `pg_dump`/`rclone`,只验到 job 协议 + 脚本被调用 + 错误回传;真实 dump→上传→`-l`→`-R` 一次未走。
+1. **external compose 已跑通;自包含版仍未跑过**——2026-11-12:v0.0.4 三镜像在 QNAP Portainer stack 42 上常驻(backend/frontend/dr-backup 全 `running`),health、静态资源、SSR 已核验;此前「镜像构建从未验证」随 v0.0.4 发布解除。**仍未知**:自包含版(`docker-compose.yml`,pg + RustFS 一起起)的卷挂载与 healthcheck 依赖链。
+2. **dr-backup 真实备份从未跑成**——本机无 `pg_dump`/`rclone`,只验到 job 协议 + 脚本被调用 + 错误回传;真实 dump→上传→`-l`→`-R` 一次未走。**注意**:sidecar 现已在 QNAP 常驻(连接真实 pg18),具备实跑条件。
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 
@@ -44,7 +44,7 @@
 
 ### 建议测试顺序
 
-- [ ] **1. compose 起全栈**:`docker compose up -d --build` → 6 服务全 healthy → `curl :8201/api/health` 返回 ok。首次需按文档 §5 处理前端镜像 fallback(取消 build 注释或手动打 tag)。
+- [x] **1. compose 起全栈**:external 版(3 服务)✅ 2026-11-12 于 QNAP Portainer stack 42,镜像钉 `v0.0.4`,三容器 running,`/api/health` → `{"database":true,"status":"ok"}`。自包含版(6 服务 + build)仍待测。
 - [ ] **2. 核心 CRUD**:注册 → 登录 → 建 workspace → 写文档 → 传附件(验 CDN 链路 `/pergame/` → RustFS)。
 - [ ] **3. 回收站**:删文档 → `/dashboard/trash` 看到 → 恢复 → 回树。
 - [ ] **4. 快照全链**:建快照 → 列表 → 下载 zip(验 `meta.json`/`manifest.json`/`blobs/`)→ 改数据 → 还原(验二次确认统计 + 只读提示条)→ 上传该 zip 回灌。
