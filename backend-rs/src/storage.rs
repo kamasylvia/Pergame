@@ -430,6 +430,78 @@ impl S3Storage {
         }
     }
 
+    /// PUT an object at an absolute key (plugin artifacts live under
+    /// `plugins/<id>/<version>/…`, outside any user prefix).
+    pub async fn put_object(
+        &self,
+        object_key: &str,
+        content: Vec<u8>,
+        content_type: Option<&str>,
+    ) -> Result<(), ApiError> {
+        let mut req = self
+            .client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(object_key)
+            .body(content.into());
+        if let Some(ct) = content_type {
+            req = req.content_type(ct);
+        }
+        req.send().await.map(|_| ()).map_err(|e| {
+            tracing::error!(error = %e, object_key, "put_object failed");
+            ApiError::Internal(Box::new(std::io::Error::other("failed to store file")))
+        })
+    }
+
+    /// GET an absolute key as bytes (plugin entry/manifest serving).
+    pub async fn get_object_bytes(&self, object_key: &str) -> Result<Vec<u8>, ApiError> {
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(object_key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(object_key, error = %e, "get_object failed");
+                ApiError::NotFound("object not found".into())
+            })?;
+        let body = resp.body.collect().await.map_err(|e| {
+            tracing::warn!(object_key, error = %e, "get_object body failed");
+            ApiError::Internal(Box::new(std::io::Error::other("failed to read object")))
+        })?;
+        Ok(body.into_bytes().to_vec())
+    }
+
+    /// Best-effort delete of everything under an absolute prefix (plugin
+    /// removal). Failures are logged: the row is gone either way.
+    pub async fn delete_prefix(&self, prefix: &str) {
+        let Ok(list) = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .prefix(prefix)
+            .send()
+            .await
+        else {
+            return;
+        };
+        let Some(objects) = list.contents else { return };
+        for obj in objects {
+            let Some(key) = obj.key else { continue };
+            if let Err(e) = self
+                .client
+                .delete_object()
+                .bucket(&self.bucket)
+                .key(&key)
+                .send()
+                .await
+            {
+                tracing::warn!(%key, error = %e, "failed to delete plugin object");
+            }
+        }
+    }
+
     /// Deletes everything under the `{user_id}/{node_id}` prefix (fallback
     /// sweep of a resource node, Go DeleteSingleResource fallback path).
     pub async fn delete_node_prefix(&self, user_id: Uuid, node_id: Uuid) {

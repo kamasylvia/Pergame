@@ -8,6 +8,7 @@ import { rainbowBrackets } from './bracketsRainbow';
 import { containerHighlight } from './customBlocks';
 import type { createInternalLinks } from './internalLinks';
 import { mermaidBlockHighlight } from './mermaidHighlight';
+import { editorHooks } from '~/services/plugins/editor';
 
 export interface CreateEditorStateParams {
   initialDoc: string;
@@ -55,6 +56,9 @@ export function createEditorState(params: CreateEditorStateParams) {
       params.uploadsHandlers,
       themeCompartment.of(params.themeExtension),
       highlightSelectionMatches({}),
+      // Plugin extensions (PS-C): appended after the host's own so a plugin
+      // can add behaviour but not replace core keymaps or the theme.
+      ...editorHooks.extensions,
       EditorView.lineWrapping,
       EditorState.allowMultipleSelections.of(true),
       EditorView.contentAttributes.of({

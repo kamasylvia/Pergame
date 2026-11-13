@@ -9,6 +9,9 @@ export {
   type PluginRequest,
   type PluginRequestResult,
 } from './context';
+export { createRemoteKV } from './settings';
+export { createMarkdownClient, markdownHooks, runPostProcessors } from './markdown';
+export { createEditorClient, editorHooks } from './editor';
 export { createPluginHost, type PluginHost, type PluginHostDeps, type PluginHostEntry } from './loader';
 export {
   createUiClient,

@@ -2473,6 +2473,180 @@ async fn nodes_query_dql() {
     assert_eq!(status, 200);
 }
 
+
+/// POST a plugin archive (zip) to the admin install route.
+async fn install_plugin_zip(client: &Client, filename: &str, body: &[u8]) -> (u16, ApiResponse) {
+    let boundary = "----pergame-plugin-boundary";
+    let mut payload = Vec::new();
+    payload.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    payload.extend_from_slice(
+        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n")
+            .as_bytes(),
+    );
+    payload.extend_from_slice(b"Content-Type: application/zip\r\n\r\n");
+    payload.extend_from_slice(body);
+    payload.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    let resp = client
+        .http
+        .post(format!("{BASE_URL}/admin/plugins"))
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(payload)
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status().as_u16();
+    let text = resp.text().await.unwrap();
+    let parsed: ApiResponse = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("non-JSON from plugin install [{status}]: {text:?} ({e})"));
+    (status, parsed)
+}
+
+/// Build a store-only zip from (name, bytes) pairs.
+fn zip_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+    for (name, bytes) in entries {
+        writer.start_file(*name, options).unwrap();
+        std::io::Write::write_all(&mut writer, bytes).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+
+// ------------------------------------------------------------------- plugins
+
+/// Plugin registry (PS-D): admin install from a zip, per-user capability
+/// grants, the served entry, and the settings KV namespace.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn plugin_registry_lifecycle() {
+    let client = Client::new();
+    let (user_id, username) = signup_and_login_tagged(&client, "plug").await;
+    let slug = format!("it-demo-{user_id}");
+
+    let manifest = format!(
+        r#"{{"id":"{slug}","name":"IT Demo","version":"0.1.0","apiVersion":"1","capabilities":["ui","net:example.com"]}}"#
+    );
+    let archive = zip_entries(&[
+        ("manifest.json", manifest.as_bytes()),
+        ("main.mjs", b"export default class P { async onload() {} }"),
+    ]);
+
+    // Install is admin-only.
+    let (status, _) = install_plugin_zip(&client, "demo.zip", &archive).await;
+    assert_eq!(status, 401, "non-admin must not install");
+
+    // Promote in the DB, then re-login: the JWT carries the role.
+    make_admin(&user_id).await;
+    let relogin = client
+        .http
+        .post(format!("{BASE_URL}/auth"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("username={username}&password=testpass123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relogin.status().as_u16(), 200, "admin re-login failed");
+
+    let (status, r) = install_plugin_zip(&client, "demo.zip", &archive).await;
+    assert_eq!(status, 201, "install failed: {:?}", r.message);
+    assert_eq!(r.result["id"], json!(slug));
+    assert_eq!(r.result["files"], json!(2));
+
+    // The user list exposes the plugin; nothing is granted yet.
+    let (status, r) = get(&client, "/plugins").await;
+    assert_eq!(status, 200);
+    let rows = r.result.as_array().expect("plugins array");
+    let row = rows
+        .iter()
+        .find(|row| row["id"] == json!(slug))
+        .expect("installed plugin listed");
+    assert_eq!(row["granted"], json!([]));
+    assert_eq!(row["capabilities"], json!(["ui", "net:example.com"]));
+    assert_eq!(row["entry_url"], json!(format!("/api/plugins/{slug}/entry")));
+
+    // The entry is served same-origin as JavaScript.
+    let resp = client
+        .http
+        .get(format!("{BASE_URL}/plugins/{slug}/entry"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(
+        resp.headers().get("content-type").unwrap(),
+        "text/javascript; charset=utf-8"
+    );
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("export default class"), "served entry: {body}");
+
+    // Settings are refused until the user approves the plugin.
+    let (status, _) = get(&client, &format!("/plugins/{slug}/kv")).await;
+    assert_eq!(status, 403, "ungranted plugin must not read settings");
+
+    // Grants are filtered against the manifest.
+    let (status, r) = put_json(
+        &client,
+        &format!("/plugins/{slug}/grants"),
+        &json!({"capabilities": ["ui", "root"]}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["granted"], json!(["ui"]), "unknown capability dropped");
+
+    let (status, r) = get(&client, "/plugins").await;
+    assert_eq!(status, 200);
+    let row = r
+        .result
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == json!(slug))
+        .unwrap();
+    assert_eq!(row["granted"], json!(["ui"]));
+
+    // KV round-trip inside the plugin namespace.
+    let (status, _) = put_json(&client, &format!("/plugins/{slug}/kv/theme"), &json!({"mode": "dark"})).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/plugins/{slug}/kv")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["theme"], json!({"mode": "dark"}));
+    let (status, r) = del(&client, &format!("/plugins/{slug}/kv/theme")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["deleted"], json!(true));
+
+    // Disable: the plugin disappears from the user list and the entry 404s.
+    let (status, _) = patch_json(&client, &format!("/admin/plugins/{slug}"), &json!({"enabled": false})).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, "/plugins").await;
+    assert_eq!(status, 200);
+    assert!(
+        !r.result.as_array().unwrap().iter().any(|row| row["id"] == json!(slug)),
+        "disabled plugin hidden from the loader list"
+    );
+    let resp = client
+        .http
+        .get(format!("{BASE_URL}/plugins/{slug}/entry"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 404);
+
+    // Uninstall removes the row (and its artifacts).
+    let (status, r) = del(&client, &format!("/admin/plugins/{slug}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["deleted"], json!(true));
+    let (status, _) = get(&client, &format!("/plugins/{slug}/kv")).await;
+    assert_eq!(status, 404);
+
+    demote_user(&user_id).await;
+    cleanup_user(&user_id).await;
+}
+
 // ---------------------------------------------------------------- directory index
 
 /// Directory index files (issue #4): folder creation auto-creates the

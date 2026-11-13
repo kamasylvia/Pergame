@@ -1,0 +1,10 @@
+{
+  "id": "daily-note",
+  "name": "Daily note",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "main.mjs",
+  "capabilities": ["nodes:read", "nodes:write", "ui", "settings"],
+  "author": "Pergame",
+  "description": "Creates today's note once per day under a folder you pick in the command."
+}

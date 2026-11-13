@@ -285,6 +285,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: 'Інші',
+    plugins: 'Плагіни',
     profile: 'Мій профіль',
     security: 'Безпека',
     shortcuts: 'Гарячі клавіші',
@@ -292,6 +293,23 @@ export default {
     snippets: 'Фрагменти',
     styles: 'Впровадження стилів',
     teams: 'Команди',
+  },
+
+  plugins: {
+    capabilities: 'Дозволи',
+    disabled: 'Вимкнено адміністратором.',
+    empty: 'Ще немає встановлених плагінів.',
+    install: 'Встановити плагін',
+    installed: 'Встановлені плагіни',
+    installedOne: 'Встановлено {name} v{version}',
+    installHint: 'Завантажте zip плагіна (manifest.json + main.mjs). Лише для адміністраторів.',
+    installing: 'Встановлення…',
+    noCapabilities: 'Цей плагін не запитує дозволів.',
+    notApproved: 'Ще не схвалено: надайте принаймні один дозвіл, щоб завантажити.',
+    pickArchive: 'Вибрати архів…',
+    subtitle: 'Встановлюйте плагіни та визначайте, що їм дозволено робити з вашими даними.',
+    title: 'Плагіни',
+    updateFailed: 'Не вдалося оновити плагін',
   },
 
   profile: {

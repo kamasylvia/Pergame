@@ -27,10 +27,22 @@ export interface PluginRibbon {
 }
 
 /** Reactive tables the UI reads; dispose-able registrations write into them. */
-export const pluginUiState = {
-  commands: shallowReactive<PluginCommand[]>([]),
-  ribbons: shallowReactive<PluginRibbon[]>([]),
-};
+interface PluginUiState {
+  commands: PluginCommand[];
+  ribbons: PluginRibbon[];
+}
+
+/** Same page-wide identity rule as the markdown registry. */
+const UI_KEY = '__pergamePluginUiState';
+
+export const pluginUiState: PluginUiState = (() => {
+  const holder = globalThis as unknown as Record<string, PluginUiState | undefined>;
+  holder[UI_KEY] ??= {
+    commands: shallowReactive<PluginCommand[]>([]),
+    ribbons: shallowReactive<PluginRibbon[]>([]),
+  };
+  return holder[UI_KEY];
+})();
 
 /** Registration API handed to each plugin (bound to its id + bag). */
 export interface PluginUiClient {

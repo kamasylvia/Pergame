@@ -1,4 +1,4 @@
-# GOAL-STATE — pergame-infra(fork 现代化改造;2026-11-08 定名 Collectanea,2026-11-09 随仓库改名全量改为 Pergame;最终定名 Pergamena 延期执行,目录名 pergame-infra)
+# GOAL-STATE — pergame-infra(fork 现代化改造;2026-11-08 定名 Collectanea,2026-11-09 随仓库改名全量改为 Pergame;2026-11-14 用户裁决撤销 Pergamena 改名,定名 Pergame 不再变更;目录名 pergame-infra)
 
 ## 1. 任务总览
 
@@ -34,7 +34,7 @@
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
 | B3 | 目录索引文件 ✅(2026-11-13) | issue #4;spec `features/directory-index.md`(裁决+实施记录) |
 | B4 | Dataview 查询引擎 ✅(2026-11-13) | issue #5;spec `features/dataview.md`(开放问题全裁决+实施记录) |
-| B5 | 插件系统 PS-A..E(**PS-A ✅ / PS-B 命令+ribbon ✅ 2026-11-13**;PS-B 设置页与视图、PS-C/D/E 待做;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` §10 实施记录 |
+| B5 | 插件系统 PS-A..E(**PS-A ✅ PS-B ✅ PS-C ✅ PS-D ✅ PS-E 首批 ✅,2026-11-14**;剩余:固定槽位视图/`ui.modal`/插件设置 schema/drawio 迁移/ReadItLater 站点 parser) | issue #8;spec `plugin-system/DESIGN.md` §10 实施记录 |
 
 **B6(Backup v2)已取消(2026-11-08)**:issue #9 关闭,设计存档 `features/backup-v2.md`;替代 = 运维件 `scripts/dr-backup.sh`(N pg 源 × M rclone 目的地,已 dry-run 验证,实机验证待人工)。
 
@@ -98,6 +98,8 @@
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **插件系统 PS-D/PS-B 收尾/PS-C/PS-E(2026-11-14)**:`0011_plugins.sql`(plugins/grants/kv)+ 管理员 zip 安装(服务端 manifest 全校验、路径/大小/条目上限、S3 `plugins/<id>/<version>/`)+ 同源 entry/asset 服务 + 每用户能力同意 + 持久化 KV + 审计;`net.proxy` 后端代取(白名单 + 8 MiB + SSRF 守卫)替代剪藏对 camoufox 的依赖(DESIGN §11)。前端:设置页 Plugins、`ctx.markdown`(代码块/容器/post-processor)+ `ctx.editor`(CM6 扩展),注册表 globalThis 单例(修 bundler 双实例真 bug)。官方插件三件(recent-files/daily-note/web-clipper)+ 打包脚本 → `public/plugin-packs/`。验证:后端 140 单测(含 manifest/net/SSRF/zip 规则)+ 集成用例 `plugin_registry_lifecycle` 活环境通过 + API 全链活测(装/列/entry/grant/kv/proxy/SSRF/卸)+ 真浏览器(注册表加载、命令面板执行、设置页列表、markdown 三件套渲染)。测试数据已清(插件卸载、临时 admin 删除、检查文档 purge)。
 
 - **真浏览器验证 + 3 个真 bug(2026-11-13)**:本机装 Playwright Chromium(约 100MB,免 1.3GB camoufox)。①`AppPreferenceInputSection.vue` 缺 `</div>`(#4 批次引入,typecheck/eslint 都不编译模板 → 设置页 500):修 + 新增 `lint:sfc` 闸门(`@vue/compiler-sfc` 解析 219 组件)。②插件宿主在认证前启动 → 401 触发登出流程:改为等 `userStore.user`。③`localForage.setItem('isLoggedIn')` 未 await 输给路由中间件 → 登录后被弹回 login:改 await。UI 全链验证见 #4 条目。
 

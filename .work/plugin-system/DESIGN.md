@@ -164,6 +164,30 @@ export interface PluginContext {
 
 ## 10. 实施记录
 
+### PS-D 分发(2026-11-14 ✅)
+
+- **表**:`0011_plugins.sql` —— `plugins`(实例级安装,slug 主键,artifact_prefix 指向 S3)、`plugin_grants`(每用户能力批准)、`plugin_kv`(每用户每插件键值,比塞 `user_settings` 更好删/更好查)。
+- **安装**:`POST /api/admin/plugins`(multipart zip;≤4 MiB、≤64 条目、单文件 ≤2 MiB、路径逐段校验、可选外层目录自动剥)。manifest 由 `plugins_manifest::validate` 服务端校验(与前端同一套规则:slug/semver/主版本/entry/能力白名单/IP 字面量拒绝)。产物写 `plugins/<id>/<version>/`,替换版本时清旧前缀。
+- **服务**:`GET /plugins/:id/entry`(text/javascript,同源,`import()` 自带 cookie)与 `GET /plugins/:id/asset/*`。
+- **同意**:`GET /api/plugins` 返回已启用插件 + 调用者已批能力;loader 只加载 `granted` 非空的插件,并把 granted 传给 ctx(网络门禁按批准集算)。`PUT /plugins/:id/grants` 过滤掉 manifest 未声明的项。
+- **设置**:`/plugins/:id/kv` 读写调用者命名空间(键 ≤128、值 ≤64 KiB JSON);卸载/删号级联。
+- **审计**:install/enable/uninstall/grant/proxy 全部写 `logs`。
+- **net.proxy**:后端代取(GET/POST、15s、8 MiB、域名按能力白名单),`ensure_public_target` 解析 DNS 后拒绝私网/环回/链路本地/CGNAT/IPv4-mapped;这是剪藏替代 camoufox 的通道(DESIGN §11)。
+- **UI**:设置页 `?p=plugins` —— 管理员安装 zip、启停、卸载、勾选能力;普通用户看到已装插件并批准能力。能力变更会卸载并重载该插件。
+
+### PS-C markdown/编辑器钩子(2026-11-14 ✅)
+
+- `ctx.markdown.{registerCodeBlock,registerContainer,registerPostProcessor}`、`ctx.editor.registerCmExtension`;全部返回 `Disposable`,随插件 bag 回收。
+- 注册表放 `globalThis`(bundler 可能给出两个模块实例,双注册表 = 插件注册进没人读的表;真浏览器验证时踩到,见 LESSONS)。
+- 编译器缓存键含 hook 版本,注册后下一次 compile 自动重建;fence 回落到宿主规则(高亮/复制按钮保留),未认领的 `:::name` 仍归内建容器。
+- 首版不迁移内建块(index/dataview/mermaid),避免动已验证渲染路径。
+
+### PS-E 官方插件(2026-11-14 ✅ 首批)
+
+- `plugins/official/`:recent-files(命令+ribbon)、daily-note(按天建/开 + 设置存父目录)、web-clipper(`net.proxy` → 正文 → 建笔记)。
+- `scripts/build-plugin-packs.sh` 产出 `frontend/public/plugin-packs/*.zip`,设置页可直接安装(无需构建插件仓库)。
+- ReadItLater 站点专用 parser 未移植:先用通用正文抽取,后续按需求补站点规则。
+
 ### PS-B 第一片(2026-11-13 ✅,命令与 ribbon)
 
 - **注册表**:`services/plugins/ui.ts` —— Vue `shallowReactive` 表(`commands`/`ribbons`),注册返回 `Disposable`,id 以 `<pluginId>:` 命名空间化,重复 id 抛错(连带使该插件加载失败并回滚)。`clearPluginUi(pluginId)` 兜底清理。
@@ -184,3 +208,16 @@ export interface PluginContext {
 - **启动**:`app/plugins/plugin-host.client.ts` 读 `NUXT_PUBLIC_DEV_PLUGINS`(逗号分隔 base URL),`useNuxtApp().$pluginHost` 暴露给 PS-B。
 - **参考插件**:`frontend/public/plugins/demo/`(manifest + main.mjs,数一遍文档并 notice)。
 - **验证**:25 项内核断言(manifest 拒绝矩阵/网络门禁/生命周期/隔离/KV)+ 真实 HTTP 取 manifest 与入口、真实 ESM 求值 e2e(载入 → notice → unload)。本机无浏览器(见 TODO 缺口),浏览器内交互留待有环境时补验。
+
+## 11. 设计补充:剪藏不需要浏览器自动化(2026-11-14 用户裁决)
+
+**背景**:ReadItLater(SiYuan 插件)剪藏知乎时依赖 camoufox MCP,这是**思源插件沙箱的限制**——插件没有任意网络出口,也没有后端代理,只能外挂一个浏览器自动化服务代抓。Pergame 的宿主形态不同,这条依赖不必继承。
+
+**结论**:PS-E 的 ReadItLater 移植**不引入 camoufox MCP**,改为宿主提供的能力:
+
+1. **`net.fetch`(已有,PS-A)**:manifest 声明 `net:<domain>`,插件在页面里直接 fetch。适合有 CORS 的站点(YouTube/Bilibili/Vimeo 等公开 API)。
+2. **`net.proxy`(PS-D/PS-E 新增,后端代取)**:`POST /api/plugins/{id}/proxy` 由 Rust 后端代取目标 URL,突破浏览器 CORS 限制,返回正文(限大小/限域/限方法,审计入 `logs`)。这是替代 camoufox 的主力路径——绝大多数文章页是服务端可直取的 HTML。
+3. **需要登录态的页面**:后端代理**不带**用户浏览器 cookie;由用户在插件设置里粘贴该站 cookie(插件 KV 存,权限 `net:<domain>` + 显式同意),或退回“复制页面 HTML/正文粘贴到剪藏框”。**不做**读取用户浏览器其它标签页的 DOM——Web 应用没有这个权限,那是扩展才有的能力。
+4. **交互式挑战**(知乎的部分反爬)仍可能失败:失败即报错并提示粘贴,不静默降级,也不引入第二个自动化服务。
+
+**记要**:凡是“思源插件必须外挂 MCP/浏览器才能做的事”,先问 Pergame 宿主是否有更直接的通道(页面 fetch / 后端代理 / 用户提供凭据);只有需要**真实浏览器交互**且**不可由用户手动完成**的场景,才考虑外部自动化,并且必须是可选依赖而非默认路径。

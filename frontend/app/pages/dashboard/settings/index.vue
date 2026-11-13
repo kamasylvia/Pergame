@@ -47,6 +47,7 @@ import AdvancedView from './_views/advanced.vue';
 import OtherView from './_views/other.vue';
 import StylesView from './_views/styles.vue';
 import TeamsView from './_views/teams.vue';
+import PluginsView from './_views/plugins.vue';
 
 type PageKey = keyof typeof pages;
 
@@ -83,6 +84,7 @@ const pages = {
   other: OtherView,
   styles: StylesView,
   teams: TeamsView,
+  plugins: PluginsView,
 } as const;
 
 defineProps<{ isModal?: boolean }>();
@@ -130,6 +132,7 @@ const navSections = computed<NavSection[]>(() => [
       { key: 'backup', label: t('settings.pages.backup'), icon: 'backup' },
       { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
       { key: 'mcp', label: t('settings.pages.mcp'), icon: 'security' },
+      { key: 'plugins', label: t('settings.pages.plugins'), icon: 'snippets' },
       { key: 'advanced', label: t('settings.pages.advanced'), icon: 'build' },
       { key: 'teams', label: t('settings.pages.teams'), icon: 'users' },
     ],

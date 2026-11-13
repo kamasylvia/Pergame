@@ -8,6 +8,8 @@
  */
 import { createPluginContext, type PluginHostInfo, type PluginRequest } from './context';
 import { createUiClient, clearPluginUi, type PluginUiClient } from './ui';
+import { createMarkdownClient } from './markdown';
+import { createEditorClient } from './editor';
 import { DisposableBag } from './registry';
 import { validateManifest } from './manifest';
 import {
@@ -51,7 +53,7 @@ export interface PluginHost {
   /** Load one plugin from a base URL holding `manifest.json` + entry. */
   loadFromUrl(baseUrl: string): Promise<PluginHostEntry>;
   /** Load a manifest that was already fetched (registry/install path). */
-  load(manifest: PluginManifest, entryUrl: string): Promise<PluginHostEntry>;
+  load(manifest: PluginManifest, entryUrl: string, granted?: string[]): Promise<PluginHostEntry>;
   /** Unload by id (no-op when unknown). */
   unload(id: string): Promise<void>;
   /** Unload everything (app teardown / hot reload). */
@@ -89,7 +91,11 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
     });
   const entries: PluginHostEntry[] = [];
 
-  async function load(manifest: PluginManifest, entryUrl: string): Promise<PluginHostEntry> {
+  async function load(
+    manifest: PluginManifest,
+    entryUrl: string,
+    granted?: string[],
+  ): Promise<PluginHostEntry> {
     if (entries.some(e => e.manifest.id === manifest.id)) {
       return { manifest, status: 'failed', error: `plugin '${manifest.id}' is already registered` };
     }
@@ -116,9 +122,10 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       if (typeof instance.onload !== 'function') {
         throw new Error('default export is not a Plugin (missing onload)');
       }
-      const ui = (deps.createUi ?? createUiClient)(manifest.id, disposable => {
-        bag.add(disposable);
-      });
+      const track = (disposable: import('../../types/plugin').Disposable) => bag.add(disposable);
+      const ui = (deps.createUi ?? createUiClient)(manifest.id, track);
+      const markdown = createMarkdownClient(track);
+      const editor = createEditorClient(track);
       const ctx = createPluginContext({
         manifest,
         version: HOST_API_VERSION,
@@ -126,6 +133,9 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         request: deps.request,
         notify: deps.notify,
         ui,
+        markdown,
+        editor,
+        granted,
       });
       await instance.onload(ctx);
 

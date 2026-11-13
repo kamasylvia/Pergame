@@ -197,3 +197,13 @@
 - **还原会因「文件覆盖」要求 force**:plan 里 `files_colliding > 0` 时二击还原返回 400,必须先勾 `.force-row` 的 checkbox;脚本漏勾会误判成「按钮没生效」。
 - **还原成功的可靠证据 = 服务端自动生成的 `Pre-restore safety snapshot`**:toast 会在 10s 内消失,断言别依赖 `.notification` 的时序,查 `GET /api/backup/snapshots` 更稳。
 - **收尾要按依赖顺序清**:删账号前先把 targets `empty` + `delete`(否则 409 门禁),节点先 `DELETE /api/nodes/:id` 再 `DELETE /api/trash/:id` purge;本机验证完把 `pergame-tgt-test` 前缀对象清干净。
+
+## 2026-11-14 插件 PS-C/D/E 批次
+
+- **同一个文件被 bundler 给出两个模块实例**:`~/services/plugins/markdown`(别名)与 `./markdown`(相对)在 dev 下各自实例化,插件注册进 A 表、编译器读 B 表 → 钩子「注册成功但不生效」,而且**没有任何报错**。真浏览器里靠 `window.__pergamePluginDebug` 打出 `blocks=1 v=3` vs 编译期 `blocks=0 v=0` 才定位。规则:跨模块共享的**注册表**一律挂 `globalThis`(本项目 markdown/editor/ui 三处),不要指望模块单例。
+- **fence 覆写必须回落到原规则**:第一版把 `renderer.rules.fence` 直接换成自写 HTML,高亮/复制按钮全丢。正确写法 = 先存 `baseFence`,插件渲染器返回 null 时调它,再退 `self.renderToken`。
+- **`entry.name()` 在 zip 9 是 `Result`**:`entry.name().to_string()` 编译期 E0599;要 `entry.name()?` 再转。
+- **cargo 在这台机器会「假死」**:`--offline` 时解析/编译长时间 0.1% CPU,`sample` 显示卡在读 registry index 或 fingerprint 文件;`--all-targets` 尤其慢。实践:`CARGO_TARGET_DIR` 指本机盘 + `--offline` + 只跑 `--lib`,并在等待时不要并发再起第二个 cargo(会互抢 target 锁,双双卡住)。
+- **能力字符串里的 IP 字面量要显式拒绝**:`net:127.0.0.1` 能通过「label 全是字母数字」的规则,必须在 label 校验前 `scope.parse::<IpAddr>()` 拦掉;SSRF 守卫在代理侧还有第二道。
+- **QNAP 测试账号是普通用户(role 1)**:要验管理员安装路径得临时建号 + DB 提权,验完删号;别把用户本人账号提权。
+- **插件安装后的「授权」是每用户的**:管理员装完,普通用户列表里 `granted: []`,loader 直接跳过——这不是 bug,是设计;验证时要显式 PUT grants。

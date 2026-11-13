@@ -284,6 +284,7 @@ export default {
     markdown: '마크다운',
     mcp: 'MCP',
     other: '기타',
+    plugins: '플러그인',
     profile: '내 프로필',
     security: '보안',
     shortcuts: '단축키',
@@ -291,6 +292,23 @@ export default {
     snippets: '스니펫',
     styles: '스타일 삽입',
     teams: '팀',
+  },
+
+  plugins: {
+    capabilities: '권한',
+    disabled: '관리자가 비활성화했습니다.',
+    empty: '아직 설치된 플러그인이 없습니다.',
+    install: '플러그인 설치',
+    installed: '설치된 플러그인',
+    installedOne: '{name} v{version} 설치됨',
+    installHint: '플러그인 zip(manifest.json + main.mjs)을 업로드합니다. 관리자 전용.',
+    installing: '설치 중…',
+    noCapabilities: '이 플러그인은 권한을 요청하지 않습니다.',
+    notApproved: '아직 승인되지 않음: 최소 하나의 권한을 허용해야 로드됩니다.',
+    pickArchive: '압축 파일 선택…',
+    subtitle: '플러그인을 설치하고 데이터에 접근할 수 있는 범위를 선택합니다.',
+    title: '플러그인',
+    updateFailed: '플러그인을 업데이트할 수 없습니다',
   },
 
   profile: {

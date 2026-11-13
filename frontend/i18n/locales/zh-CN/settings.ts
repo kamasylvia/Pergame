@@ -284,6 +284,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: '其他',
+    plugins: '插件',
     profile: '我的个人资料',
     security: '安全性',
     shortcuts: '快捷键',
@@ -291,6 +292,23 @@ export default {
     snippets: '代码片段',
     styles: '样式注入',
     teams: '团队',
+  },
+
+  plugins: {
+    capabilities: '权限',
+    disabled: '已被管理员停用。',
+    empty: '还没有安装插件。',
+    install: '安装插件',
+    installed: '已安装插件',
+    installedOne: '已安装 {name} v{version}',
+    installHint: '上传插件 zip（manifest.json + main.mjs）。仅管理员。',
+    installing: '安装中…',
+    noCapabilities: '该插件未申请任何权限。',
+    notApproved: '尚未批准：至少授予一项权限后才会加载。',
+    pickArchive: '选择压缩包…',
+    subtitle: '安装插件，并决定每个插件可以用你的数据做什么。',
+    title: '插件',
+    updateFailed: '无法更新插件',
   },
 
   profile: {

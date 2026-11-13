@@ -286,6 +286,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: 'Autre',
+    plugins: 'Plugins',
     profile: 'Mon profil',
     security: 'Sécurité',
     shortcuts: 'Raccourcis',
@@ -293,6 +294,23 @@ export default {
     snippets: 'Snippets',
     styles: 'Injection de styles',
     teams: 'Équipes',
+  },
+
+  plugins: {
+    capabilities: 'Capacités',
+    disabled: 'Désactivé par un administrateur.',
+    empty: 'Aucun plugin installé pour le moment.',
+    install: 'Installer un plugin',
+    installed: 'Plugins installés',
+    installedOne: '{name} v{version} installé',
+    installHint: "Téléversez l'archive du plugin (manifest.json + main.mjs). Réservé aux admins.",
+    installing: 'Installation…',
+    noCapabilities: 'Ce plugin ne demande aucune capacité.',
+    notApproved: 'Pas encore approuvé : accordez au moins une capacité pour le charger.',
+    pickArchive: "Choisir l'archive…",
+    subtitle: "Installez des plugins et choisissez ce qu'ils peuvent faire de vos données.",
+    title: 'Plugins',
+    updateFailed: 'Impossible de mettre à jour le plugin',
   },
 
   profile: {

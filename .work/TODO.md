@@ -20,11 +20,14 @@
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周;spec = `plugin-system/DESIGN.md`(§9 已定案)。
   - [x] **PS-A 内核 ✅(2026-11-13)**:`app/types/plugin.ts` 契约 + `services/plugins/{manifest,registry,context,loader}.ts`(manifest 全校验:slug/semver/apiVersion 主版本/entry 路径穿越/capabilities 白名单;DisposableBag LIFO;host 载入-隔离-卸载;ctx L1 = nodes/resources/search/settings(KV)/ui.notice/net 门禁)+ `app/plugins/plugin-host.client.ts` 由 `NUXT_PUBLIC_DEV_PLUGINS` 驱动 + `public/plugins/demo` 参考插件 + docs `5.administer/3.plugins.md`。验证:25 项内核断言全过(含故意坏插件隔离、重复 id、错误主版本、`..` 穿越)+ 真实 HTTP 分发 + ESM 求值 e2e(demo 插件经 dev server 载入/unload)。
   - [x] **PS-B 第一片 ✅(2026-11-13,真浏览器验证)**:`ctx.ui.command`/`ctx.ui.ribbon` + `services/plugins/ui.ts`(反应式注册表、`<pluginId>:` 命名空间、重复 id 抛错、unload 自动回收)+ 命令面板 `Plugins` 分组(Enter/点击执行)+ Dock 渲染插件按钮;demo 插件示范两者。断言 12 项全过;真实浏览器确认:命令面板出现 `Plugins` 分组并执行(notice 回显)、Dock 出现插件按钮。
-  - [ ] PS-B 剩余:设置页注册(需 PS-D 持久化 KV)、固定槽位视图、`ui.modal`;PS-C md(容器/代码块/post-processor/CM6)、PS-D 分发(上传/存储/能力同意/审计)、PS-E 狗粮(4 官方插件 + drawio 迁移)。
+  - [x] **PS-D 分发 ✅(2026-11-14)**:`migration 0011`(plugins/plugin_grants/plugin_kv)+ 管理员 zip 安装(`POST /api/admin/plugins`,服务端 manifest 全校验、路径穿越/大小/条目上限)+ 产物存 S3 `plugins/<id>/<version>/` 并同源服务 entry/asset + 每用户能力同意(`PUT /plugins/:id/grants`,只接受 manifest 声明的)+ 每插件 KV(`/plugins/:id/kv`,持久化到 pg)+ 审计入 `logs` + `GET /api/plugins` 供 loader + 卸载删产物/授权/KV。**另加 `net.proxy`**(后端代取破 CORS,域名白名单 + 仅 GET/POST + 8 MiB + SSRF 守卫拒绝私网/IP 字面量),替代剪藏对 camoufox 的依赖(DESIGN §11)。验证:集成用例 `plugin_registry_lifecycle` 活环境通过 + API 全链(安装/列表/entry/grant/kv/proxy/SSRF 拒绝/卸载)+ 真浏览器(loader 从注册表加载已装插件、命令面板执行、设置页列出能力)。
+  - [x] **PS-B 收尾 ✅(2026-11-14)**:设置页 Plugins(管理员安装/启停/卸载、能力勾选、非管理员只看可加载项)。
+  - [x] **PS-C md/编辑器 ✅(2026-11-14)**:`ctx.markdown.registerCodeBlock/registerContainer/registerPostProcessor` + `ctx.editor.registerCmExtension`;注册表 globalThis 单例(避免 bundler 双实例),编译器按 hook 版本重建缓存;容器规则 raw-capture,未认领的 `:::name` 仍归内建容器;fence 回落到宿主渲染器(高亮/复制按钮不受影响)。验证:15 项 bun 断言 + 真浏览器(figure/aside/post-processor 三件套在真实文档渲染)。
+  - [x] **PS-E 首批官方插件 ✅(2026-11-14)**:`plugins/official/{recent-files,daily-note,web-clipper}` + `scripts/build-plugin-packs.sh` 打包到 `frontend/public/plugin-packs/*.zip`(设置页可直接安装)。web-clipper 走 `net.proxy` 抓正文,不依赖浏览器自动化;站点专用 parser 未移植(README 已注明)。
+  - [ ] 插件系统剩余:固定槽位视图、`ui.modal`、插件设置页声明式 schema、drawio 迁移、ReadItLater 站点 parser 移植。
+  - **PS-E 剪藏不走 camoufox MCP**(2026-11-14 用户裁决,详见 `plugin-system/DESIGN.md` §11):思源 ReadItLater 依赖 camoufox 是插件沙箱限制;Pergame 用 `net.fetch`(页面直取)+ 新增 `net.proxy`(后端代取,破 CORS)+ 用户提供 cookie/粘贴兜底。不读其它标签页 DOM(Web 无此权限)。
 
 - [x] **笔记软连接/克隆**(Trilium 对位)✅(2026-11-09,NL-A/B/C 三阶段):克隆表 node_links + 环校验 + 端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`。
-
-- [ ] **改名 Pergamena**(2026-11-09 定,替代现名 Pergame;**仅决定,不执行**):执行时全层落地——crate/binary、JWT/TOTP issuer、S3 桶与库名默认值、compose 容器、frontend/docs 品牌、GitHub 仓改名;破坏性,单独批次。
 
 
 ## 回收站(用户裁决 2026-11-09:本地误删恢复走回收站,不做 git 级版本)
@@ -48,7 +51,7 @@
 
 6. **线上部署落后 main 30 个提交(2026-11-13 实测)**:QNAP stack 42 仍是 `v0.0.11` 镜像(11-12 16:12 打的 tag),而 `281bf11e`(附件改走后端鉴权读,11-12 17:08)以及其后的配额/去重、Rust 质量、MCP、#4 index、#5 dataview、PS-A、PS-B 全在 tag 之外(`git tag --contains 281bf11e` 为空)。实测证据:同一测试附件在本机最新后端 `GET /api/resources/:id/file` → **200 / 39 B**,线上 `:8200` 同路径 → **404(空 body = 路由不存在)**。即线上附件/CDN 读是坏的,修法 = 用当前 main 打 **v0.0.12** 并 `PUT /api/stacks/42` 更新(NAS 恢复在线后执行)。
 
-**明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13、目录索引 ✅2026-11-13;剩余:插件系统(#8)、Pergamena 改名。
+**明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13、目录索引 ✅2026-11-13;剩余:插件系统(#8)。(Pergamena 改名 2026-11-14 用户裁决撤销:当前名称已合适。)
 
 ### 建议测试顺序
 

@@ -24,6 +24,7 @@ pub mod mail;
 pub mod mcp;
 pub mod models;
 pub mod oidc;
+pub mod plugins_manifest;
 pub mod quota;
 pub mod repo;
 pub mod response;

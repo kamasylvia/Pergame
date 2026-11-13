@@ -1,0 +1,10 @@
+{
+  "id": "web-clipper",
+  "name": "Web clipper",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "main.mjs",
+  "capabilities": ["nodes:read", "nodes:write", "ui", "net:*"],
+  "author": "Pergame",
+  "description": "Clips a page into a note. Fetches server-side (no browser automation), strips the markup, keeps the text."
+}

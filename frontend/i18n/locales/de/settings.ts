@@ -287,6 +287,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: 'Sonstiges',
+    plugins: 'Plugins',
     profile: 'Mein Profil',
     security: 'Sicherheit',
     shortcuts: 'Tastenkombinationen',
@@ -294,6 +295,23 @@ export default {
     snippets: 'Textblöcke',
     styles: 'Stilinjektion',
     teams: 'Teams',
+  },
+
+  plugins: {
+    capabilities: 'Berechtigungen',
+    disabled: 'Von einem Administrator deaktiviert.',
+    empty: 'Noch keine Plugins installiert.',
+    install: 'Plugin installieren',
+    installed: 'Installierte Plugins',
+    installedOne: '{name} v{version} installiert',
+    installHint: 'Plugin-Zip hochladen (manifest.json + main.mjs). Nur Admins.',
+    installing: 'Wird installiert…',
+    noCapabilities: 'Dieses Plugin fragt keine Berechtigungen an.',
+    notApproved: 'Noch nicht freigegeben: mindestens eine Berechtigung erteilen.',
+    pickArchive: 'Archiv wählen…',
+    subtitle: 'Plugins installieren und festlegen, was sie mit deinen Daten tun dürfen.',
+    title: 'Plugins',
+    updateFailed: 'Plugin konnte nicht aktualisiert werden',
   },
 
   profile: {

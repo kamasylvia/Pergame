@@ -95,7 +95,47 @@ export interface UiClient {
 /** Network facade (design §3: capability-gated, method/size limited). */
 export interface NetClient {
   fetch(url: string | URL, init?: RequestInit): Promise<Response>;
+  /**
+   * Server-side fetch for hosts the browser cannot read (CORS). Same domain
+   * scope as `fetch`, plus SSRF guards on the backend; no browser cookies are
+   * borrowed — pass credentials explicitly when a site needs them.
+   */
+  proxy(url: string, init?: { method?: 'GET' | 'POST'; body?: string }): Promise<{
+    status: number;
+    contentType: string;
+    body: string;
+  }>;
 }
+
+/** Markdown render hooks (PS-C). */
+export interface MarkdownClient {
+  registerCodeBlock(lang: string, render: CodeBlockRenderer): Disposable;
+  registerContainer(name: string, render: ContainerRenderer): Disposable;
+  registerPostProcessor(fn: (html: string) => string): Disposable;
+}
+
+/** Editor hooks (PS-C): CM6 extensions appended to the editor state. */
+export interface EditorClient {
+  registerCmExtension(extension: unknown): Disposable;
+}
+
+/** Renderer context for a fenced block. */
+export interface CodeBlockContext {
+  content: string;
+  info: string;
+  escapeHtml(text: string): string;
+}
+
+/** Renderer context for a `:::name` container. */
+export interface ContainerContext extends CodeBlockContext {
+  name: string;
+}
+
+/** Renders a fence; `null` falls through to the host renderer. */
+export type CodeBlockRenderer = (ctx: CodeBlockContext) => string | null;
+
+/** Renders a container; `null` falls through to the host renderer. */
+export type ContainerRenderer = (ctx: ContainerContext) => string | null;
 
 /** The object plugins receive in `onload(ctx)`. */
 export interface PluginContext {
@@ -110,6 +150,8 @@ export interface PluginContext {
   settings: KVStore;
   ui: UiClient;
   net: NetClient;
+  markdown: MarkdownClient;
+  editor: EditorClient;
 }
 
 /** Shape a plugin module's default export must provide. */

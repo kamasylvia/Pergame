@@ -285,6 +285,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: 'Other',
+    plugins: 'Plugins',
     profile: 'My profile',
     security: 'Security',
     shortcuts: 'Shortcuts',
@@ -292,6 +293,23 @@ export default {
     snippets: 'Snippets',
     styles: 'Style injection',
     teams: 'Teams',
+  },
+
+  plugins: {
+    capabilities: 'Capabilities',
+    disabled: 'Disabled by an administrator.',
+    empty: 'No plugins installed yet.',
+    install: 'Install a plugin',
+    installed: 'Installed plugins',
+    installedOne: 'Installed {name} v{version}',
+    installHint: 'Upload the plugin zip (manifest.json + main.mjs). Admin only.',
+    installing: 'Installing…',
+    noCapabilities: 'This plugin asks for no capabilities.',
+    notApproved: 'Not approved yet: grant at least one capability to load it.',
+    pickArchive: 'Choose archive…',
+    subtitle: 'Install plugins and choose what each one may do with your data.',
+    title: 'Plugins',
+    updateFailed: 'Could not update the plugin',
   },
 
   profile: {

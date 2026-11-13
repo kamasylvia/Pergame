@@ -30,6 +30,8 @@ import { internalLinkPlugin } from './internal-links';
 import { tooltipPlugin } from './tooltip';
 import { counterPlugin } from './counters';
 import { full as emojiPlugin } from 'markdown-it-emoji';
+import { markdownHooks, runPostProcessors } from '~/services/plugins/markdown';
+import { applyPluginHooks } from '~/services/plugins/markdown-hooks';
 
 function buildCompiler(breaks: boolean, typographer: boolean): MarkdownItType {
   const md = new MarkdownIt({ html: true, linkify: true, breaks, typographer });
@@ -68,6 +70,8 @@ function buildCompiler(breaks: boolean, typographer: boolean): MarkdownItType {
   md.use(internalLinkPlugin);
   md.use(sourceMapPlugin);
   md.use(embedsPlugin);
+  // Plugin hooks (PS-C): see services/plugins/markdown-hooks.
+  applyPluginHooks(md);
   return md;
 }
 
@@ -76,7 +80,9 @@ function buildCompiler(breaks: boolean, typographer: boolean): MarkdownItType {
 const compilerCache = new Map<string, MarkdownItType>();
 
 function getCompiler(breaks: boolean, typographer: boolean) {
-  const key = `${breaks}:${typographer}`;
+  // Hook registrations bump `markdownHooks.version`: a new plugin renderer
+  // takes effect on the next compile without a page reload.
+  const key = `${breaks}:${typographer}:${markdownHooks.version}`;
   let md = compilerCache.get(key);
   if (!md) {
     md = buildCompiler(breaks, typographer);
@@ -99,8 +105,9 @@ export default function compile(str: string = '', resolveNode?: (id: string) => 
   } catch {
     // Store unavailable (SSR/tests): fall back to defaults.
   }
-  return getCompiler(breaks, typographer).render(str, {
+  const html = getCompiler(breaks, typographer).render(str, {
     html: true,
     resolveNode,
   });
+  return markdownHooks.postProcessors.size ? runPostProcessors(html) : html;
 }

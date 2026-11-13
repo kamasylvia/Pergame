@@ -1,0 +1,10 @@
+{
+  "id": "recent-files",
+  "name": "Recent files",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "main.mjs",
+  "capabilities": ["nodes:read", "ui"],
+  "author": "Pergame",
+  "description": "Palette command that lists your most recently edited documents."
+}

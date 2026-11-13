@@ -8,6 +8,9 @@
  */
 import { netAllows } from './manifest';
 import type { PluginUiClient } from './ui';
+import { createRemoteKV } from './settings';
+import { createMarkdownClient, type PluginMarkdownClient } from './markdown';
+import { createEditorClient, type PluginEditorClient } from './editor';
 import type {
   KVStore,
   NetClient,
@@ -50,6 +53,20 @@ export interface PluginContextDeps {
   notify: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void;
   /** Command/ribbon registrations for this plugin (PS-B). */
   ui: PluginUiClient;
+  /**
+   * Settings store. Defaults to the server-backed namespace (PS-D); tests can
+   * inject the in-memory one.
+   */
+  settings?: KVStore;
+  /** Markdown/editor hook clients (PS-C); default to the global registries. */
+  markdown?: PluginMarkdownClient;
+  editor?: PluginEditorClient;
+  /**
+   * Capabilities the user approved. Defaults to the manifest's full list for
+   * dev-mode loads; the registry path passes the server's grant so a plugin
+   * never gets more than the user consented to.
+   */
+  granted?: string[];
 }
 
 const NET_ALLOWED_METHODS: Record<string, true> = { GET: true, POST: true };
@@ -84,7 +101,7 @@ export function createMemoryKV(initial: Record<string, unknown> = {}): KVStore {
 }
 
 /** Network facade: capability allowlist, method and size limits (spec §9.4). */
-export function createNetClient(capabilities: readonly string[]): NetClient {
+export function createNetClient(capabilities: readonly string[], request: PluginRequest, pluginId: string): NetClient {
   return {
     async fetch(url, init) {
       const target = new URL(String(url));
@@ -111,6 +128,25 @@ export function createNetClient(capabilities: readonly string[]): NetClient {
         statusText: response.statusText,
         headers: response.headers,
       });
+    },
+    async proxy(url, init) {
+      const target = new URL(String(url));
+      if (!netAllows(capabilities, target)) {
+        throw new Error(`net: ${target.hostname} is not allowed by this plugin's capabilities`);
+      }
+      const response = await request<{ status: number; content_type: string; body: string }>(
+        `plugins/${pluginId}/proxy`,
+        'POST',
+        { url: target.toString(), method: init?.method ?? 'GET', body: init?.body },
+      );
+      if (response.status !== 'success' || !response.result) {
+        throw new Error(response.message || 'proxy request failed');
+      }
+      return {
+        status: response.result.status,
+        contentType: response.result.content_type,
+        body: response.result.body,
+      };
     },
   };
 }
@@ -174,12 +210,14 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
     nodes,
     resources,
     search,
-    settings: createMemoryKV(),
+    settings: deps.settings ?? createRemoteKV(deps.manifest.id, request),
     ui: {
       notice: (message, opts) => deps.notify(message, opts),
       command: (id, title, run) => deps.ui.command(id, title, run),
       ribbon: (icon, title, run) => deps.ui.ribbon(icon, title, run),
     },
-    net: createNetClient(deps.manifest.capabilities),
+    net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id),
+    markdown: deps.markdown ?? createMarkdownClient(() => {}),
+    editor: deps.editor ?? createEditorClient(() => {}),
   };
 }

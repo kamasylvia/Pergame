@@ -284,6 +284,7 @@ export default {
     markdown: 'Markdown',
     mcp: 'MCP',
     other: '其他',
+    plugins: '外掛',
     profile: '我的個人檔案',
     security: '安全性',
     shortcuts: '快捷鍵',
@@ -291,6 +292,23 @@ export default {
     snippets: '程式碼片段',
     styles: '樣式注入',
     teams: '團隊',
+  },
+
+  plugins: {
+    capabilities: '權限',
+    disabled: '已被管理員停用。',
+    empty: '尚未安裝任何外掛。',
+    install: '安裝外掛',
+    installed: '已安裝外掛',
+    installedOne: '已安裝 {name} v{version}',
+    installHint: '上傳外掛 zip（manifest.json + main.mjs）。僅管理員。',
+    installing: '安裝中…',
+    noCapabilities: '此外掛未申請任何權限。',
+    notApproved: '尚未核准：至少授予一項權限後才會載入。',
+    pickArchive: '選擇壓縮檔…',
+    subtitle: '安裝外掛，並決定每個外掛可以對你的資料做什麼。',
+    title: '外掛',
+    updateFailed: '無法更新外掛',
   },
 
   profile: {

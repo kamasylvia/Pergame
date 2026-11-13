@@ -48,6 +48,8 @@ schemars = "1"
 
 [dev-dependencies]
 proptest = "1.12"
+# Integration tests build plugin archives to exercise the install route.
+zip = { version = "9.4.2", default-features = false, features = ["deflate"] }
 
 [lints.rust]
 unsafe_code = "deny"
