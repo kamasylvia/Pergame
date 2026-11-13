@@ -211,7 +211,7 @@ export const useNodesStore = defineStore('nodes', () => {
     const request = await makeRequest(`nodes/${opts?.id ? opts.id : 'user/@me'}`, 'GET', {});
     if (request.status == 'success') {
       if (opts?.id) {
-        const result = request.result as { node: DB_Node; permissions: Permission[] };
+        const result = request.result as { node: DB_Node; permissions: Permission[]; auto_index?: DB_Node | null };
         const shared = nodes.value.get(opts.id)?.shared ?? false;
         // Check for orphaned parent_id and detach if necessary
         let finalParentId = result.node.parent_id;
@@ -228,6 +228,15 @@ export const useNodesStore = defineStore('nodes', () => {
           permissions: result.permissions,
         };
         nodes.value.set(opts.id, updatedNode, true);
+        // Directory index (issue #4): folder read lazily rebuilds a missing
+        // index file; absorb it so the tree shows it without refetch.
+        if (result.auto_index) {
+          nodes.value.set(
+            result.auto_index.id,
+            { ...result.auto_index, partial: false, synced: true, shared: false, permissions: [] },
+            true,
+          );
+        }
         return updatedNode as 'id' extends keyof T ? Node : IndexedCollection;
       } else {
         if (!request.result) return nodes.value as 'id' extends keyof T ? Node : IndexedCollection;
@@ -334,10 +343,16 @@ export const useNodesStore = defineStore('nodes', () => {
     const oldId = node.id;
     delete node.id;
     if (!node.parent_id) delete node.parent_id; // Ensure parent_id is not sent as empty string
-    const response = await makeRequest<DB_Node>('nodes', 'POST', { ...node, id: undefined });
+    const response = await makeRequest<DB_Node | { node: DB_Node; index: DB_Node | null }>('nodes', 'POST', { ...node, id: undefined });
     if (response.status == 'success') {
-      nodes.value.set((response.result as DB_Node).id, { ...(response.result as DB_Node), partial: false, synced: true, shared: false, permissions: [] }, true);
-      return response.result as DB_Node;
+      // Folder creation also returns its auto-created index file (issue #4).
+      const payload = response.result!;
+      const created = 'node' in payload ? payload.node : payload;
+      nodes.value.set(created.id, { ...created, partial: false, synced: true, shared: false, permissions: [] }, true);
+      if ('index' in payload && payload.index) {
+        nodes.value.set(payload.index.id, { ...payload.index, partial: false, synced: true, shared: false, permissions: [] }, true);
+      }
+      return created;
     } else if (isNetworkError(response)) {
       node.user_id = userStore.user?.id;
       const localNode = await LocalDbService.saveCreateDelta({ ...node, id: oldId });
@@ -353,6 +368,12 @@ export const useNodesStore = defineStore('nodes', () => {
       const full_node = await fetch({ id: node.id });
       if (!full_node) throw 'Node not found';
       node = mergeNode(node, full_node);
+    }
+    // Directory index (issue #4, locked): the editor sends the full node, so
+    // restore the frozen fields locally instead of tripping the 403.
+    const stored = nodes.value.get(node.id);
+    if (stored?.metadata?.index === true) {
+      node = { ...node, name: stored.name, parent_id: stored.parent_id, order: -1, metadata: stored.metadata };
     }
     if (!node.parent_id) delete node.parent_id; // Ensure parent_id is not sent as empty string
     const response = await makeRequest(`nodes/${node.id}`, 'PUT', node);
@@ -393,6 +414,10 @@ export const useNodesStore = defineStore('nodes', () => {
   }
 
   async function remove(id: string) {
+    // Directory index (issue #4, locked): local guard mirrors the 403.
+    if (nodes.value.get(id)?.metadata?.index === true) {
+      throw new Error('Index file cannot be deleted');
+    }
     const response = await makeRequest(`nodes/${id}`, 'DELETE', {});
     if (response.status == 'success') {
       //

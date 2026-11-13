@@ -15,7 +15,7 @@
 - [x] **Rust 代码质量改进项** ✅(2026-11-13,审计 6 项全落地 + 集成测试修复 + 3 真 bug):①`#![deny(unsafe_code)]`(forbid 与 test scoped allow 互斥,deny 等效;生产 unsafe 0,8 处全在 `#[cfg(test)]`);②删 `croner`/`aws-config`;③拆分 6 文件全 <600(restore→apply/plan/portable/members、backup→mod/store/run/schedule、resources→upload/download/orphans、nodes→mod/trash、repo→mod/tests、routes/backup→mod/tests);④rustdoc 全覆盖 + 6 doc-tests(抽 `src/lib.rs` 纯 binary 才跑得起);⑤llvm-cov 行 13.8%→24.3%(纯逻辑多 85%+,余量需活 pg/S3)+ proptest 3 组(cron/sanitize/cookie);⑥PGO/SoA/SIMD 判 N/A。**真 bug**:环检查 `(Uuid,)`↔bigint 错配恒 500(UUIDv7 批量改残留)、还原子先父后撞外键(改两轮插入)、2FA `qr_code_url` 返 Display 摘要非 otpauth URL(改 `to_url()`)。**集成**:14/14 全绿(修 3 过时测试:target 走 probe-draft token、备份前建 target、还原传 force、sync 改快照语义)。单测 44→117。
 - [x] **Per-user 配额 + 内容寻址去重** ✅(2026-11-13):①users.max_file/total_size(NULL=回落 config;config 0=无限制;admin 豁免;PATCH 双 Option 清 null;`GET /users/@me/quota`;CDN 条读服务端+无限制态;用户管理页配额输入);②空/缺省=无限制口径(TRASH_RETENTION unset/空=不清理,0=全清;SNAPSHOT_INTERVAL unset/空=关,0=非法 warn 关;全局审计余量无限制语义);③去重(`object_blobs`+`blobs/{sha256}`+refcount;upload/update/restore acquire;purge/删账户递减;末引用删对象;备份读 blob 优先;orphan 扫失引 blob)。**生产迁移实测**:30 对象全迁 `bytes_saved=0`(无重复)。单测 117→119,集成 14→16,覆盖率行 22.9%。
 - [x] **MCP server** ✅(2026-11-12,issue #3 保持开启待用户确认):`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具 + `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens` + docs `use/mcp`。**已实测**:隔离库全链(token 生命周期/7 工具/越权 -32003/环 -32602/回收站/吊销 401)+ 只读窗口(四写 -32023、三读放行、REST 同窗 423)+ 生产库真数据(list/read/search/create/update/delete 全通)。**未做**:速率限制(P1 裁决不做);docker 镜像未含(下次 release 才上 QNAP)。
-- [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
+- [x] **目录索引文件** ✅(2026-11-13):issue #4;`metadata.index=true` 身份标记(服务端签发,客户端不可伪造)+ 建夹自动创建(响应 `{node,index}`)+ GET 懒重建 + 唯一索引 `0010` + 锁定(改名/移动/删除/pin 全拒,内容可编辑;MCP 三写工具同锁)+ 设置批量改名(`indexFileName`,`index_renamed` 计数,含回收站行)+ `displayIndexFiles` 可见性开关 + index 块子树渲染(过滤 index/目录优先/图标)+ 目录行跳转懒建 + 全站排序 index 置顶。单测 128 + 集成新用例 `directory_index_lifecycle`。spec = `features/directory-index.md`。
 - [x] **Dataview 查询引擎** ✅(2026-11-13):issue #5;DQL 子集(LIST/TABLE/FROM folder+tag/WHERE 比较+contains/startswith+AND/OR/NOT/SORT/LIMIT 硬顶100/相对时间-7d)+手写递归下降+参数化 planner(字段白名单/深度32)+`POST /api/nodes/query`(仅本人节点/5s 超时)+前端 ` ```dataview `/` ```index ` 块(LIST/TABLE/index 预设 `LIST FROM 当前目录`)+可点跳转。**实测**:单测 6/6+集成 17/17+浏览器 3 块渲染+跳转。spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。
 
@@ -30,7 +30,7 @@
 
 ## 待人工验证
 
-> **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。(2026-11-13 校数:119 单测 + 6 doc-tests + 16 集成全绿,~20.5k 行 Rust / 79 文件,9 migration)
+> **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。(2026-11-13 校数:128 单测 + doc-tests + 18 集成全绿,~21k 行 Rust / 80 文件,10 migration)
 > 后端 80 路由 / 218 Vue;
 > 认证/2FA/OIDC/节点/软链接/回收站/快照/还原/fan-out/只读锁均已对真实 pg + 对象存储活测。
 > 部署步骤 = 思源 `Pergame 外部基础设施部署指南`(id 20261111085400-74zeey6);旧版指南已删。
@@ -41,8 +41,9 @@
 2. ~~**dr-backup 真实备份从未跑成**~~ —— **已失效(2026-11-12 快照=全备份,边车删除 `06a30906`)**:实例 DR 改由用户级快照直写 targets 覆盖,本条作废。
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
+5. **目录索引的点击链**——index 块渲染逻辑已用真实 helper + DOM 桩验过(过滤/排序/图标),目录行点击→懒建→跳转只在 API 层验过;本机无浏览器(camoufox 缓存空、1.3GB 安装过慢),需在有浏览器的机器点一遍:侧边栏 index 置顶、指向 index 的隐藏开关、目录页「打开索引」按钮。
 
-**明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13;剩余:目录索引(#4,等 #5 落地已可开工)、插件系统、Pergamena 改名。
+**明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13、目录索引 ✅2026-11-13;剩余:插件系统(#8)、Pergamena 改名。
 
 ### 建议测试顺序
 

@@ -51,6 +51,11 @@ export default {
     toClose: 'zum Schließen',
   },
 
+  index: {
+    nameLocked: 'Der Name der Indexdatei wird unter Einstellungen → Dokumente verwaltet.',
+    open: 'Indexdatei öffnen',
+  },
+
   modals: {
     delete: {
       bulkCount: 'Durch diesen Vorgang werden {count} Nodes gelöscht.',

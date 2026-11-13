@@ -75,17 +75,29 @@ export function useNodesTree() {
    * Get the tree structure for a specific workspace, optionally including the full subtree
    */
   const getWorkspaceTree = (workspaceId?: string, fullTree: boolean = false): TreeItem<Node>[] => {
-    if (!workspaceId) return tree.value;
-
+    if (!workspaceId) return filterIndexFiles(tree.value);
     if (workspaceId === 'shared') {
-      return tree.value.filter(item => item.data?.shared);
+      return filterIndexFiles(tree.value.filter(item => item.data?.shared));
     }
-
     const cachedItem = treeMap.value.get(workspaceId);
     if (!cachedItem) return [];
+    if (fullTree) return filterIndexFiles([cachedItem]);
+    return filterIndexFiles(cachedItem.children ?? []);
+  };
 
-    if (fullTree) return [cachedItem];
-    return cachedItem.children ?? [];
+  /**
+   * Directory index (issue #4): prune index files from the sidebar tree
+   * when `displayIndexFiles` is off. Pure recursion (leaf docs, no
+   * descendant surgery), so the cached global tree stays shared.
+   */
+  const filterIndexFiles = (items: TreeItem<Node>[]): TreeItem<Node>[] => {
+    const preferences = usePreferencesStore();
+    if (preferences.get('displayIndexFiles').value) return items;
+    return items.flatMap(item => {
+      if (item.data?.metadata?.index === true) return [];
+      if (!item.children?.length) return [item];
+      return [{ ...item, children: filterIndexFiles(item.children) }];
+    });
   };
 
   /**

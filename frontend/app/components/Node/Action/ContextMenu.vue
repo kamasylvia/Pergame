@@ -17,9 +17,9 @@
     <div class="menu-group">
       <button class="menu-item" @click="action('cloneTo')"><Icon name="duplicate" />{{ t('common.actions.cloneTo') }}</button>
       <button v-if="props.linkId" class="menu-item" @click="action('removeLink')"><Icon name="link_off" />{{ t('common.actions.removeLink') }}</button>
-      <button class="menu-item" @click="action('duplicate')"><Icon name="duplicate" />{{ t('common.actions.duplicate') }}<kbd>Ctrl+D</kbd></button>
+      <button v-if="!isIndex" class="menu-item" @click="action('duplicate')"><Icon name="duplicate" />{{ t('common.actions.duplicate') }}<kbd>Ctrl+D</kbd></button>
       <button class="menu-item" @click="action('copyLink')"><Icon name="link" />{{ t('common.actions.copyLink') }}<kbd>Ctrl+L</kbd></button>
-      <button class="menu-item" @click="action('pin')">
+      <button v-if="!isIndex" class="menu-item" @click="action('pin')">
         <Icon :name="node.order === -1 ? 'pin_off' : 'pin'" />{{ node.order === -1 ? t('common.actions.unpin') : t('common.actions.pin') }}<kbd>P</kbd>
       </button>
     </div>
@@ -28,7 +28,7 @@
       <button class="menu-item" @click="action('manageAccess')"><Icon name="manage_access" />{{ t('nodes.actions.managePermissions') }}</button>
     </div>
 
-    <div class="menu-group">
+    <div v-if="!isIndex" class="menu-group">
       <button class="menu-item delete" @click="action('delete')"><Icon name="delete" />{{ t('common.actions.delete') }}<kbd>Del</kbd></button>
     </div>
 
@@ -63,7 +63,8 @@ userStore.fetchPublicUser(props.node.user_id);
 
 const user = computed(() => userStore.getById(props.node.user_id || ''));
 const developerMode = preferences.get('developerMode');
-
+/** Directory index (issue #4): name/parent/pin locked, no delete/duplicate. */
+const isIndex = computed(() => props.node.metadata?.index === true);
 async function action(name: string) {
   switch (name) {
     case 'open':

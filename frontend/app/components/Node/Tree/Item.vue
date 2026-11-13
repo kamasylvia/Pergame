@@ -56,6 +56,10 @@ const children = computed(() => {
     }
   });
   return result.sort((a, b) => {
+    // Directory index (issue #4): index first.
+    const aIndex = a.metadata?.index === true;
+    const bIndex = b.metadata?.index === true;
+    if (aIndex !== bIndex) return aIndex ? -1 : 1;
     if (a.role !== b.role) return a.role - b.role;
     const orderA = a.order ?? 0;
     const orderB = b.order ?? 0;

@@ -121,3 +121,18 @@ export function mergeNode(node: Node, full_node: Node): Node {
   result.partial = false;
   return result;
 }
+
+/** Directory index file (issue #4): auto-created per folder, settings-driven name. */
+export function isIndexFile(node: unknown): boolean {
+  if (typeof node !== 'object' || node === null) return false;
+  if (!('metadata' in node)) return false;
+  const metadata: unknown = node.metadata;
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  if (!('index' in metadata)) return false;
+  return metadata.index === true;
+}
+
+/** Find the index child of a folder among store nodes (issue #4). */
+export function findIndexChild(nodes: ReadonlyArray<Pick<DB_Node, 'id' | 'parent_id' | 'role' | 'metadata'>>, folderId: string): string | undefined {
+  return nodes.find(n => n.parent_id === folderId && n.role === 3 && isIndexFile(n))?.id;
+}

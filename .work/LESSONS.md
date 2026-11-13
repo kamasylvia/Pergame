@@ -159,3 +159,16 @@
 - **tags 逗号分隔容空格**:`dqlprobe, demo` 的 `,demo,` LIKE 不中。规则:tag 成员匹配一律 `REPLACE(tags,' ','')` 后再包逗号。
 - **NodeRow 全列 SELECT**:planner 漏 `color` 等列运行期 500(`no column found`)。新 repo 查询抄 `list_all` 的列单(含 `"order" AS node_order` + thumbnail CASE),别手写子集。
 - **浏览器登录态**:localForage CDN 注入实例与 app 实例驱动不一致,设 flag 不生效。可靠法 = UI 真登录(测试密码可 bcrypt swap,测完从备份恢复)。
+
+## 2026-11-13 #4 目录索引批次
+
+- **PUT 是整行替换,「没传」≠「不改」**:index 文件的 parent 冻结若按「值不同就 403」实现,客户端省略 `parent_id` 的 PUT(只想改正文)会被判成「移动到根」直接 403。正确语义 = 省略视为不变(`safe_parent = 现有 parent`),只有显式传了**不同的** parent 才拒。集成用例第一版就撞在这。
+- **`create_node` 改响应形状会碎测试的 `result.id`**:返回 `{node,index}` 后,所有 `result_id_string` 读 `result.id` 的用例全挂。修法 = helper 先看 `result.node` 再回落 `result`(一处改,全体受益);新客户端同理用 `in` 窄化,别 inline cast。
+- **分部唯一索引是「防重」也是「防并发」**:`UNIQUE ... WHERE metadata->>'index'='true' AND deleted_at IS NULL` 让 check-then-insert 的竞态自然折回(`23505` → 视为已存在);同时它把「还原旧归档里同目录两个 index」变成事务级失败——`restore/apply` 必须在插入前按 parent 去重并剥标记,否则整次还原回滚。
+- **快照/回收站/树/排序都有 index 计数副作用**:自动建 index 让 trash `nodes`/`batch_size`/`restored`/`purged`、restore `incoming_nodes`/`nodes`、DQL `LIST FROM` 行数全部 +1~+2。改这类「每目录多一行」的特性,先 `grep -n "assert_eq!.*len\|as_u64().unwrap_or(0)" tests/` 一次全量对表。
+- **`nodes.name` 是 VARCHAR(50)**:设置里允许任意长度文件名会整条 settings PUT 500(长度违规)。规则 = 读设置时就地夹到 50 字并回落默认名,配置层不产生 DB 错误。
+- **客户端不能签发服务端标记**:`metadata.index` 必须由服务端写,create/update 收到的同名键要剥掉;否则任何客户端都能伪造第二个 index,与唯一索引对撞。导入路径同理(backup 里的 index 行直接跳过)。
+- **i18n 文案里的撇号**:法语/乌克兰语 `l'`/`Ім'я` 用单引号包裹会截断字符串,typecheck 报一屏 TS1005。安全写法 = 含撇号文案统一双引号。
+- **新依赖不装 → typecheck 报 module not found 是环境不是代码**:`abcjs`/`markdown-it-multimd-table` 报 TS2307 时先 `grep package.json`,再 `bun install`(`git checkout -- bun.lock`),别去改 import。
+- **1.100 的 rustfmt/clippy 与 1.95 基线有差**:`cargo fmt --check` 会对既有 `dql.rs` 报 diff(仅换行风格)、clippy 1.100 的 `redundant_clone` 会命中 `target/webdav.rs` 旧代码。判断归属:只对**本次改动文件**跑 `rustfmt --check <files>`;旧文件的 lint 命中要么单独一行修掉(无行为变化),要么明确记为基线差异,别整仓 `cargo fmt` 制造噪声 diff。
+- **无浏览器时的渲染验证**:本机 camoufox 缓存空、1.3GB 安装太慢,改用 `bun run <script>` 直接 import 真实 helper(`dataview-render.ts`),用 DOM 桩 + 真实 DQL 响应跑断言(过滤/排序/图标)。验的是被改的那段逻辑本体,不是替代品;但点击跳转等交互仍待有浏览器时补验。

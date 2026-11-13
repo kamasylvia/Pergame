@@ -145,7 +145,7 @@ impl WebdavTarget {
             // S3's list returns full keys. Bare tails would resolve against
             // the wrong directory.
             let key = if path.trim_matches('/').is_empty() {
-                tail.clone()
+                tail
             } else {
                 format!("{}/{tail}", path.trim_matches('/'))
             };

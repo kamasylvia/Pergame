@@ -1,4 +1,4 @@
-type OptionType = 'toggle' | 'select' | 'color' | 'radio' | 'groupCheckbox' | 'anode' | 'textarea' | 'number';
+type OptionType = 'toggle' | 'select' | 'color' | 'radio' | 'groupCheckbox' | 'anode' | 'textarea' | 'number' | 'text';
 interface BaseOption<K extends PreferenceKey = PreferenceKey> {
   label: string;
   description?: string;
@@ -54,6 +54,13 @@ interface NumberOption<K extends PreferenceKey = PreferenceKey> extends BaseOpti
   onChange?: (value: Preferences[K]) => void;
 }
 
-export type Option = ToggleOption | ColorOption | SelectOption | RadioOption | GroupCheckboxOption | AnodeOption | TextareaOption | NumberOption;
+interface TextOption<K extends PreferenceKey = PreferenceKey> extends BaseOption<K> {
+  type: 'text';
+  placeholder?: string;
+  maxlength?: number;
+  onChange?: (value: Preferences[K]) => void;
+}
 
-export type { ColorOption, SelectOption, RadioOption, ToggleOption, GroupCheckboxOption, AnodeOption, TextareaOption, NumberOption };
+export type Option = ToggleOption | ColorOption | SelectOption | RadioOption | GroupCheckboxOption | AnodeOption | TextareaOption | NumberOption | TextOption;
+
+export type { ColorOption, SelectOption, RadioOption, ToggleOption, GroupCheckboxOption, AnodeOption, TextareaOption, NumberOption, TextOption };

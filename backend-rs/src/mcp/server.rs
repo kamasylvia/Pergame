@@ -376,6 +376,13 @@ impl PergameMcp {
             .await?;
 
         let mut write = Self::write_from_row(&node);
+        if node_repo::is_index(&node.metadata) && args.name.is_some() {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode(-32003),
+                "index file name can only change through settings",
+                None,
+            ));
+        }
         if let Some(name) = args.name {
             let name = name.trim().to_string();
             if name.is_empty() {
@@ -441,7 +448,14 @@ impl PergameMcp {
                 None,
             ));
         }
-
+        // Directory index (issue #4, locked): it belongs to its folder.
+        if node_repo::is_index(&node.metadata) {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode(-32003),
+                "index file cannot be moved",
+                None,
+            ));
+        }
         let requested = match args.new_folder_id.as_deref() {
             Some(raw) if !raw.trim().is_empty() => Some(parse_id(raw)?),
             _ => None,
@@ -509,6 +523,14 @@ impl PergameMcp {
         let node = self
             .load(&actor, parse_id(&args.id)?, NodeAction::Delete)
             .await?;
+        // Directory index (issue #4, locked): it belongs to its folder.
+        if node_repo::is_index(&node.metadata) {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode(-32003),
+                "index file cannot be deleted",
+                None,
+            ));
+        }
         let (deleted_at, nodes) =
             node_repo::soft_delete_subtree(&self.state.db, node.id, node_repo::now_ms())
                 .await

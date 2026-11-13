@@ -32,7 +32,7 @@
 |---|---|---|
 | B1 | Rust 重写 + pg(Toasty + sqlx 逃逸)。**P0 ✅(2026-11-08)**;**P1 ✅(2026-11-08,commits c9fae7c0/4993e160)**:backend-rs 骨架(axum+config+snowflake+0001 pg schema+health)、Toasty spike **PASS**(编译门 + 共存审查;运行时验证移 P2 首查点) | issue #1;`rust-migration/RESEARCH.md` §8 |
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
-| B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
+| B3 | 目录索引文件 ✅(2026-11-13) | issue #4;spec `features/directory-index.md`(裁决+实施记录) |
 | B4 | Dataview 查询引擎 ✅(2026-11-13) | issue #5;spec `features/dataview.md`(开放问题全裁决+实施记录) |
 | B5 | 插件系统 PS-A..E(排 B1 主体后,与 B2-B4 合流;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` |
 
@@ -67,16 +67,19 @@
 3. 部署 smoke:external 3 服务栈已在 QNAP 常驻;按思源笔记 `Pergame 外部基础设施部署指南`(id `20261111085400-74zeey6`)的剩余清单走功能项;NAS 上只需 `docker-compose.external.yml`(配置全内联,不需要 .env,不需要 clone 仓库)。旧版指南(id `20261110165052-x8mgczs`,自包含 5 服务 + .env 模型)已过时,2026-11-11 经用户确认删除。
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
 5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
+6. **目录索引(#4)✅ 2026-11-13**:后端建夹自动建 + 读夹懒建 + 三写锁 + 设置批量改名 + 唯一索引 0010;前端 index 块子树渲染/目录优先/目录行跳转/侧边栏置顶与隐藏开关。**待有浏览器机器点验**:侧边栏 index 置顶、`displayIndexFiles` 隐藏、目录页「打开索引」按钮(index 块渲染已用真实 helper + DOM 桩验过;本机 camoufox 缓存空、安装 1.3GB 过慢)。
 
 ### 换机续接指引
 
 - **编译/测试环境**:backend-rs 需 `rustup override set 1.100.0`(2026-11-13 起;原 1.95.0 在 macOS 27.2 下 proc-macro dylib dlopen 失败,详见 LESSONS;toasty 要求 ≥1.95,1.100 实测全绿);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。**本地起前后端(连 NAS 基础设施,活测模式)**:backend env = `DATABASE_*`(host 换 `qnap.elf-balance.ts.net`)+ `S3_*`(QuObjects 8010)+ 随机 `JWT_SECRET` + `ALLOW_UNSECURE=true` + `TZ=Asia/Shanghai` + `ADMIN_ACCOUNTS=<laniakea id>`;启动前杀旧 8201 监听(`lsof -t -iTCP:8201`);frontend = `NUXT_PUBLIC_API_PROXY_TARGET=http://localhost:8201 NUXT_PUBLIC_CDN_PROXY_TARGET=http://qnap.elf-balance.ts.net:8010 bun run dev`。
 - **活环境**:NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(`PG_HOST/PG_PORT/PG_USERNAME/PG_PASSWORD`, `QUOBJECT_ENDPOINT/ACCESS_KEY/SECRET_KEY`;QUOBJECT_ENDPOINT 值是容器内主机名,本机用需替换为 `qnap.elf-balance.ts.net`)。Keycloak(`KEYCLOAK_URL` :10002)可复用于 OIDC 测试。
-- **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;14 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET=pergame-tgt-test`(存在的空桶;备份/还原/target 三用例用,带自清理)。
-- **验证门**:`cargo test --lib`(117 单测)+ `cargo test --doc`(6)+ 集成 14、`cargo clippy --all-targets`(0)、`cargo fmt --check`、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
+- **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;18 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET=pergame-tgt-test`(存在的空桶;备份/还原/target 三用例用,带自清理)。
+- **验证门**:`cargo test --lib`(128 单测)+ `cargo test --doc`(6)+ 集成 18、`cargo clippy --all-targets`(0;1.100 的 clippy 比 1.95 严,旧代码 `target/webdav.rs` 已顺手修 1 处 `redundant_clone`)、`cargo fmt --check`(**1.100 的 rustfmt 会对既有 `dql.rs` 报风格 diff,属基线差异;改完只对本次文件跑 `rustfmt --check <files>`**)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **目录索引文件(2026-11-13,issue #4 ✅)**:`metadata.index=true` 身份标记(服务端签发;客户端 create/update 提交的键被剥离)+ 建夹自动创建(`POST /nodes` 响应 `{node,index}`)+ 读夹懒重建(GET 回 `auto_index`)+ `migration 0010` 分部唯一索引 `idx_nodes_index_child` + 锁定(改名/移动/删除/pin 全拒,内容可编辑;check-then-insert 竞态由唯一索引折回;MCP `update_note`/`move_node`/`delete_node` 同步拒绝)+ 设置批量改名(`indexFileName` → 同请求 UPDATE 存量含回收站行,响应 `index_renamed`)+ 可见性开关 `displayIndexFiles` + index 块子树渲染(过滤自身/其他 index、目录优先 + 图标)+ 目录行跳转懒建 + 全站排序 index 置顶 + 还原归档去重(重复 index 剥标记 + warning)。单测 128 绿;集成新增 `directory_index_lifecycle`,并修正 trash/restore/DQL 5 处受 index 影响的计数断言。spec = `features/directory-index.md`。
 
 - **Dataview 查询引擎(2026-11-13,issue #5 ✅)**:`src/dql.rs`(lexer+递归下降+参数化 planner)+`POST /api/nodes/query`(仅本人/5s 超时)+前端 dataview/index 块+index 预设。单测 6/6+集成 17/17+浏览器 3 块+跳转。tag 匹配容空格;shared 跨用户 v1 不做。#4 index 落地前提就绪。
 

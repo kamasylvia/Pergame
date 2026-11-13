@@ -79,7 +79,17 @@
         :max="opt.max"
         :step="opt.step"
       />
-    </div>
+
+      <!-- Text -->
+      <input
+        v-else-if="opt.type === 'text'"
+        v-model="p(opt.key).value"
+        type="text"
+        class="entry text-entry"
+        :placeholder="opt.placeholder || ''"
+        :maxlength="opt.maxlength"
+        @change="opt.onChange?.(p(opt.key).value)"
+      />
   </div>
 </template>
 
@@ -159,6 +169,10 @@ h3 {
 }
 
 .number-entry {
+  width: 40%;
+}
+
+.text-entry {
   width: 40%;
 }
 </style>

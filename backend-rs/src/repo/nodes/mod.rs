@@ -470,7 +470,11 @@ pub async fn resolve_folder_path(
     user_id: Uuid,
     path: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
-    let segs: Vec<&str> = path.split('/').map(str::trim).filter(|s| !s.is_empty()).collect();
+    let segs: Vec<&str> = path
+        .split('/')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
     if segs.is_empty() {
         return Ok(None);
     }
@@ -523,4 +527,53 @@ pub async fn dql_query(
         };
     }
     q.fetch_all(pool).await
+}
+
+/// Directory index marker: `nodes.metadata.index = true` (issue #4). The name
+/// is user-configurable (`general.index_file_name`), so identity never keys
+/// off the filename.
+pub fn is_index(metadata: &Option<serde_json::Value>) -> bool {
+    metadata
+        .as_ref()
+        .and_then(|m| m.get("index"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Live index child of a folder, if any (`metadata.index = true`, role 3).
+pub async fn get_index_child(
+    pool: &PgPool,
+    folder_id: Uuid,
+) -> Result<Option<NodeRow>, sqlx::Error> {
+    sqlx::query_as::<_, NodeRow>(
+        "SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
+                  n.icon, n.theme, n.accessibility, n.access, n.display, n.\"order\" AS node_order, n.size,
+                  n.metadata, n.created_timestamp, n.updated_timestamp,
+                  CASE WHEN n.role IN (1, 2) THEN n.thumbnail ELSE NULL END AS thumbnail
+           FROM nodes n WHERE n.parent_id = $1 AND n.role = 3 AND n.metadata->>'index' = 'true' AND n.deleted_at IS NULL LIMIT 1",
+    )
+    .bind(folder_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Rename every index node of a user (settings-driven batch rename).
+/// Trashed rows are included: they carry the name they will show when
+/// restored, and leaving them behind would resurrect a stale filename.
+/// Returns the renamed count.
+pub async fn rename_index_files(
+    pool: &PgPool,
+    user_id: Uuid,
+    name: &str,
+    now: i64,
+) -> Result<u64, sqlx::Error> {
+    sqlx::query(
+        "UPDATE nodes SET name = $1, updated_timestamp = $2 WHERE user_id = $3 AND metadata->>'index' = 'true'",
+    )
+    .bind(name)
+    .bind(now)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map(|r| r.rows_affected())
 }

@@ -190,6 +190,11 @@ pub async fn restore_from_zip(
     // nodes_parent_id_fkey would reject the insert. Insert parent-less first,
     // then wire parents in a second pass (all ids exist by then).
     let mut deferred_parents: Vec<(Uuid, Uuid)> = Vec::new();
+    // Directory index (issue #4): one live index per folder
+    // (`idx_nodes_index_child`). A foreign archive may carry several; the
+    // first wins and the rest lose the marker instead of aborting the tx.
+    let mut seen_index_parents: std::collections::HashSet<Option<Uuid>> =
+        std::collections::HashSet::new();
     for n in &nodes_raw {
         let Some(id) = as_uuid(n.get("id")) else {
             report.warnings.push("node without id skipped".into());
@@ -209,7 +214,17 @@ pub async fn restore_from_zip(
             }
             None => {}
         };
-        let metadata = n.get("metadata").cloned().unwrap_or(Value::Null);
+        let mut metadata = n.get("metadata").cloned().unwrap_or(Value::Null);
+        if metadata.get("index").and_then(Value::as_bool) == Some(true)
+            && !seen_index_parents.insert(parent)
+        {
+            if let Some(obj) = metadata.as_object_mut() {
+                obj.remove("index");
+            }
+            report.warnings.push(format!(
+                "node {id}: duplicate index file in its folder, marker dropped"
+            ));
+        }
         sqlx::query(
             r#"INSERT INTO nodes (id, user_id, parent_id, name, description, tags, role, color,
                    icon, thumbnail, theme, accessibility, access, display, "order",

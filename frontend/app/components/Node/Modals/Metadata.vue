@@ -17,10 +17,10 @@
           :items="parentsTree"
           :placeholder="t('common.labels.parent')"
           nullable
-          :disabled="i => i.id == node.id || nodeStore.isDescendant(node, i.id as string)"
+          :disabled="i => i.id == node.id || nodeStore.isDescendant(node, i.id as string) || node.metadata?.index === true"
         />
 
-        <div class="setting-row">
+        <div v-if="node.metadata?.index !== true" class="setting-row">
           <div class="setting-info">
             <label for="pinned">{{ t('common.labels.pinned') }}</label>
             <span class="setting-description">{{ t('nodes.modals.metadata.pinDescription') }}</span>

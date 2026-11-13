@@ -51,6 +51,11 @@ export default {
     toClose: '以關閉',
   },
 
+  index: {
+    nameLocked: '索引檔名在「設定 → 文件」中統一管理。',
+    open: '開啟索引檔',
+  },
+
   modals: {
     delete: {
       bulkCount: '此操作將刪除 {count} 個節點。',

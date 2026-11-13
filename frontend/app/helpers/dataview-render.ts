@@ -40,15 +40,37 @@ function cellText(node: Node, col: string): string {
   return v == null ? '' : String(v);
 }
 
-function renderRows(el: HTMLElement, result: QueryResult) {
-  if (!result.rows.length) {
+function indexRowLabel(n: Node): string {
+  if (n.role === 1 || n.role === 2) return `📁 ${n.name || '(untitled)'}`;
+  if (n.role === 4) return `📎 ${n.name || '(untitled)'}`;
+  return n.name || '(untitled)';
+}
+
+function renderRows(el: HTMLElement, result: QueryResult, kind: string, currentNode?: Partial<Node>) {
+  let rows = result.rows;
+  if (kind === 'index') {
+    // Subtree listing (issue #4): the folder itself, its index file and any
+    // other index rows are not entries; folders sort first.
+    const containerId = currentNode?.parent_id;
+    rows = rows.filter(n => n.metadata?.index !== true && n.id !== currentNode?.id && n.id !== containerId);
+    rows = [...rows].sort((a, b) => {
+      const aFolder = a.role === 1 || a.role === 2 ? 0 : 1;
+      const bFolder = b.role === 1 || b.role === 2 ? 0 : 1;
+      if (aFolder !== bFolder) return aFolder - bFolder;
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }
+  if (!rows.length) {
     el.innerHTML = '<span class="dataview-empty">No results</span>';
     return;
   }
   if (!result.columns) {
     // LIST: one clickable row per node.
-    el.innerHTML = `<ul class="dataview-list">${result.rows
-      .map(n => `<li><a data-internal-link="${esc(n.id)}" href="#">${esc(n.name || '(untitled)')}</a></li>`)
+    el.innerHTML = `<ul class="dataview-list">${rows
+      .map(n => `<li><a data-internal-link="${esc(n.id)}" href="#">${esc(kind === 'index' ? indexRowLabel(n) : n.name || '(untitled)')}</a></li>`)
       .join('')}</ul>`;
     return;
   }
@@ -56,7 +78,7 @@ function renderRows(el: HTMLElement, result: QueryResult) {
   const cols = result.columns;
   el.innerHTML = `<table class="dataview-table"><thead><tr>${cols
     .map(c => `<th>${esc(c)}</th>`)
-    .join('')}</tr></thead><tbody>${result.rows
+    .join('')}</tr></thead><tbody>${rows
     .map(
       n =>
         `<tr>${cols
@@ -114,7 +136,7 @@ export async function renderDataviewBlocks(
         el.innerHTML = `<span class="dataview-error">${esc(body.message || 'Query failed')}</span>`;
         continue;
       }
-      renderRows(el, body.result);
+      renderRows(el, body.result, kind, currentNode);
     } catch (err) {
       el.innerHTML = `<span class="dataview-error">${esc(err instanceof Error ? err.message : 'Query failed')}</span>`;
     }

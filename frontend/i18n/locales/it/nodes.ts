@@ -51,6 +51,11 @@ export default {
     toClose: 'per chiudere',
   },
 
+  index: {
+    nameLocked: "Il nome del file indice si gestisce in Impostazioni → Documenti.",
+    open: 'Apri il file indice',
+  },
+
   modals: {
     delete: {
       bulkCount: 'Questa azione eliminerà {count} nodi.',

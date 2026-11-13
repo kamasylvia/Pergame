@@ -198,6 +198,10 @@ export class IndexedCollection {
 	*/
   private rebuildSortedArray() {
     this.sortedArray = Array.from(this.store.values()).sort((a, b) => {
+      // Directory index (issue #4): index first, ahead of pinned siblings.
+      const aIndex = a.metadata?.index === true;
+      const bIndex = b.metadata?.index === true;
+      if (aIndex !== bIndex) return aIndex ? -1 : 1;
       // 1. Sort by role
       if (a.role !== b.role) {
         return b.role - a.role;

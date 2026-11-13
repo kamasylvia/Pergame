@@ -17,6 +17,92 @@ use crate::repo::nodes as node_repo;
 use crate::response::ApiOk;
 use crate::utils::sanitize_html;
 
+/// Default index filename (`general.index_file_name`, issue #4).
+pub const DEFAULT_INDEX_NAME: &str = "index";
+
+/// Fresh ````index` body for an auto-created index file.
+pub fn index_template() -> String {
+    "```index\n```\n".to_string()
+}
+
+/// Read the user's index filename from `user_settings.general`, falling back
+/// to [`DEFAULT_INDEX_NAME`] when unset, blank, or over 255 chars.
+pub async fn index_file_name(pool: &sqlx::PgPool, user_id: Uuid) -> String {
+    match crate::repo::settings_stats::get_settings(pool, user_id).await {
+        Ok(Some(row)) => index_name_from_general(&row.general),
+        _ => DEFAULT_INDEX_NAME.to_string(),
+    }
+}
+
+/// Pure name extraction (unit-testable without a database).
+pub fn index_name_from_general(general: &serde_json::Value) -> String {
+    // Frontend syncs `indexFileName` (camelCase preference keys); older saves
+    // and the spec use `index_file_name`. Accept both, camelCase first.
+    let name = general
+        .get("indexFileName")
+        .or_else(|| general.get("index_file_name"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    // `nodes.name` is VARCHAR(50): longer input falls back to the default
+    // rather than failing the whole settings save on a length violation.
+    if name.is_empty() || name.chars().count() > 50 {
+        DEFAULT_INDEX_NAME.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+/// Idempotently create the index child of a folder (auto-create on
+/// folder creation + lazy rebuild on folder read). Returns the freshly
+/// created row, `Ok(None)` when one already exists. A lost
+/// check-then-insert race surfaces as a unique-violation on
+/// `idx_nodes_index_child` and folds back to `Ok(None)`.
+pub async fn ensure_index_child(
+    pool: &sqlx::PgPool,
+    folder: &crate::models::NodeRow,
+) -> Result<Option<crate::models::NodeRow>, ApiError> {
+    if folder.role != 1 && folder.role != 2 {
+        return Ok(None);
+    }
+    if node_repo::get_index_child(pool, folder.id)
+        .await
+        .map_err(ApiError::from)?
+        .is_some()
+    {
+        return Ok(None);
+    }
+    let name = index_file_name(pool, folder.user_id).await;
+    let content = index_template();
+    let write = node_repo::NodeWrite {
+        parent_id: Some(folder.id),
+        name,
+        role: 3,
+        accessibility: Some(1),
+        access: 1,
+        node_order: Some(-1),
+        content: Some(content.clone()),
+        content_compiled: Some(String::new()),
+        size: Some(content.len() as i64),
+        metadata: Some(serde_json::json!({"index": true})),
+        ..Default::default()
+    };
+    let id = crate::types::new_id();
+    match node_repo::insert(pool, id, folder.user_id, &write, node_repo::now_ms()).await {
+        Ok(()) => Ok(node_repo::get_by_id(pool, id)
+            .await
+            .map_err(ApiError::from)?),
+        Err(e) => {
+            if let sqlx::Error::Database(db) = &e
+                && db.code().as_deref() == Some("23505")
+            {
+                return Ok(None);
+            }
+            Err(ApiError::from(e))
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 /// GET /nodes/search query (q/content/limit).
 pub struct SearchQuery {
@@ -108,9 +194,17 @@ pub async fn get_node(
         .filter(|p| p.user_id == actor.user_id || owner)
         .map(|p| serde_json::to_value(p).unwrap_or(json!(null)))
         .collect();
+    // Directory index (issue #4): reading your own folder lazily rebuilds a
+    // missing index file (deleted-then-revisited, pre-feature folders).
+    let auto_index = if node.user_id == actor.user_id {
+        ensure_index_child(&state.db, &node).await?
+    } else {
+        None
+    };
     Ok(ApiOk::ok(json!({
         "node": serde_json::to_value(&node).unwrap_or(json!(null)),
         "permissions": filtered,
+        "auto_index": auto_index,
     })))
 }
 
@@ -266,7 +360,13 @@ pub async fn create_node(
 
     let mut write = input.into_write();
     write.parent_id = safe_parent;
-
+    // Directory index (issue #4): the marker is server-issued; client
+    // metadata must not forge it (would collide with the real index).
+    if let Some(meta) = write.metadata.as_mut()
+        && let Some(obj) = meta.as_object_mut()
+    {
+        obj.remove("index");
+    }
     let id = crate::types::new_id();
     let now = node_repo::now_ms();
     node_repo::insert(&state.db, id, actor.user_id, &write, now)
@@ -279,7 +379,13 @@ pub async fn create_node(
         .ok_or(ApiError::Internal(Box::new(std::io::Error::other(
             "created node missing",
         ))))?;
-    Ok(ApiOk::with_status(StatusCode::OK, created))
+    // Directory index (issue #4): a fresh folder/workspace gets its index
+    // file immediately, so the tree shows it without a second round-trip.
+    let index = ensure_index_child(&state.db, &created).await?;
+    Ok(ApiOk::with_status(
+        StatusCode::OK,
+        json!({"node": created, "index": index}),
+    ))
 }
 
 /// PUT /nodes/:nodeId — update (write-level access; unlisted+access≥2 open
@@ -326,7 +432,18 @@ pub async fn update_node(
         access = db_node.access;
     }
 
+    // Directory index (issue #4, locked): the index file's name, parent,
+    // pin and marker can only change through the settings batch path or a
+    // same-folder rebuild. Content edits stay allowed; an omitted parent
+    // means "unchanged" here (a bare PUT must not silently root the file).
+    let is_index_file = node_repo::is_index(&db_node.metadata);
     let mut safe_parent = parent;
+    if is_index_file {
+        if safe_parent.is_some() && safe_parent != db_node.parent_id {
+            return Err(ApiError::Forbidden("index file cannot be moved".into()));
+        }
+        safe_parent = db_node.parent_id;
+    }
     if let Some(pid) = safe_parent {
         let parent_row = node_repo::get_by_id(&state.db, pid).await.unwrap_or(None);
         let allowed = match parent_row {
@@ -340,12 +457,20 @@ pub async fn update_node(
             safe_parent = None;
         }
     }
-
     let mut write = input.into_write();
     write.parent_id = safe_parent;
     write.accessibility = accessibility;
     write.access = access;
-
+    if is_index_file {
+        write.name.clone_from(&db_node.name);
+        write.node_order = Some(-1);
+        write.metadata = db_node.metadata.clone();
+    } else if let Some(meta) = write.metadata.as_mut()
+        && let Some(obj) = meta.as_object_mut()
+    {
+        // Non-index rows must not adopt the server-issued marker.
+        obj.remove("index");
+    }
     node_repo::update(&state.db, id, &write, node_repo::now_ms())
         .await
         .map_err(ApiError::from)?;
@@ -371,7 +496,11 @@ pub async fn delete_node(
     let actor: Actor = auth.into();
     let id = resolve_id(&node_id)?;
     let node = guard::require_node_action(&state.db, &actor, id, NodeAction::Delete).await?;
-
+    // Directory index (issue #4, locked): it belongs to the folder; deleting
+    // the folder soft-deletes the whole subtree including the index.
+    if node_repo::is_index(&node.metadata) {
+        return Err(ApiError::Forbidden("index file cannot be deleted".into()));
+    }
     let (deleted_at, affected) =
         node_repo::soft_delete_subtree(&state.db, node.id, node_repo::now_ms()).await?;
     Ok(ApiOk::ok(json!({
@@ -405,5 +534,44 @@ mod tests {
             resolve_user_param(&id.to_string(), Uuid::nil()).unwrap(),
             id
         );
+    }
+
+    #[test]
+    fn index_name_falls_back_on_missing_blank_or_long() {
+        assert_eq!(index_name_from_general(&json!({})), "index");
+        assert_eq!(
+            index_name_from_general(&json!({"index_file_name": "  "})),
+            "index"
+        );
+        assert_eq!(
+            index_name_from_general(&json!({"index_file_name": 42})),
+            "index"
+        );
+        assert_eq!(
+            index_name_from_general(&json!({"index_file_name": "x".repeat(51)})),
+            "index"
+        );
+        assert_eq!(
+            index_name_from_general(&json!({"index_file_name": "  home "})),
+            "home"
+        );
+        assert_eq!(
+            index_name_from_general(&json!({"indexFileName": "camel"})),
+            "camel"
+        );
+    }
+
+    #[test]
+    fn index_marker_reads_truthy_bool_only() {
+        assert!(node_repo::is_index(&Some(json!({"index": true}))));
+        assert!(!node_repo::is_index(&None));
+        assert!(!node_repo::is_index(&Some(json!({}))));
+        assert!(!node_repo::is_index(&Some(json!({"index": false}))));
+        assert!(!node_repo::is_index(&Some(json!({"index": "true"}))));
+    }
+
+    #[test]
+    fn index_template_is_bare_index_block() {
+        assert_eq!(index_template(), "```index\n```\n");
     }
 }

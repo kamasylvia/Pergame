@@ -14,6 +14,9 @@ export const useNodesImporterStore = defineStore('nodesImporter', () => {
     const toCreate: ImportItem[] = [];
     const toUpdate: ImportItem[] = [];
     for (const backupNode of nodesToImport) {
+      // Directory index (issue #4): the marker is server-issued; a foreign
+      // archive must not adopt it (would shadow the folder's real index).
+      if (backupNode.metadata?.index === true) continue;
       const existingNode = nodesStore.getById(backupNode.id);
       if (!existingNode) {
         toCreate.push({

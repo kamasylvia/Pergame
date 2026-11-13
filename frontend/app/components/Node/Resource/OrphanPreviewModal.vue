@@ -72,8 +72,8 @@ onUnmounted(() => {
 
 .orphan-preview-title {
   font-size: 13px;
-  word-break: break-all;
   color: var(--text-secondary);
+  word-break: break-all;
 }
 
 .orphan-preview-body {
@@ -90,8 +90,8 @@ onUnmounted(() => {
 
   pre {
     max-height: 60vh;
-    overflow: auto;
     white-space: pre-wrap;
+    overflow: auto;
   }
 }
 </style>

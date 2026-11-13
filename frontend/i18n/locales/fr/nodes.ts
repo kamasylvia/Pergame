@@ -51,6 +51,11 @@ export default {
     toClose: 'pour fermer',
   },
 
+  index: {
+    nameLocked: "Le nom du fichier index se gère dans Réglages → Documents.",
+    open: 'Ouvrir le fichier index',
+  },
+
   modals: {
     delete: {
       bulkCount: 'Cette action supprimera {count} nœuds.',
