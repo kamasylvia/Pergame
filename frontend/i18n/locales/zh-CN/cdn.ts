@@ -63,6 +63,7 @@ export default {
     deleteFailed: '删除失败',
     found: '{count} 个未使用 · {size}',
     hint: '检查没有文档引用的存储对象(失败导入或中断上传的残留)。',
+    loading: '加载中…',
     none: '没有残留——存储与文档一致。',
     preview: '预览',
     scan: '检查',

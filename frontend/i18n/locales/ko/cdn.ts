@@ -63,6 +63,7 @@ export default {
     deleteFailed: '삭제 실패',
     found: '{count}개 미사용 · {size}',
     hint: '문서가 참조하지 않는 저장 객체를 찾습니다(실패한 가져오기나 중단된 업로드의 잔여물).',
+    loading: '불러오는 중…',
     none: '남은 파일이 없습니다 — 저장소와 문서가 일치합니다.',
     preview: '미리 보기',
     scan: '확인',

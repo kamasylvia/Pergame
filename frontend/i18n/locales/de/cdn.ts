@@ -63,6 +63,7 @@ export default {
     deleteFailed: 'Löschen fehlgeschlagen',
     found: '{count} ungenutzt · {size}',
     hint: 'Prüft gespeicherte Objekte, auf die kein Dokument verweist (Reste fehlgeschlagener Importe oder abgebrochener Uploads).',
+    loading: 'Wird geladen…',
     none: 'Nichts Unbenutztes — der Speicher passt zu den Dokumenten.',
     preview: 'Vorschau',
     scan: 'Prüfen',

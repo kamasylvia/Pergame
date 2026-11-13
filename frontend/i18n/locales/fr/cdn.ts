@@ -63,6 +63,7 @@ export default {
     deleteFailed: 'Échec de la suppression',
     found: '{count} inutilisé(s) · {size}',
     hint: 'Recherche les objets stockés qu’aucun document ne référence (restes d’imports échoués ou d’envois interrompus).',
+    loading: 'Chargement…',
     none: 'Rien d’inutilisé — le stockage correspond aux documents.',
     preview: 'Aperçu',
     scan: 'Vérifier',

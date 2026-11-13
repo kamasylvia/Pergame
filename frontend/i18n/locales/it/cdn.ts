@@ -63,6 +63,7 @@ export default {
     deleteFailed: 'Eliminazione non riuscita',
     found: '{count} inutilizzati · {size}',
     hint: 'Cerca oggetti memorizzati che nessun documento referenzia (residui di import falliti o caricamenti interrotti).',
+    loading: 'Caricamento…',
     none: 'Niente di inutilizzato — lo spazio corrisponde ai documenti.',
     preview: 'Anteprima',
     scan: 'Controlla',

@@ -69,8 +69,11 @@
       </div>
       <ul v-if="orphans.count" class="orphan-list">
         <li v-for="item in orphans.items" :key="item.key">
-          <span class="orphan-name orphan-preview" :title="t('cdn.orphans.preview')" @click="previewOrphan(item.key)">{{ item.key }}</span>
+          <span class="orphan-name">{{ item.key }}</span>
           <span class="orphan-size">{{ readableFileSize(item.size) }}</span>
+          <span class="orphan-remove" :title="t('cdn.orphans.preview')" @click="previewOrphan(item.key)">
+            <Icon name="view" />
+          </span>
           <span class="orphan-remove" @click="purgeOrphans([item.key])">
             <Icon name="delete" />
           </span>
@@ -162,6 +165,7 @@
 <script setup lang="ts">
 import ResourceContextMenu from '~/components/Node/Action/ResourceContextMenu.vue';
 import DeleteNodeModal from '~/components/Node/Modals/Delete.vue';
+import OrphanPreviewModal from '~/components/Node/Resource/OrphanPreviewModal.vue';
 import { readableFileSize, resolvePreviewUrl } from '~/helpers/resources';
 import { assignParent } from '~/helpers/resources-parent';
 import { resolveNodeColor } from '~/helpers/node';
@@ -317,9 +321,9 @@ const purgeOrphans = async (keys: string[] | null = null) => {
   }
 };
 
-/** Open one orphan in a new tab (server streams the bytes inline). */
+/** Preview one orphan in a modal (same eye-button idiom as file rows). */
 const previewOrphan = (key: string) => {
-  window.open(`/api/resources/orphans/preview?key=${encodeURIComponent(key)}`, '_blank', 'noopener');
+  modals.add(new Modal(shallowRef(OrphanPreviewModal), { props: { fileKey: key }, size: 'large' }));
 };
 const parentNodes = tree.getTreeUpToRole(3);
 
