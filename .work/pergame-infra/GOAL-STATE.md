@@ -85,7 +85,9 @@
 7. **部署 smoke 第一轮(2026-11-13 晚,Playwright)**:核心 CRUD ✅(注册/登录/建文档/保存/树/渲染)、附件上传 + 鉴权读 ✅(本机 200/39B,匿名 401)、回收站 ✅(删→列表→Restore→回树)、零 target 快照 ✅(一次性 token 链接 + zip `meta.json`/`manifest.json`/`blobs/` + token 单次消费)。
    - **发现 1(线上坏)**:QNAP stack 42 的 `v0.0.11` 镜像落后 main 30 个提交,`281bf11e`(附件走后端鉴权读)不在任何 tag 内 → 线上 `GET /api/resources/:id/file` **404**(同附件本机最新后端 200)。修法 = 当前 main 打 v0.0.12 + 更新 stack。
    - **发现 2(已修)**:快照目标页没有「Empty」按钮,`empty` 只有 API → 目标一旦有对象,`delete-check` 永远拒绝且 UI 无出口。本轮补按钮 + 8 语言文案(`emptyTarget/emptyConfirm/emptied/emptyFailed`)。
-   - **中断**:跑到 draft probe 时 NAS 从本机不可达(Tailscale 到 `qnap.elf-balance.ts.net` 的 8200/5432 全断),本地后端随之连不上 pg → 目标页 Test/Sync/Delete/Empty 全链与线上 smoke 待恢复后重跑(脚本 `~/.cache/pergame/pw/s6-targets.mjs`)。
+   - **目标页全链 ✅(NAS 恢复后补跑)**:保存前 Test 门禁 → `Test connection`(Reachable + 对象数 + 指纹)→ `Save target` → 行内 Test → Edit/Cancel → `Sync now`(`copied 6 skipped 1 pruned 0`)→ 有对象时 Delete 被拒(409)→ **Empty**(`deleted_objects:10`)→ Delete 成功。
+   - **快照列表 + 还原 ✅**:v2 快照进列表;首击 arm 出 plan(`Incoming 2 · Current 2 · Replaced 2 · Added 0 · Removed 0` + 1 文件覆盖 + Profile 提示),勾 force 二击执行,服务端自动生成 `Pre-restore safety snapshot`。未验:只读提示条(还原窗口太短)、上传 zip 回灌。
+   - **测试数据已清**:测试账号(节点 purge + targets empty/delete + 账号删除)全清,`pergame-tgt-test` 前缀对象清空。
 
 ### 换机续接指引
 

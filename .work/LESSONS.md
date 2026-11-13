@@ -193,3 +193,7 @@
 - **快照目标页保存有「先测连接」门禁**:`probe-draft` 通过后 `connection_token` 才解锁 Save(任一连接字段改动即失效)。测试要用真实凭据 + 存在的空桶(`pergame-tgt-test`),否则 probe 返回 `reachable:false / snapshot_objects:-1` 且不带原因(后端只 `tracing::warn`)。
 - **`empty` 之前只有 API**:目标上有对象 → `delete-check` 永远拒,UI 没有出口 = 用户被锁死。功能落地要对照 spec 的「两步确认」检查前端入口是否真存在,别只验后端端点。
 - **stylelint 也是闸门**:PS-B 批次声称全绿,但 `Dock.vue` 的 `align-items/justify-content` 顺序红(`order/properties-order`)。提交前四件一起跑:lint / lint:css / lint:sfc / typecheck。
+- **target 指纹去重会拒掉「同桶同凭据」的第二个目标**:probe-draft 的 fingerprint = endpoint+bucket+access key,同机重复跑脚本建第二个 target 直接 409。验证脚本要用唯一 prefix 不够,得换 bucket 或先清旧 target。
+- **还原会因「文件覆盖」要求 force**:plan 里 `files_colliding > 0` 时二击还原返回 400,必须先勾 `.force-row` 的 checkbox;脚本漏勾会误判成「按钮没生效」。
+- **还原成功的可靠证据 = 服务端自动生成的 `Pre-restore safety snapshot`**:toast 会在 10s 内消失,断言别依赖 `.notification` 的时序,查 `GET /api/backup/snapshots` 更稳。
+- **收尾要按依赖顺序清**:删账号前先把 targets `empty` + `delete`(否则 409 门禁),节点先 `DELETE /api/nodes/:id` 再 `DELETE /api/trash/:id` purge;本机验证完把 `pergame-tgt-test` 前缀对象清干净。

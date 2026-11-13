@@ -42,7 +42,7 @@
 
 1. **自包含版 compose 仍未跑过**——2026-11-12:external 版随 v0.0.4→v0.0.11 在 QNAP Portainer stack 42 常驻(backend/frontend 双容器,镜像钉 tag),health/静态/SSR/备份全链/WebDAV/CDN 鉴权读均已活测。**仍未知**:自包含版(`docker-compose.yml`,pg + RustFS 一起起)的卷挂载与 healthcheck 依赖链。
 2. ~~**dr-backup 真实备份从未跑成**~~ —— **已失效(2026-11-12 快照=全备份,边车删除 `06a30906`)**:实例 DR 改由用户级快照直写 targets 覆盖,本条作废。
-3. **前端交互走查(2026-11-13 起用 Playwright 真浏览器补)**——已验:建文档/保存/树内可见、CDN 页上传附件 + 鉴权读 200(匿名 401)、回收站列表 + Restore 按钮、零 target 快照生成一次性 token 链接 + zip 结构(`meta.json`/`manifest.json`/`blobs/`)+ token 单次消费。**未验**:快照目标页的 create/Test/Sync/Delete/Empty 全链(跑到 draft probe 时 NAS 断连,Tailscale 到 qnap 不可达,本地后端连不上 pg),待基础设施恢复后重跑;`~/.cache/pergame/pw/s6-targets.mjs` 即该脚本(注意 Save 按钮文案是「Save target」、`?p=backup`/`?p=snapshotTargets` 是正确 page key)。**同轮修**:目标行补「Empty」按钮(此前 empty 只有 API,UI 无法自解 delete-check)。
+3. **前端交互走查 ✅ 2026-11-13(Playwright 真浏览器,本机最新代码 + NAS 基础设施)**——建文档/保存/树内可见、CDN 页上传附件 + 鉴权读 200(匿名 401)、回收站列表 + Restore、零 target 快照一次性 token 链接 + zip 结构(`meta.json`/`manifest.json`/`blobs/`)+ token 单次消费、**快照目标页全链**(保存前 Test 门禁 → Test connection → Save target → 行内 Test → Edit/Cancel → Sync now(`copied 6 skipped 1 pruned 0`)→ 有对象时 Delete 被拒 → **Empty 按钮** → Delete 成功)、**快照列表 + 二次确认还原**(首击 arm 出 plan 统计 `Incoming 2 · Current 2 · Replaced 2 · Added 0 · Removed 0` + 覆盖文件提示 + Profile 提示;勾 force 后二击执行,服务端自动生成 Pre-restore safety snapshot)。**同轮修**:目标行补「Empty」按钮(此前 empty 只有 API,UI 无法自解 delete-check)。测试账号/目录/target/对象已全清。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 5. ~~**目录索引的点击链**~~ —— **已验(2026-11-13,Playwright + Chromium 真浏览器)**:侧边栏 index 紧跟目录、index 块过滤容器与 index 自身且目录前置、点目录行跳该目录 index、目录页「Open index file」跳转、`displayIndexFiles` 关闭后侧边栏无 index(目录仍在)。另:同轮修掉该批次遗留的 SFC 模板缺闭合标签(设置页整个不可用),并新增 `bun run lint:sfc` 闸门。
 
@@ -55,8 +55,8 @@
 - [x] **1. compose 起全栈**:external 版(2 服务)✅ 2026-11-12 于 QNAP Portainer stack 42(镜像钉 tag,随 v0.0.4→v0.0.11 逐版跟进),`/api/health` → `{"database":true,"status":"ok"}`。自包含版(4 服务,pg+RustFS+backend+frontend)仍待测。
 - [x] **2. 核心 CRUD** ✅ 2026-11-13(Playwright,本机最新代码 + NAS 基础设施):注册 201 → 登录进 `/dashboard/home` → 新建文档(标题 + CodeMirror 正文)保存跳 `/dashboard/docs/edit/<id>` → 树内可见 → 正文渲染 → CDN 页上传附件(`AppDrop` file input + Upload)→ `GET /api/resources/:id/file` 带 cookie **200 / 39 B**,匿名 401。
 - [x] **3. 回收站** ✅ 2026-11-13(Playwright):`DELETE /api/nodes/:id` → `/dashboard/trash` 列出(名称/大小/删除时间)→ 点 Restore → 节点恢复可读、trash 列表 0 行。
-- [ ] **4. 快照全链**(部分 ✅):零 target 建快照 → 一次性 token 下载链接 → zip 含 `meta.json`/`manifest.json`/`blobs/<sha256>`;token 二次访问 404「expired or already downloaded」。**未验**:有 target 时的列表/还原二次确认/只读提示条/上传 zip 回灌。
-- [ ] **5. 异地目标**:建 target(S3)→ Test(可达 + 对象数)→ Sync now → 目标桶出现 `manifests/`+`blobs/` → 有对象时 Delete 被拒 → Empty 后才可删。(脚本已写到 draft probe 一步,因 NAS 断连中止;Empty 按钮本轮补上)
+- [x] **4. 快照全链** ✅ 2026-11-13:零 target → 一次性 token 链接 + zip(`meta.json`/`manifest.json`/`blobs/<sha256>`,token 二次访问 404);有 target → 快照进列表(`format v2`、size、memo)→ 首击 arm 显示 plan 统计 + 覆盖文件/Profile 提示 → 勾 force 二击执行 → 服务端自动建 Pre-restore safety snapshot。**未验**:只读提示条(`MaintenanceBanner`,还原太快抓不到窗口)、上传 zip 回灌。
+- [x] **5. 异地目标** ✅ 2026-11-13(Playwright):draft probe `Reachable · 0 snapshot object(s) · <fingerprint>` → Save(保存前 Test 门禁生效)→ 行内 Test → Sync now(`copied 6 skipped 1 pruned 0`)→ 有对象时 Delete 被拒(delete-check 409)→ **Empty**(`deleted_objects:10`)→ Delete 成功。
 - [x] **6. ~~实例 DR(dr-backup)~~ 已随边车删除作废** → 改为:零 target 快照(S3 inline zip + 有效期 + token 链接下载)✅ 2026-11-13 验证通过。
 - [ ] **7. 进阶**:2FA(enroll/verify/recovery)、OIDC(Keycloak 环境已有)、SMTP 邮件。
 
