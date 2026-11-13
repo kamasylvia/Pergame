@@ -7,6 +7,8 @@
     </NuxtLayout>
     <Notification />
     <MaintenanceBanner />
+    <!-- Plugin dialogs (ctx.ui.modal): one host, rendered above the app. -->
+    <PluginModalHost />
   </div>
   <SplashScreen v-show="isLoading" />
 </template>

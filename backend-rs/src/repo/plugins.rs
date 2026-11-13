@@ -32,7 +32,7 @@ pub async fn upsert(
     capabilities: &[String],
     manifest: &serde_json::Value,
     artifact_prefix: &str,
-    installed_by: Uuid,
+    installed_by: Option<Uuid>,
     now: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(

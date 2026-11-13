@@ -10,7 +10,7 @@
  * would otherwise 401, and the shared request helper treats a failed refresh
  * as a logout — starting plugins before login would sign the user out.
  */
-import { createPluginHost, markdownHooks, editorHooks, pluginUiState, type PluginHost } from '~/services/plugins';
+import { createPluginHost, markdownHooks, editorHooks, pluginUiState, pluginModalState, type PluginHost } from '~/services/plugins';
 import type { PluginManifest } from '~/types/plugin';
 
 /** One row of `GET /api/plugins`. */
@@ -59,6 +59,7 @@ export default defineNuxtPlugin(async nuxtApp => {
       markdownHooks,
       editorHooks,
       ui: pluginUiState,
+      modal: pluginModalState,
     };
   }
 

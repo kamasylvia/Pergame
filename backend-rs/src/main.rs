@@ -311,6 +311,7 @@ async fn main() {
         .route("/api/plugins/{pluginId}/asset/{*path}", get(routes::plugins::plugin_asset))
         .route("/api/plugins/{pluginId}/grants", put(routes::plugins::put_grants))
         .route("/api/plugins/{pluginId}/proxy", post(routes::plugins::proxy_fetch))
+        .route("/api/plugins/{pluginId}/proxy-binary", post(routes::plugins::proxy_binary))
         .route("/api/plugins/{pluginId}/kv", get(routes::plugins::list_kv))
         .route(
             "/api/plugins/{pluginId}/kv/{key}",

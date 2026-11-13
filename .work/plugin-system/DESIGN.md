@@ -184,9 +184,17 @@ export interface PluginContext {
 
 ### PS-E 官方插件(2026-11-14 ✅ 首批)
 
-- `plugins/official/`:recent-files(命令+ribbon)、daily-note(按天建/开 + 设置存父目录)、web-clipper(`net.proxy` → 正文 → 建笔记)。
-- `scripts/build-plugin-packs.sh` 产出 `frontend/public/plugin-packs/*.zip`,设置页可直接安装(无需构建插件仓库)。
-- ReadItLater 站点专用 parser 未移植:先用通用正文抽取,后续按需求补站点规则。
+- `plugins/official/`:recent-files(命令+ribbon)、daily-note(按天建/开 + 设置存父目录)、**read-it-later**(ReadItLater 功能对位,见下)。
+- `scripts/build-plugin-packs.sh` 产出 `frontend/public/plugin-packs/*.zip`;有 `src/` 的插件先 `bun build src/main.ts --target browser --format esm` 再打包(主产物是构建物)。
+
+### ReadItLater 对位(2026-11-14,用户裁决)
+
+原 `web-clipper` 直接演进为 `read-it-later`,不再单列 ReadItLater 移植批次:
+
+- **宿主新增**:`ctx.ui.modal(spec)`(声明式表单:text/textarea/select/checkbox,宿主渲染,取消返回 null)、`ctx.net.proxyBinary(url)`(后端取字节 → base64,SSRF/大小同 proxy)、proxy 的 header 白名单(cookie/user-agent/accept/accept-language/referer)、默认 UA、`HTTPS_PROXY` 出站(受限网络里仍能剪藏)。
+- **插件能力**:剪贴板单条/批量/对话框(URL/标题/标签/目录);文章 = Readability + Turndown,相对链接绝对化,图片经 `proxyBinary` → `resources.upload` 落附件;知乎(用户 cookie,挑战页明确报错并提示粘贴);YouTube/Bilibili/Vimeo/TikTok(oEmbed + 嵌入);Stack Exchange(问题+最佳回答)、Bluesky、Mastodon、GitHub(issue/repo)、Wikipedia(REST summary)、纯文本兜底;每类型模板(`{{var|filter}}`、`{% for %}`)。
+- **未移植**(有明确理由):图床上传(可后补)、YouTube Data API(需 key)、Twitter/X 与 Pinterest(需认证 API)、插入光标(插件 API 无编辑器光标钩子)。
+- **验证**:模板/检测/文章抽取(含图片重写与链接绝对化)共 40 项 bun 断言;真浏览器:命令 → 宿主对话框 → 剪 example.com 建笔记(模板渲染正确)、Wikipedia 经代理抓取建笔记;`proxy-binary` 活测返回 PNG。
 
 ### PS-B 第一片(2026-11-13 ✅,命令与 ribbon)
 

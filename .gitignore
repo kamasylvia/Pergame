@@ -19,3 +19,7 @@ test.vue
 .agents/
 .claude/
 skills-lock.json
+
+# Plugin build inputs: sources and manifests are tracked, dependencies are not.
+plugins/**/node_modules/
+plugins/**/bun.lock

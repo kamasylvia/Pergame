@@ -207,3 +207,14 @@
 - **能力字符串里的 IP 字面量要显式拒绝**:`net:127.0.0.1` 能通过「label 全是字母数字」的规则,必须在 label 校验前 `scope.parse::<IpAddr>()` 拦掉;SSRF 守卫在代理侧还有第二道。
 - **QNAP 测试账号是普通用户(role 1)**:要验管理员安装路径得临时建号 + DB 提权,验完删号;别把用户本人账号提权。
 - **插件安装后的「授权」是每用户的**:管理员装完,普通用户列表里 `granted: []`,loader 直接跳过——这不是 bug,是设计;验证时要显式 PUT grants。
+
+## 2026-11-14 Read it later(clipper)批次
+
+- **`shallowReactive` 包一层再改原对象 = Vue 看不见**:模态队列把裸对象存进 globalThis、导出 `shallowReactive(state)`,插件改裸对象 → 状态确实变了,组件永远不更新(表现为「命令执行了,弹窗不出现」,且 `run()` 永不 resolve)。修法 = **把 reactive 对象本身存进 globalThis**。同类注册表(ui/markdown/editor)本来就改 reactive 代理,所以没暴露。
+- **`SELECT 1` 是 INT4**:`query_scalar::<_, i64>` 运行期报 `mismatched types i64 vs INT4`(编译期不报)。存在性探测一律 `i32`。
+- **token 可能比 user 行活得久**:删号后旧 JWT 仍能过鉴权,带 FK 的写入(如 `plugins.installed_by`)直接 500。修法 = 写前查用户是否存在,不存在存 NULL;并把这类「陈旧令牌」记成已知缺口。
+- **代理抓取要有默认 UA**:Wikipedia 对无 UA 请求回 403 文本(不是 HTML),Readability 自然抽不出内容。给后端出站客户端设 `Pergame-Clip/0.1 (...)`;插件仍可通过 header 白名单覆盖。
+- **受限网络里剪藏要能走代理**:后端 proxy 客户端默认 `no_proxy()`,国内直连 wikipedia 失败;改成读 `HTTPS_PROXY/HTTP_PROXY`,SSRF 仍按解析后的目标地址判定。验证时后端以 `HTTPS_PROXY=127.0.0.1:10809` 启动即可。
+- **弹窗里别在打开前做重查询**:先列全库节点再弹窗 → 大库上要几十秒,用户以为没反应。做法 = 先弹窗,选项查询与 1.5s 超时赛跑,超时就用默认项。
+- **插件里的 ctx 与宿主 ctx 形状不同**:解析器层用 `ctx.proxy/upload/setting`,宿主是 `ctx.net.proxy/ctx.resources.upload/ctx.settings`;入口处集中适配一次,别让解析器知道宿主 API。
+- **打包脚本要区分「源插件」与「构建物插件」**:`plugins/official/*` 里有 `src/` 的先 `bun build`,否则会打包过期的 main.mjs。

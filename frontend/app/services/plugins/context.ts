@@ -137,7 +137,7 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
       const response = await request<{ status: number; content_type: string; body: string }>(
         `plugins/${pluginId}/proxy`,
         'POST',
-        { url: target.toString(), method: init?.method ?? 'GET', body: init?.body },
+        { url: target.toString(), method: init?.method ?? 'GET', body: init?.body, headers: init?.headers },
       );
       if (response.status !== 'success' || !response.result) {
         throw new Error(response.message || 'proxy request failed');
@@ -147,6 +147,21 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
         contentType: response.result.content_type,
         body: response.result.body,
       };
+    },
+    async proxyBinary(url) {
+      const target = new URL(String(url));
+      if (!netAllows(capabilities, target)) {
+        throw new Error(`net: ${target.hostname} is not allowed by this plugin's capabilities`);
+      }
+      const response = await request<{ content_type: string; base64: string }>(
+        `plugins/${pluginId}/proxy-binary`,
+        'POST',
+        { url: target.toString() },
+      );
+      if (response.status !== 'success' || !response.result) {
+        throw new Error(response.message || 'proxy request failed');
+      }
+      return { contentType: response.result.content_type, base64: response.result.base64 };
     },
   };
 }
@@ -215,6 +230,7 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
       notice: (message, opts) => deps.notify(message, opts),
       command: (id, title, run) => deps.ui.command(id, title, run),
       ribbon: (icon, title, run) => deps.ui.ribbon(icon, title, run),
+      modal: spec => deps.ui.modal(spec),
     },
     net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id),
     markdown: deps.markdown ?? createMarkdownClient(() => {}),

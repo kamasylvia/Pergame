@@ -90,6 +90,8 @@ export interface UiClient {
   command(id: string, title: string, run: () => void): Disposable;
   /** Register a sidebar dock button. */
   ribbon(icon: string, title: string, run: () => void): Disposable;
+  /** Ask the user for input; resolves to the field values or `null`. */
+  modal(spec: ModalSpec): Promise<ModalResult>;
 }
 
 /** Network facade (design §3: capability-gated, method/size limited). */
@@ -100,12 +102,38 @@ export interface NetClient {
    * scope as `fetch`, plus SSRF guards on the backend; no browser cookies are
    * borrowed — pass credentials explicitly when a site needs them.
    */
-  proxy(url: string, init?: { method?: 'GET' | 'POST'; body?: string }): Promise<{
+  proxy(url: string, init?: { method?: 'GET' | 'POST'; body?: string; headers?: Record<string, string> }): Promise<{
     status: number;
     contentType: string;
     body: string;
   }>;
+  /** Server-side GET of bytes (images, fonts) as a base64 payload. */
+  proxyBinary(url: string): Promise<{ contentType: string; base64: string }>;
 }
+
+/** One field of a plugin dialog. */
+export interface ModalField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'select' | 'checkbox';
+  value?: string | boolean;
+  placeholder?: string;
+  /** Options for `select`. */
+  choices?: Array<{ value: string; label: string }>;
+  required?: boolean;
+}
+
+/** Declarative dialog spec; the host renders and returns the values. */
+export interface ModalSpec {
+  title: string;
+  description?: string;
+  fields: ModalField[];
+  submitLabel?: string;
+  cancelLabel?: string;
+}
+
+/** Values keyed by field; `null` when the user cancels. */
+export type ModalResult = Record<string, string | boolean> | null;
 
 /** Markdown render hooks (PS-C). */
 export interface MarkdownClient {

@@ -9,6 +9,10 @@ mkdir -p "$out"
 for dir in "$src"/*/; do
   name="$(basename "$dir")"
   rm -f "$out/$name.zip"
+  # Plugins with a src/ tree are bundled here (main.mjs is a build artifact).
+  if [ -d "$dir/src" ]; then
+    (cd "$dir" && bun build src/main.ts --target browser --format esm --outfile main.mjs >/dev/null)
+  fi
   (cd "$dir" && zip -q "$out/$name.zip" manifest.json main.mjs)
   echo "packed $name.zip"
 done

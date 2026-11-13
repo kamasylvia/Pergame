@@ -356,6 +356,15 @@ pub async fn install_plugin(
             .await?;
     }
 
+    // A token can outlive its user row (deleted account): keep the FK honest
+    // instead of failing the install.
+    let installer: Option<uuid::Uuid> =
+        sqlx::query_scalar::<_, i32>("SELECT 1 FROM users WHERE id = $1")
+            .bind(auth.user_id())
+            .fetch_optional(&state.db)
+            .await
+            .map_err(ApiError::from)?
+            .map(|_| auth.user_id());
     repo::upsert(
         &state.db,
         &manifest.id,
@@ -366,7 +375,7 @@ pub async fn install_plugin(
         &manifest.capabilities,
         &raw,
         &prefix,
-        auth.user_id(),
+        installer,
         crate::repo::nodes::now_ms(),
     )
     .await
@@ -521,6 +530,40 @@ async fn require_granted(
     Ok(row)
 }
 
+/// Outbound client for plugin fetches.
+///
+/// Honors `HTTPS_PROXY`/`HTTP_PROXY` (an instance behind a restricted network
+/// still needs to clip): the SSRF guard checks the *target*, the proxy is only
+/// transport. No proxy is forced when the variables are unset.
+fn proxy_client(timeout_secs: u64) -> Result<reqwest::Client, ApiError> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        // Some sites (Wikipedia among them) refuse anonymous clients; a
+        // plugin can still override this through the header allow-list.
+        .user_agent("Pergame-Clip/0.1 (+https://github.com/kamasylvia/Pergame)");
+    let proxy = std::env::var("HTTPS_PROXY")
+        .or_else(|_| std::env::var("https_proxy"))
+        .or_else(|_| std::env::var("HTTP_PROXY"))
+        .or_else(|_| std::env::var("http_proxy"))
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    match proxy {
+        Some(url) => {
+            builder = builder.proxy(reqwest::Proxy::all(&url).map_err(|e| {
+                ApiError::Internal(Box::new(std::io::Error::other(format!(
+                    "invalid proxy url: {e}"
+                ))))
+            })?);
+        }
+        // No proxy configured: ignore the ambient variables entirely so a
+        // stray http_proxy in the container cannot silently reroute clips.
+        None => builder = builder.no_proxy(),
+    }
+    builder
+        .build()
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+}
+
 #[derive(Debug, Deserialize)]
 /// POST /plugins/{id}/proxy body.
 pub struct ProxyInput {
@@ -529,7 +572,20 @@ pub struct ProxyInput {
     pub method: Option<String>,
     #[serde(default)]
     pub body: Option<String>,
+    /// Forwarded headers, restricted to an allow-list (a plugin must not be
+    /// able to set Host/Content-Length or smuggle a second request).
+    #[serde(default)]
+    pub headers: Option<std::collections::HashMap<String, String>>,
 }
+
+/// Request headers a plugin may set on a proxied call.
+const PROXY_HEADER_ALLOWLIST: [&str; 5] = [
+    "cookie",
+    "user-agent",
+    "accept",
+    "accept-language",
+    "referer",
+];
 
 /// Reject targets that could reach the instance's own network (SSRF).
 ///
@@ -630,11 +686,7 @@ pub async fn proxy_fetch(
             "proxy supports GET and POST only".into(),
         ));
     }
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .no_proxy()
-        .build()
-        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
+    let client = proxy_client(15)?;
     let mut request = client.request(
         reqwest::Method::from_bytes(method.as_bytes())
             .map_err(|_| ApiError::BadRequest("invalid method".into()))?,
@@ -644,6 +696,19 @@ pub async fn proxy_fetch(
         request = request
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(payload.clone());
+    }
+    for (name, value) in body.headers.iter().flatten() {
+        let lowered = name.to_ascii_lowercase();
+        if !PROXY_HEADER_ALLOWLIST.contains(&lowered.as_str()) {
+            return Err(ApiError::BadRequest(format!(
+                "header '{name}' is not allowed"
+            )));
+        }
+        let header_name = reqwest::header::HeaderName::from_bytes(lowered.as_bytes())
+            .map_err(|_| ApiError::BadRequest(format!("invalid header '{name}'")))?;
+        let header_value = reqwest::header::HeaderValue::from_str(value)
+            .map_err(|_| ApiError::BadRequest(format!("invalid value for header '{name}'")))?;
+        request = request.header(header_name, header_value);
     }
     let response = request
         .send()
@@ -681,6 +746,79 @@ pub async fn proxy_fetch(
         "status": status,
         "content_type": content_type,
         "body": text,
+        "url": url.to_string(),
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+/// POST /plugins/{id}/proxy-binary body.
+pub struct ProxyBinaryInput {
+    pub url: String,
+}
+
+/// Largest binary object the proxy will hand to a plugin (images, fonts).
+const MAX_PROXY_BINARY_BYTES: usize = 12 * 1024 * 1024;
+
+/// POST /plugins/{id}/proxy-binary — server-side GET of a binary asset.
+///
+/// Same allow-list and SSRF guards as `proxy_fetch`, but the body comes back
+/// base64 so a clipper can store images as attachments (the browser cannot
+/// read cross-origin bytes itself).
+pub async fn proxy_binary(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<ProxyBinaryInput>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let row = require_granted(&state, &auth, &id).await?;
+    let url =
+        url::Url::parse(&body.url).map_err(|_| ApiError::BadRequest("invalid proxy url".into()))?;
+    if !crate::plugins_manifest::net_allows(&row.capabilities, &url) {
+        return Err(ApiError::Forbidden(
+            "the plugin's capabilities do not cover this host".into(),
+        ));
+    }
+    ensure_public_target(&url).await?;
+
+    let client = proxy_client(20)?;
+    let response =
+        client.get(url.clone()).send().await.map_err(|e| {
+            ApiError::BadRequest(format!("proxy request failed: {}", e.without_url()))
+        })?;
+    let status = response.status().as_u16();
+    if !response.status().is_success() {
+        return Err(ApiError::BadRequest(format!(
+            "proxy target answered {status}"
+        )));
+    }
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("proxy read failed: {}", e.without_url())))?;
+    if bytes.len() > MAX_PROXY_BINARY_BYTES {
+        return Err(ApiError::BadRequest("proxy response too large".into()));
+    }
+    let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+    crate::mcp::audit(
+        &state.db,
+        Some(auth.user_id()),
+        "plugin.proxy",
+        &format!(
+            "plugin {id} proxied binary {} ({} bytes)",
+            url.host_str().unwrap_or("?"),
+            bytes.len()
+        ),
+    )
+    .await;
+    Ok(ApiOk::ok(json!({
+        "content_type": content_type,
+        "base64": encoded,
         "url": url.to_string(),
     })))
 }

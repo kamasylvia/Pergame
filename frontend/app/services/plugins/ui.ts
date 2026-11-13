@@ -7,7 +7,8 @@
  * the returned handle removes the entry (design §3: unload is total).
  */
 import { shallowReactive } from 'vue';
-import type { Disposable } from '../../types/plugin';
+import type { Disposable, ModalResult, ModalSpec } from '../../types/plugin';
+import { openPluginModal } from './modal';
 
 /** One registered command (runs from the command palette). */
 export interface PluginCommand {
@@ -48,6 +49,7 @@ export const pluginUiState: PluginUiState = (() => {
 export interface PluginUiClient {
   command(id: string, title: string, run: () => void): Disposable;
   ribbon(icon: string, title: string, run: () => void): Disposable;
+  modal(spec: ModalSpec): Promise<ModalResult>;
 }
 
 /** Remove one entry by id, returning whether it existed. */
@@ -78,6 +80,7 @@ export function createUiClient(pluginId: string, track: (disposable: Disposable)
       register(pluginUiState.commands, { id: `${pluginId}:${id}`, pluginId, title, run }),
     ribbon: (icon, title, run) =>
       register(pluginUiState.ribbons, { id: `${pluginId}:${title}`, pluginId, icon, title, run }),
+    modal: spec => openPluginModal(spec),
   };
 }
 
