@@ -15,3 +15,7 @@ test.vue
 .idea
 # ZCode session data (not repo content)
 .zcode/
+# Agent skill caches (not repo content)
+.agents/
+.claude/
+skills-lock.json
