@@ -72,10 +72,12 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'Enter' && items.length) {
     e.preventDefault();
     const item = items[selectedIndex.value];
-    if (item?.path) {
-      close();
-      navigateTo(item.path);
-    }
+    if (!item) return;
+    close();
+    // Plugin commands run in place; everything else navigates.
+    const run = 'run' in item ? item.run : undefined;
+    if (typeof run === 'function') run();
+    else if (item.path) navigateTo(item.path);
   }
 }
 </script>

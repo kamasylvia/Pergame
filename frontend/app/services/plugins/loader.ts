@@ -7,6 +7,7 @@
  * the app down with it.
  */
 import { createPluginContext, type PluginHostInfo, type PluginRequest } from './context';
+import { createUiClient, clearPluginUi, type PluginUiClient } from './ui';
 import { DisposableBag } from './registry';
 import { validateManifest } from './manifest';
 import {
@@ -32,6 +33,11 @@ export interface PluginHostDeps {
   host: PluginHostInfo;
   request: PluginRequest;
   notify: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void;
+  /**
+   * Build the per-plugin UI client. Defaults to the global reactive registry;
+   * injected by tests that want an isolated one.
+   */
+  createUi?: (pluginId: string, track: (disposable: import('../../types/plugin').Disposable) => void) => PluginUiClient;
   /** ESM importer; injectable so the kernel is testable without a browser. */
   loadModule?: (url: string) => Promise<unknown>;
   /** Text fetcher for manifests (defaults to `fetch`). */
@@ -110,12 +116,16 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       if (typeof instance.onload !== 'function') {
         throw new Error('default export is not a Plugin (missing onload)');
       }
+      const ui = (deps.createUi ?? createUiClient)(manifest.id, disposable => {
+        bag.add(disposable);
+      });
       const ctx = createPluginContext({
         manifest,
         version: HOST_API_VERSION,
         host: deps.host,
         request: deps.request,
         notify: deps.notify,
+        ui,
       });
       await instance.onload(ctx);
 
@@ -129,6 +139,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
             console.warn(`[plugins] ${manifest.id} onunload threw`, err);
           }
           bag.dispose();
+          clearPluginUi(manifest.id);
         },
       };
       const entry: PluginHostEntry = { manifest, status: 'loaded', loaded };

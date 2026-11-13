@@ -10,3 +10,12 @@ export {
   type PluginRequestResult,
 } from './context';
 export { createPluginHost, type PluginHost, type PluginHostDeps, type PluginHostEntry } from './loader';
+export {
+  createUiClient,
+  usePluginUi,
+  clearPluginUi,
+  pluginUiState,
+  type PluginCommand,
+  type PluginRibbon,
+  type PluginUiClient,
+} from './ui';

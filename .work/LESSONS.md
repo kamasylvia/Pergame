@@ -172,3 +172,13 @@
 - **新依赖不装 → typecheck 报 module not found 是环境不是代码**:`abcjs`/`markdown-it-multimd-table` 报 TS2307 时先 `grep package.json`,再 `bun install`(`git checkout -- bun.lock`),别去改 import。
 - **1.100 的 rustfmt/clippy 与 1.95 基线有差**:`cargo fmt --check` 会对既有 `dql.rs` 报 diff(仅换行风格)、clippy 1.100 的 `redundant_clone` 会命中 `target/webdav.rs` 旧代码。判断归属:只对**本次改动文件**跑 `rustfmt --check <files>`;旧文件的 lint 命中要么单独一行修掉(无行为变化),要么明确记为基线差异,别整仓 `cargo fmt` 制造噪声 diff。
 - **无浏览器时的渲染验证**:本机 camoufox 缓存空、1.3GB 安装太慢,改用 `bun run <script>` 直接 import 真实 helper(`dataview-render.ts`),用 DOM 桩 + 真实 DQL 响应跑断言(过滤/排序/图标)。验的是被改的那段逻辑本体,不是替代品;但点击跳转等交互仍待有浏览器时补验。
+
+## 2026-11-13 浏览器验证 + PS-B 批次
+
+- **`nuxt typecheck` 与 eslint 都不编译模板**:少一个 `</div>` 的 SFC 两关全绿,运行时才 500(`Element is missing end tag`)。#4 批次改坏 `AppPreferenceInputSection.vue` 就是这么漏出去的,设置页整个不可用。修法 = 新增 `bun run lint:sfc`(`frontend/scripts/check-sfc.mjs`,用 `@vue/compiler-sfc` 解析全部 219 个组件),列入验证门。
+- **插件宿主不能在认证前启动**:启动即调 L1 数据 → 401 → 共享请求层把「刷新失败」当登出,直接把刚登录的会话踢掉。规则:任何后台服务/插件/预取在 boot 时先等 `userStore.user` 就绪。
+- **`localForage.setItem('isLoggedIn')` 未 await 会输给路由中间件**:`login()` 写完立刻 `router.push('/dashboard')`,中间件读到的仍是 false → 弹回 `/login?redirect=`。改成 `await` 后稳定进 dashboard。
+- **Playwright 合成点击不一定触发表单 submit**(dev 模式本仓登录页实测无效),但 `form.requestSubmit()` 与 Enter 一致;验证脚本用后者,别把「点不动」误判成产品 bug。
+- **登录后别自己 `goto('/dashboard')`**:应用自己的 `router.push` 已带状态;外部跳转与中间件存在竞态,等 `waitForURL(/dashboard/)` 更稳。
+- **名字重复的目录会让 DQL 路径解析歧义**:`LIST FROM "NavFolder"` 按名字逐段解析,同名工作区取第一个匹配;浏览器验证里因此点到上一轮的目录。验证脚本要么用唯一名字,要么按 id 断言。
+- **真实浏览器验证的四件事(本次全过)**:侧边栏 index 紧跟其目录、index 块只列子项(容器与 index 自身被过滤、目录前置)、index 块点目录行跳到该目录 index、目录页「Open index file」按钮跳转、`displayIndexFiles` 关闭后侧边栏无 index 而目录仍在。

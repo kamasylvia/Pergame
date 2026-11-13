@@ -4,6 +4,17 @@
       <Icon :name="item.icon" display="lg" /><span v-if="mark.hasMark(item.mark as MarkId)" class="bubble" />
     </NuxtLink>
 
+    <button
+      v-for="ribbon in pluginRibbons"
+      :key="ribbon.id"
+      class="plugin-ribbon"
+      :title="ribbon.title"
+      :aria-label="ribbon.title"
+      @click="ribbon.run()"
+    >
+      <Icon :name="ribbon.icon" display="lg" />
+    </button>
+
     <div class="bottom">
       <NuxtLink @click="openSettings">
         <Icon name="settings" display="lg" />
@@ -17,12 +28,14 @@
 
 <script setup lang="ts">
 import SettingsModal from '~/pages/dashboard/settings/index.vue';
+import { usePluginUi } from '~/services/plugins';
 
 const userStore = useUserStore();
 const preferences = usePreferencesStore();
 
 const modals = useModal();
 const mark = useMark();
+const { ribbons: pluginRibbons } = usePluginUi();
 
 const items = [
   { label: 'Dashboard', icon: 'dashboard', to: '/dashboard/home' },
@@ -81,6 +94,24 @@ a.router-link-active {
 
   svg {
     color: var(--primary) !important;
+  }
+}
+
+.plugin-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+  transition: background-color $transition-medium ease;
+
+  &:hover {
+    background-color: var(--primary-bg);
   }
 }
 

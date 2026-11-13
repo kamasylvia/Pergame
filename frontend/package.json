@@ -53,7 +53,8 @@
     "typecheck": "nuxi typecheck",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "lint:sfc": "node scripts/check-sfc.mjs"
   },
   "type": "module",
   "devDependencies": {

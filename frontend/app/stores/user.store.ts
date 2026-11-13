@@ -24,7 +24,9 @@ export const useUserStore = defineStore('user', {
         if (response.status === 'success') {
           if (response.result?.message === '2FA_TO_ENABLE') return { success: true, require2FAEnable: true, preAuthToken: response.result?.pre_auth_token };
           if (response.result?.message === '2FA_REQUIRED') return { success: true, require2FA: true, preAuthToken: response.result?.pre_auth_token };
-          if (import.meta.client) localForage.setItem('isLoggedIn', true);
+          // Await the write: the auth middleware reads this flag on the very
+          // next navigation, and an unawaited write loses that race.
+          if (import.meta.client) await localForage.setItem('isLoggedIn', true);
           return { success: true, require2FA: false };
         } else {
           throw response.message;
@@ -59,7 +61,7 @@ export const useUserStore = defineStore('user', {
       try {
         const response = await makeRequest<{ user: User }>('auth/2fa/verify', 'POST', { pre_auth_token: preAuthToken, code });
         if (response.status === 'success') {
-          if (import.meta.client) localForage.setItem('isLoggedIn', true);
+          if (import.meta.client) await localForage.setItem('isLoggedIn', true);
           return { success: true };
         }
         throw response.message;

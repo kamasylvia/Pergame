@@ -90,6 +90,7 @@
         :maxlength="opt.maxlength"
         @change="opt.onChange?.(p(opt.key).value)"
       />
+    </div>
   </div>
 </template>
 

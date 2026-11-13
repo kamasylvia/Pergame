@@ -11,9 +11,9 @@
           v-for="item in group"
           :key="item.id"
           class="search-result-item"
-          :to="item.path"
+          :to="item.path ?? '#'"
           :class="{ selected: selectedIndex === item.globalIndex }"
-          @click="close"
+          @click.prevent="activate(item)"
           @mouseenter="$emit('updateSelectedIndex', item.globalIndex)"
         >
           <Icon :name="item.icon" class="result-icon" />
@@ -40,6 +40,11 @@ defineEmits<{ updateSelectedIndex: [index: number] }>();
 
 const { t } = useI18nT();
 const { close } = useCommandCenter();
+
+function activate(item: ItemCommand) {
+  close();
+  item.run?.();
+}
 
 const groupedItems = computed(() => {
   return props.items.reduce(

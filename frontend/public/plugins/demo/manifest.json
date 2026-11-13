@@ -6,5 +6,5 @@
   "entry": "main.mjs",
   "capabilities": ["nodes:read", "ui"],
   "author": "Pergame",
-  "description": "Reference plugin for the PS-A host: counts your documents and reports it."
+  "description": "Reference plugin: counts documents, adds a command and a dock button."
 }

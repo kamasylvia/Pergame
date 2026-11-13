@@ -83,9 +83,13 @@ export interface SearchClient {
   query(dql: string): Promise<PluginNode[]>;
 }
 
-/** UI surface available in PS-A. Command/ribbon/view arrive with PS-B. */
+/** UI surface: notices (PS-A), commands and ribbons (PS-B). */
 export interface UiClient {
   notice(message: string, opts?: { type?: 'info' | 'success' | 'warning' | 'error'; timeout?: number }): void;
+  /** Register a command; it appears in the command palette. */
+  command(id: string, title: string, run: () => void): Disposable;
+  /** Register a sidebar dock button. */
+  ribbon(icon: string, title: string, run: () => void): Disposable;
 }
 
 /** Network facade (design §3: capability-gated, method/size limited). */

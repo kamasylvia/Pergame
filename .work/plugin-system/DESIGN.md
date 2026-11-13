@@ -148,7 +148,7 @@ export interface PluginContext {
 | 阶段 | 内容 | 估时 | 依赖 |
 |---|---|---|---|
 | PS-A 内核 | loader + 生命周期 + manifest 校验 + L1 数据客户端 | 1 周 | 重写 P1 完成 |
-| PS-B UI 层 | L2 声明式注册 + 设置页 + 固定槽位视图 | 1 周 | PS-A |
+| PS-B UI 层 | L2 声明式注册 + 设置页 + 固定槽位视图(**命令/ribbon ✅2026-11-13**;设置页/视图待做) | 1 周 | PS-A |
 | PS-C md/编辑器 | L3 容器/代码块/post-processor/CM6 直通 | 3-5 天 | PS-B;与 #4/#5 合流实现 |
 | PS-D 权限与分发 | capabilities 同意 UI + 上传/存储 + 审计 | 3-5 天 | PS-B |
 | PS-E 狗粮 | 官方插件 4 个 + drawio 迁移 | 1 周 | PS-C |
@@ -163,6 +163,16 @@ export interface PluginContext {
 4. `net.fetch` 是否限方式(GET/POST)+ 大小 → 建议限
 
 ## 10. 实施记录
+
+### PS-B 第一片(2026-11-13 ✅,命令与 ribbon)
+
+- **注册表**:`services/plugins/ui.ts` —— Vue `shallowReactive` 表(`commands`/`ribbons`),注册返回 `Disposable`,id 以 `<pluginId>:` 命名空间化,重复 id 抛错(连带使该插件加载失败并回滚)。`clearPluginUi(pluginId)` 兜底清理。
+- **上下文**:`ctx.ui.command(id,title,run)` / `ctx.ui.ribbon(icon,title,run)`;注册经 host 的 per-plugin bag 追踪,`unload` 无需插件配合即可回收。
+- **命令面板**:`CommandCenter` 行类型拆成「导航(`path`)或执行(`run`)」,QuickSearchTab 新增 `Plugins` 分组(🧩 + `Plugin · <id>`),Enter/点击执行;`AdvancedSearchTab` 行为不变。
+- **Dock**:`Sidebar/Dock.vue` 渲染插件 ribbon 按钮(置底组之上),点击执行回调。
+- **参考插件**:demo 增 `ctx.ui.command` + `ctx.ui.ribbon`。
+- **验证**:12 项断言(命名空间、重复拒绝、执行、坏插件回滚、unload 清空)+ eslint/stylelint/typecheck 全绿。
+- **未做(留 PS-B 第二片)**:`registerSettingsTab`(需 PS-D 的持久化 KV 才有意义)、固定槽位视图、`ui.modal`。
 
 ### PS-A 内核(2026-11-13 ✅)
 

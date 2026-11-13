@@ -3,7 +3,10 @@ export interface ItemCommand {
   icon: string;
   title: string;
   description: string;
-  path: string;
+  /** Navigation target; absent for items that run a callback instead. */
+  path?: string;
+  /** Plugin commands execute in place instead of navigating. */
+  run?: () => void;
   section: string;
   globalIndex: number;
   shortcut?: string;

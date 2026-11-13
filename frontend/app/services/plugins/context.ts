@@ -7,6 +7,7 @@
  * endpoints the UI does, so a plugin can never see more than its owner.
  */
 import { netAllows } from './manifest';
+import type { PluginUiClient } from './ui';
 import type {
   KVStore,
   NetClient,
@@ -47,6 +48,8 @@ export interface PluginContextDeps {
   host: PluginHostInfo;
   request: PluginRequest;
   notify: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void;
+  /** Command/ribbon registrations for this plugin (PS-B). */
+  ui: PluginUiClient;
 }
 
 const NET_ALLOWED_METHODS: Record<string, true> = { GET: true, POST: true };
@@ -172,7 +175,11 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
     resources,
     search,
     settings: createMemoryKV(),
-    ui: { notice: (message, opts) => deps.notify(message, opts) },
+    ui: {
+      notice: (message, opts) => deps.notify(message, opts),
+      command: (id, title, run) => deps.ui.command(id, title, run),
+      ribbon: (icon, title, run) => deps.ui.ribbon(icon, title, run),
+    },
     net: createNetClient(deps.manifest.capabilities),
   };
 }

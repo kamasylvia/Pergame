@@ -11,12 +11,14 @@
 
 <script setup lang="ts">
 import { quickActions, availablePages, type SearchResult, type BaseCommand } from '~/helpers/navigation';
+import { usePluginUi } from '~/services/plugins';
 import SearchResultsList from './SearchResultsList.vue';
 
 const props = defineProps<{ searchQuery: string; selectedIndex: number }>();
 defineEmits<{ updateSelectedIndex: [index: number] }>();
 
 const documentStore = useNodesStore();
+const pluginUi = usePluginUi();
 
 function tokenize(text: string) {
   return text.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -51,7 +53,14 @@ const filteredDocuments = computed<SearchResult[]>(() =>
 
 const filteredPages = computed(() => filterByTokens(availablePages, p => `${p.title} ${p.description} ${p.category}`));
 
-interface FlattenedItem extends BaseCommand {
+const filteredPluginCommands = computed(() =>
+  filterByTokens(pluginUi.commands, c => `${c.title} ${c.pluginId}`),
+);
+
+/** Palette row: navigable (`path`) or executable (`run`), never both. */
+interface FlattenedItem extends Omit<BaseCommand, 'path'> {
+  path?: string;
+  run?: () => void;
   section: string;
   globalIndex: number;
 }
@@ -88,6 +97,17 @@ const flattenedItems = computed(() => {
       path: p.path,
     })),
     'Pages & actions',
+  );
+
+  pushWithIndex(
+    filteredPluginCommands.value.map(c => ({
+      id: `plugin-${c.id}`,
+      icon: '🧩',
+      title: c.title,
+      description: `Plugin · ${c.pluginId}`,
+      run: c.run,
+    })),
+    'Plugins',
   );
 
   pushWithIndex(

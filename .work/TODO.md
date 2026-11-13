@@ -19,7 +19,8 @@
 - [x] **Dataview 查询引擎** ✅(2026-11-13):issue #5;DQL 子集(LIST/TABLE/FROM folder+tag/WHERE 比较+contains/startswith+AND/OR/NOT/SORT/LIMIT 硬顶100/相对时间-7d)+手写递归下降+参数化 planner(字段白名单/深度32)+`POST /api/nodes/query`(仅本人节点/5s 超时)+前端 ` ```dataview `/` ```index ` 块(LIST/TABLE/index 预设 `LIST FROM 当前目录`)+可点跳转。**实测**:单测 6/6+集成 17/17+浏览器 3 块渲染+跳转。spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周;spec = `plugin-system/DESIGN.md`(§9 已定案)。
   - [x] **PS-A 内核 ✅(2026-11-13)**:`app/types/plugin.ts` 契约 + `services/plugins/{manifest,registry,context,loader}.ts`(manifest 全校验:slug/semver/apiVersion 主版本/entry 路径穿越/capabilities 白名单;DisposableBag LIFO;host 载入-隔离-卸载;ctx L1 = nodes/resources/search/settings(KV)/ui.notice/net 门禁)+ `app/plugins/plugin-host.client.ts` 由 `NUXT_PUBLIC_DEV_PLUGINS` 驱动 + `public/plugins/demo` 参考插件 + docs `5.administer/3.plugins.md`。验证:25 项内核断言全过(含故意坏插件隔离、重复 id、错误主版本、`..` 穿越)+ 真实 HTTP 分发 + ESM 求值 e2e(demo 插件经 dev server 载入/unload)。
-  - [ ] PS-B UI 层(命令/ribbon/设置页/固定槽位视图)、PS-C md(容器/代码块/post-processor/CM6)、PS-D 分发(上传/存储/能力同意/审计)、PS-E 狗粮(4 官方插件 + drawio 迁移)。
+  - [x] **PS-B 第一片 ✅(2026-11-13,真浏览器验证)**:`ctx.ui.command`/`ctx.ui.ribbon` + `services/plugins/ui.ts`(反应式注册表、`<pluginId>:` 命名空间、重复 id 抛错、unload 自动回收)+ 命令面板 `Plugins` 分组(Enter/点击执行)+ Dock 渲染插件按钮;demo 插件示范两者。断言 12 项全过;真实浏览器确认:命令面板出现 `Plugins` 分组并执行(notice 回显)、Dock 出现插件按钮。
+  - [ ] PS-B 剩余:设置页注册(需 PS-D 持久化 KV)、固定槽位视图、`ui.modal`;PS-C md(容器/代码块/post-processor/CM6)、PS-D 分发(上传/存储/能力同意/审计)、PS-E 狗粮(4 官方插件 + drawio 迁移)。
 
 - [x] **笔记软连接/克隆**(Trilium 对位)✅(2026-11-09,NL-A/B/C 三阶段):克隆表 node_links + 环校验 + 端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`。
 
@@ -43,7 +44,7 @@
 2. ~~**dr-backup 真实备份从未跑成**~~ —— **已失效(2026-11-12 快照=全备份,边车删除 `06a30906`)**:实例 DR 改由用户级快照直写 targets 覆盖,本条作废。
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
-5. **目录索引的点击链**——index 块渲染逻辑已用真实 helper + DOM 桩验过(过滤/排序/图标),目录行点击→懒建→跳转只在 API 层验过;本机无浏览器(camoufox 缓存空、1.3GB 安装过慢),需在有浏览器的机器点一遍:侧边栏 index 置顶、指向 index 的隐藏开关、目录页「打开索引」按钮。
+5. ~~**目录索引的点击链**~~ —— **已验(2026-11-13,Playwright + Chromium 真浏览器)**:侧边栏 index 紧跟目录、index 块过滤容器与 index 自身且目录前置、点目录行跳该目录 index、目录页「Open index file」跳转、`displayIndexFiles` 关闭后侧边栏无 index(目录仍在)。另:同轮修掉该批次遗留的 SFC 模板缺闭合标签(设置页整个不可用),并新增 `bun run lint:sfc` 闸门。
 
 **明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13、目录索引 ✅2026-11-13;剩余:插件系统(#8)、Pergamena 改名。
 
