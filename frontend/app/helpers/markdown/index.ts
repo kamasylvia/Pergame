@@ -7,6 +7,7 @@ import { containerSvg } from './containers-svg';
 import { copyCodePlugin } from './code-block';
 import { advancedBlocks } from './cards';
 import { mermaidPlugin } from './mermaid';
+import { dataviewPlugin } from './dataview';
 import underline from './underline';
 import highlight from 'markdown-it-highlightjs';
 // @ts-expect-error no types provided
@@ -40,6 +41,7 @@ function buildCompiler(breaks: boolean, typographer: boolean): MarkdownItType {
   md.use(containerSvg);
   md.use(advancedBlocks);
   md.use(mermaidPlugin);
+  md.use(dataviewPlugin);
   md.use(abcPlugin);
   md.use(copyCodePlugin);
   md.use(underline);

@@ -349,3 +349,50 @@
 	cursor: help;
 	user-select: none;
 }
+
+.dataview-block {
+	margin: 12px 0;
+	padding: 10px 12px;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	font-size: 13px;
+}
+
+.dataview-loading {
+	color: var(--text-secondary);
+}
+
+.dataview-error {
+	color: var(--color-error, #c00);
+}
+
+.dataview-empty {
+	color: var(--text-secondary);
+}
+
+.dataview-list {
+	margin: 0;
+	padding-left: 20px;
+
+	li {
+		margin: 2px 0;
+	}
+}
+
+.dataview-table {
+	width: 100%;
+	border-collapse: collapse;
+
+	th,
+	td {
+		padding: 4px 8px;
+		border-bottom: 1px solid var(--border);
+		text-align: left;
+	}
+
+	th {
+		color: var(--text-secondary);
+		font-weight: 600;
+	}
+}

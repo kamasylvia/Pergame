@@ -462,3 +462,65 @@ pub async fn search(
         .await
     }
 }
+
+/// Resolve a folder path ("Projects" or "Projects/2024") to its node id,
+/// walking name segments down from the user's roots. `None` = not found.
+pub async fn resolve_folder_path(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    path: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let segs: Vec<&str> = path.split('/').map(str::trim).filter(|s| !s.is_empty()).collect();
+    if segs.is_empty() {
+        return Ok(None);
+    }
+    let mut parent: Option<Uuid> = None;
+    for seg in segs {
+        let id: Option<(Uuid,)> = match parent {
+            None => {
+                sqlx::query_as(
+                    "SELECT id FROM nodes WHERE user_id = $1 AND parent_id IS NULL AND name = $2 AND role IN (1,2) AND deleted_at IS NULL",
+                )
+                .bind(user_id)
+                .bind(seg)
+                .fetch_optional(pool)
+                .await?
+            }
+            Some(p) => {
+                sqlx::query_as(
+                    "SELECT id FROM nodes WHERE user_id = $1 AND parent_id = $2 AND name = $3 AND role = 2 AND deleted_at IS NULL",
+                )
+                .bind(user_id)
+                .bind(p)
+                .bind(seg)
+                .fetch_optional(pool)
+                .await?
+            }
+        };
+        match id {
+            Some((id,)) => parent = Some(id),
+            None => return Ok(None),
+        }
+    }
+    Ok(parent)
+}
+
+/// Execute a planned DQL statement (dynamic binding count → manual binds).
+/// SAFETY: `planned.sql` is planner-generated (field/function whitelist,
+/// all values bound as parameters); audited, hence `AssertSqlSafe`.
+pub async fn dql_query(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    planned: &crate::dql::Planned,
+) -> Result<Vec<NodeRow>, sqlx::Error> {
+    let mut q =
+        sqlx::query_as::<_, NodeRow>(sqlx::AssertSqlSafe(planned.sql.clone())).bind(user_id);
+    for b in &planned.bindings {
+        q = match b {
+            crate::dql::BoundValue::Str(s) => q.bind(s),
+            crate::dql::BoundValue::I64(n) => q.bind(n),
+            crate::dql::BoundValue::F64(n) => q.bind(n),
+        };
+    }
+    q.fetch_all(pool).await
+}

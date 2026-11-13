@@ -15,6 +15,7 @@ pub mod blobs;
 pub mod config;
 pub mod db;
 pub mod db_toasty;
+pub mod dql;
 pub mod error;
 pub mod extract;
 pub mod locks;

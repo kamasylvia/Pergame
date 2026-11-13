@@ -33,10 +33,16 @@ LIMIT 20
 - `SORT`/`LIMIT`:直译 ORDER BY/LIMIT;LIMIT 硬顶 100
 - 安全:parser 白名单字段与函数;参数化绑定;查询复杂度/深度上限;执行超时
 
-## 开放问题(实施时裁决)
+## 开放问题(2026-11-13 实施裁决)
 
-1. WHERE 相对时间(`-7d` 等 duration)首版是否支持
-2. TASK 输出——Pergame 无独立 task 概念 → v1 不做
-3. `metadata.*` 索引策略:按需表达式 GIN vs 全列 jsonb GIN
-4. 同 DQL 结果缓存 → v1 不缓存
-5. dataview 结果被其他笔记引用/导出 → 不做
+1. WHERE 相对时间 ✅做:`-7d/-1M/-12h/-30m/-45s/-2w`(M=30 天);`now_ms - duration` 化为时间戳比较。
+2. TASK 输出——v1 不做(Pergame 无 task 概念)。
+3. `metadata.*` 索引:现有 `GIN(metadata jsonb_path_ops)` 够用,`->>` 比较数据量小无妨;v1 不加索引。
+4. 结果缓存——v1 不缓存。
+5. 被引用/导出——不做。
+
+## 实施记录(2026-11-13)
+
+- 后端:`src/dql.rs`(lexer+递归下降+planner,白名单字段/深度 32/LIMIT 硬顶 100)+`src/routes/dql.rs`(`POST /api/nodes/query`,仅本人节点,5s 超时,4096 字符上限)+`repo/nodes::{resolve_folder_path,dql_query}`(路径逐段解析,role 1/2;sqlx `AssertSqlSafe` 已审计)。
+- 前端:`helpers/markdown/dataview.ts`(```dataview /```index 原捕获插件)+`helpers/dataview-render.ts`(mount 期 fetch 渲染,index 预设=`LIST FROM 当前目录`)+`ContentCompiled` 挂载+`markdown.scss` 样式。链接走 `data-internal-link` 复用路由跳转。
+- 范围裁决:shared/public 跨用户查询 v1 不做(仅本人节点);tag 匹配容空格(`REPLACE(tags,' ','')`)。

@@ -24,6 +24,7 @@ import { renderMermaidDiagrams } from '~/helpers/mermaid-render';
 import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
 import { renderExtEmbeds } from '~/helpers/markdown/embeds';
 import { renderAbcBlocks } from '~/helpers/abc-render';
+import { renderDataviewBlocks } from '~/helpers/dataview-render';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ node?: Partial<Node> }>();
@@ -160,10 +161,17 @@ function runAbcRender() {
   renderAbcBlocks(rootElement.value);
 }
 
+function runDataviewRender() {
+  if (!rootElement.value) return;
+  const config = useRuntimeConfig();
+  renderDataviewBlocks(rootElement.value, config.public.baseApi || '', props.node, id => nodesStore.getById(id));
+}
+
 onMounted(() => {
   runMermaidRender();
   runAbcRender();
   runPdfEmbeds();
+  runDataviewRender();
   const unsub = subscribeDrawioCacheInvalidated(() => {
     rerenderImages(rootElement.value!);
   });
@@ -180,6 +188,7 @@ watch(
     runMermaidRender();
     runAbcRender();
     runPdfEmbeds();
+    runDataviewRender();
     if (rootElement.value) renderExtEmbeds(rootElement.value);
   },
 );

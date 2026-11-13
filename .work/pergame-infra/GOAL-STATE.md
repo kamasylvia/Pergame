@@ -33,7 +33,7 @@
 | B1 | Rust 重写 + pg(Toasty + sqlx 逃逸)。**P0 ✅(2026-11-08)**;**P1 ✅(2026-11-08,commits c9fae7c0/4993e160)**:backend-rs 骨架(axum+config+snowflake+0001 pg schema+health)、Toasty spike **PASS**(编译门 + 共存审查;运行时验证移 P2 首查点) | issue #1;`rust-migration/RESEARCH.md` §8 |
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
 | B3 | 目录索引文件(随 B1) | issue #4;spec `features/directory-index.md` |
-| B4 | Dataview 查询引擎(随 B1) | issue #5;spec `features/dataview.md` |
+| B4 | Dataview 查询引擎 ✅(2026-11-13) | issue #5;spec `features/dataview.md`(开放问题全裁决+实施记录) |
 | B5 | 插件系统 PS-A..E(排 B1 主体后,与 B2-B4 合流;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` |
 
 **B6(Backup v2)已取消(2026-11-08)**:issue #9 关闭,设计存档 `features/backup-v2.md`;替代 = 运维件 `scripts/dr-backup.sh`(N pg 源 × M rclone 目的地,已 dry-run 验证,实机验证待人工)。
@@ -77,6 +77,8 @@
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **Dataview 查询引擎(2026-11-13,issue #5 ✅)**:`src/dql.rs`(lexer+递归下降+参数化 planner)+`POST /api/nodes/query`(仅本人/5s 超时)+前端 dataview/index 块+index 预设。单测 6/6+集成 17/17+浏览器 3 块+跳转。tag 匹配容空格;shared 跨用户 v1 不做。#4 index 落地前提就绪。
 
 - **Rust 质量改进批次(2026-11-13,审计 6 项全落地)**:`deny(unsafe_code)`(生产 0 unsafe)+ 删 `croner`/`aws-config` + 6 文件拆分全 <600(restore/backup/resources/nodes/repo/routes-backup)+ rustdoc 全覆盖 + 6 doc-tests(抽 lib.rs)+ llvm-cov 13.8%→24.3% + proptest 3 组 + 单测 44→117。抓 3 真 bug:环检查 bigint↔Uuid 错配恒 500、还原子先父后撞外键(两轮插入)、2FA qr_code_url 非 otpauth(改 to_url)。集成 14/14 全绿(修 3 过时测试:probe-draft token/备份前建 target/还原 force/sync 快照语义)。教训 → LESSONS §2026-11-13。
 

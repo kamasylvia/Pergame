@@ -3,6 +3,7 @@ pub mod admin_backup;
 pub mod api_tokens;
 pub mod auth;
 pub mod backup;
+pub mod dql;
 pub mod health;
 pub mod links;
 pub mod nodes;

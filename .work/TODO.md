@@ -16,7 +16,7 @@
 - [x] **Per-user 配额 + 内容寻址去重** ✅(2026-11-13):①users.max_file/total_size(NULL=回落 config;config 0=无限制;admin 豁免;PATCH 双 Option 清 null;`GET /users/@me/quota`;CDN 条读服务端+无限制态;用户管理页配额输入);②空/缺省=无限制口径(TRASH_RETENTION unset/空=不清理,0=全清;SNAPSHOT_INTERVAL unset/空=关,0=非法 warn 关;全局审计余量无限制语义);③去重(`object_blobs`+`blobs/{sha256}`+refcount;upload/update/restore acquire;purge/删账户递减;末引用删对象;备份读 blob 优先;orphan 扫失引 blob)。**生产迁移实测**:30 对象全迁 `bytes_saved=0`(无重复)。单测 117→119,集成 14→16,覆盖率行 22.9%。
 - [x] **MCP server** ✅(2026-11-12,issue #3 保持开启待用户确认):`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具 + `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens` + docs `use/mcp`。**已实测**:隔离库全链(token 生命周期/7 工具/越权 -32003/环 -32602/回收站/吊销 401)+ 只读窗口(四写 -32023、三读放行、REST 同窗 423)+ 生产库真数据(list/read/search/create/update/delete 全通)。**未做**:速率限制(P1 裁决不做);docker 镜像未含(下次 release 才上 QNAP)。
 - [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
-- [ ] **Dataview 查询引擎**:issue #5;DQL 子集、内置字段+metadata JSONB、`POST /api/nodes/query`、前端容器块;spec = `features/dataview.md`。
+- [x] **Dataview 查询引擎** ✅(2026-11-13):issue #5;DQL 子集(LIST/TABLE/FROM folder+tag/WHERE 比较+contains/startswith+AND/OR/NOT/SORT/LIMIT 硬顶100/相对时间-7d)+手写递归下降+参数化 planner(字段白名单/深度32)+`POST /api/nodes/query`(仅本人节点/5s 超时)+前端 ` ```dataview `/` ```index ` 块(LIST/TABLE/index 预设 `LIST FROM 当前目录`)+可点跳转。**实测**:单测 6/6+集成 17/17+浏览器 3 块渲染+跳转。spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。
 
 - [x] **笔记软连接/克隆**(Trilium 对位)✅(2026-11-09,NL-A/B/C 三阶段):克隆表 node_links + 环校验 + 端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`。
@@ -42,7 +42,7 @@
 3. **前端部分交互只有 API 验证**——快照目标页按钮点击、回收站页面只验到渲染与几何(本机 IAB actionability 卡),需手动点一遍。
 4. **frontend flags 的 `.env`→compose 断链**(2026-11-11 发现):`CONFIG_HIDE_NATIVE_LOGIN`/`CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` 在 `.env.example` 与 docs 有名,但自包含 compose 未映射成 `NUXT_PUBLIC_CONFIG_HIDE_NATIVE_LOGIN`/`NUXT_PUBLIC_CONFIG_OIDC_PROVIDER_AUTO_REDIRECT` → 设了不生效;OIDC-only 部署会踩。修法 = compose frontend 块补两行映射。
 
-**明确未实现(按批次,非 bug)**:批次 A 剩余(Joplin md 特性 / Obsidian 语法兼容;媒体播放器 ✅2026-11-12)、目录索引、Dataview、插件系统、Pergamena 改名。
+**明确未实现(按批次,非 bug)**:批次 A ✅全清(媒体播放器 ✅2026-11-12、Joplin md ✅2026-11-13、M0 缩水 ✅2026-11-13)、Dataview ✅2026-11-13;剩余:目录索引(#4,等 #5 落地已可开工)、插件系统、Pergamena 改名。
 
 ### 建议测试顺序
 

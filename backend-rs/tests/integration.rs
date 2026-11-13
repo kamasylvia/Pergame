@@ -2383,3 +2383,58 @@ async fn blob_dedup_shared_across_users() {
     cleanup_user(&user_a).await;
     cleanup_user(&user_b).await;
 }
+
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn nodes_query_dql() {
+    let client = Client::new();
+    let (_user_id, suffix) = signup_and_login_tagged(&client, "dql").await;
+    let folder = format!("folder-{suffix}");
+    let doc = format!("doc-{suffix}");
+    let (status, r) = post_json(&client, "/nodes", &json!({"name": folder, "role": 2})).await;
+    assert_eq!(status, 200);
+    let folder_id = result_id_string(&r);
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": doc, "role": 3, "parent_id": folder_id, "tags": format!("dql-{suffix}")}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let doc_id = result_id_string(&r);
+
+    // LIST FROM folder returns folder + doc.
+    let (status, r) = post_json(
+        &client,
+        "/nodes/query",
+        &json!({"query": format!("LIST FROM \"{folder}\"")}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let rows = r.result["rows"].as_array().expect("rows");
+    assert_eq!(rows.len(), 2);
+
+    // TABLE with tag source + WHERE narrows to the doc.
+    let (status, r) = post_json(
+        &client,
+        "/nodes/query",
+        &json!({"query": format!("TABLE name FROM #dql-{suffix} WHERE role = 3")}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["columns"], json!(["name"]));
+    let rows = r.result["rows"].as_array().expect("rows");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"], json!(doc_id));
+
+    // Unknown field rejected; injection rejected.
+    let (status, _) = post_json(&client, "/nodes/query", &json!({"query": "LIST WHERE password = 1"})).await;
+    assert_eq!(status, 400);
+    let (status, _) = post_json(&client, "/nodes/query", &json!({"query": "TABLE name; DROP TABLE nodes"})).await;
+    assert_eq!(status, 400);
+
+    let (status, _) = del(&client, &format!("/nodes/{doc_id}")).await;
+    assert_eq!(status, 200);
+    let (status, _) = del(&client, &format!("/nodes/{folder_id}")).await;
+    assert_eq!(status, 200);
+}

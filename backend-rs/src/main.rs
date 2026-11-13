@@ -302,6 +302,7 @@ async fn main() {
             delete(routes::links::delete_link),
         )
         .route("/api/nodes/search", get(routes::nodes::search))
+        .route("/api/nodes/query", post(routes::dql::query))
         .route(
             "/api/nodes/user/{userId}",
             get(routes::nodes::get_user_nodes),

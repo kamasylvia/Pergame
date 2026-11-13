@@ -151,3 +151,11 @@
 - **i18n 花括号是占位符**:文案里 `{"scale": 1.2}` 示例让 vue-i18n 编译炸 500。示例改无花括号写法(scale 1.2)。
 - **`edit` PUT N.=M 是替换**:多次顶掉邻行(import/闭合括号)。插入用 `PUT >N:`;改完跑 typecheck(本批 typecheck 抓到 3 次顶掉)。
 - **偏好开关实测要走 UI**:直接写 IndexedDB 会被后端 merge 覆盖。开关类验证 = 设置页点开关 → 同步后端 → 重载验渲染。
+
+## 2026-11-13 #5 Dataview 批次
+
+- **sqlx 0.9 动态 SQL 要 `AssertSqlSafe`**:`query_as(&String)` 编译期 E0277(`SqlSafeStr` 未实现)。planner 生成 SQL(字段白名单+值全绑定)审计后包 `AssertSqlSafe(sql)`。
+- **`edit` CUT 行号是快照不是当前**:多次切多/切少吃掉邻代码(parse 函数头/check_field 被吃)。大文件改前先 `wc -l` 记锚,出错 `git diff` 对范围,碎了直接整段重写比缝补快。
+- **tags 逗号分隔容空格**:`dqlprobe, demo` 的 `,demo,` LIKE 不中。规则:tag 成员匹配一律 `REPLACE(tags,' ','')` 后再包逗号。
+- **NodeRow 全列 SELECT**:planner 漏 `color` 等列运行期 500(`no column found`)。新 repo 查询抄 `list_all` 的列单(含 `"order" AS node_order` + thumbnail CASE),别手写子集。
+- **浏览器登录态**:localForage CDN 注入实例与 app 实例驱动不一致,设 flag 不生效。可靠法 = UI 真登录(测试密码可 bcrypt swap,测完从备份恢复)。
