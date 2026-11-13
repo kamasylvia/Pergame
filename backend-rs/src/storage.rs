@@ -78,7 +78,16 @@ pub fn parse_env() -> Result<S3Storage, String> {
         .endpoint_url(url)
         .region(aws_sdk_s3::config::Region::new("us-east-1"))
         .credentials_provider(Credentials::new(access, secret, None, None, "S3Storage"))
-        .force_path_style(true);
+        .force_path_style(true)
+        // Slow S3 links (QuObjects over Tailscale, ~33KB/s) stall longer
+        // than the SDK's 20s default grace, aborting big downloads with
+        // "streaming error". Disable download-side protection; uploads
+        // keep it (fast local reads never legitimately stall).
+        .stalled_stream_protection(
+            aws_sdk_s3::config::StalledStreamProtectionConfig::enabled()
+                .download_enabled(false)
+                .build(),
+        );
 
     if let Some(ca_path) = env("S3_CA_PATH") {
         let http_client = load_custom_ca_client(&ca_path)?;

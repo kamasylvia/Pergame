@@ -39,6 +39,12 @@ impl S3Target {
                 "BackupTarget",
             ))
             .force_path_style(true)
+            // Same slow-link rationale as storage.rs: no download stall cap.
+            .stalled_stream_protection(
+                aws_sdk_s3::config::StalledStreamProtectionConfig::enabled()
+                    .download_enabled(false)
+                    .build(),
+            )
             .build();
         Self {
             client: Client::from_conf(cfg),
