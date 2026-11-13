@@ -99,8 +99,8 @@ a.router-link-active {
 
 .plugin-ribbon {
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   width: 39px;
   height: 39px;
   padding: 0.5rem;

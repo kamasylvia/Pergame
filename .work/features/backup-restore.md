@@ -297,3 +297,4 @@ trait BackupStore: id() / fingerprint() / has(path) / put(path, bytes) / get(pat
 
 - targets 视图搬迁 + API 换前缀 + admin 元素隐藏;backups 页:无 target 提示条 + 跳转、快照密码框、加密锁标、还原口令/force 确认框、plan 新行、full 明细 toast、upload 强制 force。
 - i18n:12 新键 en + zh-CN + zh-TW(余者 fallback en)。
+- **2026-11-13 补:targets 行「Empty」按钮**(`emptyTarget` + `confirm()` + toast 显示 `deleted_objects`)。此前 `POST /backup/targets/:id/empty` 只有 API,前端无入口 → 目标上只要有对象,`delete-check` 永远拒绝,用户在 UI 里无法自解,只能手敲 API。i18n 4 键 × 8 语言(含撇号语言用双引号包裹)。

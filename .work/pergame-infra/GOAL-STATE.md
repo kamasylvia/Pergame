@@ -82,6 +82,10 @@
 4. GitHub secrets 改名 `MINIO_*` → `S3_ACCESSKEY/S3_SECRETKEY`(启用 Actions 部署时手动做)。
 5. 前端走查补完:快照目标页(`?p=snapshotTargets`)的 CRUD/测试/同步/删除按钮交互(API 已全链活测,UI 只验到渲染与几何;IAB 的按钮 actionability 在本机会卡,需人工点一遍)。
 6. **目录索引(#4)✅ 2026-11-13**:后端建夹自动建 + 读夹懒建 + 三写锁 + 设置批量改名 + 唯一索引 0010;前端 index 块子树渲染/目录优先/目录行跳转/侧边栏置顶与隐藏开关。**已用真浏览器验(2026-11-13,Playwright Chromium)**:侧边栏 index 紧跟目录、index 块只列子项且目录前置、点目录行跳该目录 index、目录页「Open index file」跳转、`displayIndexFiles` 关闭后侧边栏无 index。同轮修 SFC 模板缺闭合标签(设置页不可用)+ 新增 `bun run lint:sfc`。
+7. **部署 smoke 第一轮(2026-11-13 晚,Playwright)**:核心 CRUD ✅(注册/登录/建文档/保存/树/渲染)、附件上传 + 鉴权读 ✅(本机 200/39B,匿名 401)、回收站 ✅(删→列表→Restore→回树)、零 target 快照 ✅(一次性 token 链接 + zip `meta.json`/`manifest.json`/`blobs/` + token 单次消费)。
+   - **发现 1(线上坏)**:QNAP stack 42 的 `v0.0.11` 镜像落后 main 30 个提交,`281bf11e`(附件走后端鉴权读)不在任何 tag 内 → 线上 `GET /api/resources/:id/file` **404**(同附件本机最新后端 200)。修法 = 当前 main 打 v0.0.12 + 更新 stack。
+   - **发现 2(已修)**:快照目标页没有「Empty」按钮,`empty` 只有 API → 目标一旦有对象,`delete-check` 永远拒绝且 UI 无出口。本轮补按钮 + 8 语言文案(`emptyTarget/emptyConfirm/emptied/emptyFailed`)。
+   - **中断**:跑到 draft probe 时 NAS 从本机不可达(Tailscale 到 `qnap.elf-balance.ts.net` 的 8200/5432 全断),本地后端随之连不上 pg → 目标页 Test/Sync/Delete/Empty 全链与线上 smoke 待恢复后重跑(脚本 `~/.cache/pergame/pw/s6-targets.mjs`)。
 
 ### 换机续接指引
 

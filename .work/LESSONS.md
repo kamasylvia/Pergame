@@ -182,3 +182,14 @@
 - **登录后别自己 `goto('/dashboard')`**:应用自己的 `router.push` 已带状态;外部跳转与中间件存在竞态,等 `waitForURL(/dashboard/)` 更稳。
 - **名字重复的目录会让 DQL 路径解析歧义**:`LIST FROM "NavFolder"` 按名字逐段解析,同名工作区取第一个匹配;浏览器验证里因此点到上一轮的目录。验证脚本要么用唯一名字,要么按 id 断言。
 - **真实浏览器验证的四件事(本次全过)**:侧边栏 index 紧跟其目录、index 块只列子项(容器与 index 自身被过滤、目录前置)、index 块点目录行跳到该目录 index、目录页「Open index file」按钮跳转、`displayIndexFiles` 关闭后侧边栏无 index 而目录仍在。
+
+## 2026-11-13 部署 smoke 与目标页走查(Playwright)
+
+- **登录脚本要等 hydration**:`goto(/login)` 后立刻 `fill` 会填进未挂载的表单,提交无效、停在 login。可靠序 = `waitForSelector("#username")` + 1.2s + `form.requestSubmit()` + `waitForURL(/dashboard/)`。登录端点是 `POST /api/auth`(不是 `/api/auth/login`);注册是 `POST /api/users` 201 后跳 login。
+- **设置页 `?p=` 的 key 是代码里的 pages 表**:备份页是 `?p=backup`(不是 backups)、目标是 `?p=snapshotTargets`;写错不报错,静默回落 profile,脚本会误判「页面没渲染」。
+- **一次性 token 下载链接只能取一次**:第一次 fetch 已消费,脚本里再取一次拿到的是 `{"message":"Snapshot zip expired or already downloaded"}`(404),`unzip` 报 End-of-central-directory。验证 zip 要单次 fetch 后内存复用;这条本身也是「token 单次消费」的活证据。
+- **判断「线上缺路由」看 body**:同路径本机 200、线上 404 且 **body 为空** = axum fallback(路由不存在);业务 404 会带 JSON。配合 `git tag --contains <sha>`(为空 = 没进过任何 release)与 `git rev-list --count vX..HEAD` 定量说明版本漂移。
+- **部署 smoke 先对版本**:本次线上 v0.0.11 落后 main 30 个提交,附件鉴权读(`281bf11e`,11-12 17:08)在 tag 之外 → 线上附件 404。以后 smoke 第一步 = 比 tag 与 HEAD,别把「旧镜像的已知缺失」当新 bug 追。
+- **快照目标页保存有「先测连接」门禁**:`probe-draft` 通过后 `connection_token` 才解锁 Save(任一连接字段改动即失效)。测试要用真实凭据 + 存在的空桶(`pergame-tgt-test`),否则 probe 返回 `reachable:false / snapshot_objects:-1` 且不带原因(后端只 `tracing::warn`)。
+- **`empty` 之前只有 API**:目标上有对象 → `delete-check` 永远拒,UI 没有出口 = 用户被锁死。功能落地要对照 spec 的「两步确认」检查前端入口是否真存在,别只验后端端点。
+- **stylelint 也是闸门**:PS-B 批次声称全绿,但 `Dock.vue` 的 `align-items/justify-content` 顺序红(`order/properties-order`)。提交前四件一起跑:lint / lint:css / lint:sfc / typecheck。

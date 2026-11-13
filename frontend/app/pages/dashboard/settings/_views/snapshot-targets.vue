@@ -43,6 +43,9 @@
             >
               {{ t('settings.snapshotTargets.takeover') }}
             </AppButton>
+            <AppButton type="secondary" small :disabled="busy === tg.id" @click="emptyTarget(tg)">
+              {{ t('settings.snapshotTargets.emptyTarget') }}
+            </AppButton>
             <AppButton type="secondary" small @click="startEdit(tg)">
               {{ t('settings.snapshotTargets.edit') }}
             </AppButton>
@@ -334,6 +337,26 @@ async function sync(tg: Target) {
     await load();
   } else {
     notifications.add({ type: 'error', title: t('settings.snapshotTargets.syncFailed'), message: result.message });
+  }
+}
+
+async function emptyTarget(tg: Target) {
+  if (!confirm(t('settings.snapshotTargets.emptyConfirm', { name: tg.name }))) return;
+  busy.value = tg.id;
+  const result = await makeRequest<{ deleted_objects: number }>(
+    `backup/targets/${tg.id}/empty`,
+    'POST',
+    {},
+  );
+  busy.value = '';
+  if (result.status === 'success') {
+    notifications.add({
+      type: 'success',
+      title: t('settings.snapshotTargets.emptied', { count: result.result?.deleted_objects ?? 0 }),
+    });
+    await load();
+  } else {
+    notifications.add({ type: 'error', title: t('settings.snapshotTargets.emptyFailed'), message: result.message });
   }
 }
 
