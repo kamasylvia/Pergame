@@ -172,6 +172,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: 'ABC-Notation Optionen',
+    abcjsOptionsDesc: 'JSON-Renderoptionen für ABC-Blöcke (z. B. scale 1.2). Leer = Standard.',
     displayStatsBar: 'Statistikleiste anzeigen',
     displayStatsBarDesc: 'Zeige eine kleine Statistikleiste oben im Editor mit Wort-, Zeichen- und Zeilenzähler an.',
     enableAutoSave: 'Automatisches Speichern aktivieren',
@@ -181,6 +183,10 @@ export default {
     enableSpellCheckDesc: 'Aktiviere die Browser-Rechtschreibprüfung im Editor. Änderungen erfordern möglicherweise ein erneutes Laden der Seite.',
     fontFamily: 'Editor-Schriftart',
     fontSize: 'Editor-Schriftgröße',
+    markdownBreaks: 'Markdown-Zeilenumbrüche',
+    markdownBreaksDesc: 'Einzelne Zeilenumbrüche als <br> rendern (Joplin-kompatibel).',
+    markdownTypographer: 'Typografie',
+    markdownTypographerDesc: 'Anführungszeichen und Gedankenstriche intelligent ersetzen. Vorsicht bei Code/URLs.',
     scrollBeyondLastLine: 'Über die letzte Zeile hinaus scrollen',
     scrollBeyondLastLineDesc:
       'Erlaube dem Editor, über das Ende des Dokuments hinaus zu scrollen, damit die letzte Zeile nicht am unteren Bildschirmrand bleibt.',

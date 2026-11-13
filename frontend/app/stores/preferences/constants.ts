@@ -29,6 +29,9 @@ export const DEFAULT_PREFERENCES = {
   documentTitlesNumbering: false as boolean,
   documentColoredTags: true as boolean,
   documentShowAttachments: false as boolean,
+  markdownBreaks: true as boolean, // single \n renders <br> (Joplin parity)
+  markdownTypographer: false as boolean, // smart quotes/dashes (Joplin parity)
+  abcjsOptions: '' as string, // JSON render options for ABC blocks (Joplin parity)
   documentDefaultThumbnail: false as boolean,
   documentUseParentThumbnail: false as boolean,
   sidebarItems: {
@@ -120,6 +123,9 @@ export const EDITOR_KEYS: PreferenceKey[] = [
   'documentTitlesNumbering',
   'documentColoredTags',
   'documentShowAttachments',
+  'markdownBreaks',
+  'markdownTypographer',
+  'abcjsOptions',
   'documentDefaultThumbnail',
   'documentUseParentThumbnail',
   'editorFontFamily',

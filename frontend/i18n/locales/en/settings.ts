@@ -171,6 +171,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: 'ABC notation options',
+    abcjsOptionsDesc: 'JSON render options for ABC blocks (e.g. scale 1.2). Empty = defaults.',
     displayStatsBar: 'Show stats bar',
     displayStatsBarDesc: 'Show a small stats bar at the top of the editor with word, character and line counts.',
     enableAutoSave: 'Enable autosave',
@@ -180,6 +182,10 @@ export default {
     enableSpellCheckDesc: 'Enable browser spell check in the editor. Changes may require a page reload.',
     fontFamily: 'Editor font',
     fontSize: 'Editor font size',
+    markdownBreaks: 'Markdown line breaks',
+    markdownBreaksDesc: 'Render single newlines as <br> (Joplin parity).',
+    markdownTypographer: 'Typographer',
+    markdownTypographerDesc: 'Smart quotes and dashes. May affect quotes inside code/URLs.',
     scrollBeyondLastLine: 'Scroll beyond last line',
     scrollBeyondLastLineDesc: 'Allow the editor to scroll past the end of the document, so the last line need not sit at the bottom of the screen.',
     section: 'Editor',

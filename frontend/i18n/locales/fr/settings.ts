@@ -172,6 +172,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: "Options de notation ABC",
+    abcjsOptionsDesc: 'Options de rendu JSON pour les blocs ABC (ex. scale 1.2). Vide = défaut.',
     displayStatsBar: 'Afficher la barre de statistiques',
     displayStatsBarDesc: "Afficher une petite barre de statistiques en haut de l'éditeur avec le nombre de mots, caractères et lignes.",
     enableAutoSave: 'Activer la sauvegarde automatique',
@@ -181,6 +183,10 @@ export default {
     enableSpellCheckDesc: "Activer la vérification orthographique du navigateur dans l'éditeur. Les changements peuvent nécessiter un rechargement de la page.",
     fontFamily: "Police de l'éditeur",
     fontSize: "Taille de police de l'éditeur",
+    markdownBreaks: "Sauts de ligne Markdown",
+    markdownBreaksDesc: "Rendre les sauts de ligne simples en <br> (parité Joplin).",
+    markdownTypographer: "Typographie",
+    markdownTypographerDesc: "Guillemets et tirets intelligents. Attention au code/URL.",
     scrollBeyondLastLine: 'Défiler au-delà de la dernière ligne',
     scrollBeyondLastLineDesc: "Permettre à l'éditeur de défiler au-delà de la fin du document, afin que la dernière ligne ne reste pas en bas de l'écran.",
     section: 'Éditeur',

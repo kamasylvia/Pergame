@@ -144,3 +144,10 @@
 - **migration 落生产库即冻结**:0008/0009 已在生产库应用,勿改文件;调结构只能 0010+。
 - **JWT role 在 token 里**:集成测试改 role 后必须重登,否则走旧身份(配额测试曾因此误测 admin 豁免)。
 - **QuObjects 目录占位符**:`dir/` 零字节 key 在 empty/scan 中要显式排除,迁移后 prefix 下只剩占位符属正常,手动清。
+
+## 2026-11-13 A2 Joplin 特性批次
+
+- **markdown-it 插件生态多已停更**:multimd-table 4.2.3 调 `md.utils.assign`(13+ 已删)直接炸。修法 = use 前垫 `Object.assign`(语义同)。装旧插件先跑个最小渲染探针再接管线。
+- **i18n 花括号是占位符**:文案里 `{"scale": 1.2}` 示例让 vue-i18n 编译炸 500。示例改无花括号写法(scale 1.2)。
+- **`edit` PUT N.=M 是替换**:多次顶掉邻行(import/闭合括号)。插入用 `PUT >N:`;改完跑 typecheck(本批 typecheck 抓到 3 次顶掉)。
+- **偏好开关实测要走 UI**:直接写 IndexedDB 会被后端 merge 覆盖。开关类验证 = 设置页点开关 → 同步后端 → 重载验渲染。

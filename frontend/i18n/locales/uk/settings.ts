@@ -171,6 +171,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: "Параметри нотації ABC",
+    abcjsOptionsDesc: 'JSON-параметри рендеру блоків ABC (напр. scale 1.2). Порожньо = типові.',
     displayStatsBar: 'Показувати панель статистики',
     displayStatsBarDesc: 'Показувати невелику панель статистики у верхній частині редактора з кількістю слів, символів та рядків.',
     enableAutoSave: 'Увімкнути автозбереження',
@@ -180,6 +182,10 @@ export default {
     enableSpellCheckDesc: 'Увімкнути перевірку орфографії браузера в редакторі. Зміни можуть потребувати перезавантаження сторінки.',
     fontFamily: 'Шрифт редактора',
     fontSize: 'Розмір шрифту редактора',
+    markdownBreaks: "Розриви рядків Markdown",
+    markdownBreaksDesc: "Одинарні переведення рядка як <br> (паритет Joplin).",
+    markdownTypographer: "Типограф",
+    markdownTypographerDesc: "Розумні лапки й тире. Обережно з кодом/URL.",
     scrollBeyondLastLine: 'Прокрутка за останній рядок',
     scrollBeyondLastLineDesc: 'Дозволити редактору прокручуватися за кінець документа, щоб останній рядок не залишався внизу екрана.',
     section: 'Редактор',

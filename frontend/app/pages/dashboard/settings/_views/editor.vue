@@ -72,6 +72,24 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         type: 'toggle',
         key: 'editorScrollBeyondLastLine',
       },
+      {
+        label: t('settings.editor.markdownBreaks'),
+        description: t('settings.editor.markdownBreaksDesc'),
+        type: 'toggle',
+        key: 'markdownBreaks',
+      },
+      {
+        label: t('settings.editor.markdownTypographer'),
+        description: t('settings.editor.markdownTypographerDesc'),
+        type: 'toggle',
+        key: 'markdownTypographer',
+      },
+      {
+        label: t('settings.editor.abcjsOptions'),
+        description: t('settings.editor.abcjsOptionsDesc'),
+        type: 'textarea',
+        key: 'abcjsOptions',
+      },
     ],
   },
 ]);

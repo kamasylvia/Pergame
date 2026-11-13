@@ -30,3 +30,31 @@ iframe {
 	border: none;
 	border-radius: var(--radius-sm);
 }
+
+.ext-embed {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	width: 100%;
+	max-width: 640px;
+	margin: 10px 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg-secondary);
+	aspect-ratio: 16 / 9;
+}
+
+.ext-embed-consent {
+	padding: 8px 20px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-sm);
+	color: var(--accent);
+	background: transparent;
+	cursor: pointer;
+}
+
+.ext-embed iframe {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+}

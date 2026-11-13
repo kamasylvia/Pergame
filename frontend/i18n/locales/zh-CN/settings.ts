@@ -170,6 +170,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: 'ABC 记谱选项',
+    abcjsOptionsDesc: 'ABC 块的 JSON 渲染选项（如 scale 1.2），空 = 默认。',
     displayStatsBar: '显示统计栏',
     displayStatsBarDesc: '在编辑器顶部显示小型统计栏，包含字数、字符数与行数。',
     enableAutoSave: '启用自动保存',
@@ -179,6 +181,10 @@ export default {
     enableSpellCheckDesc: '在编辑器中启用浏览器的拼写检查，修改后可能需要重新加载页面。',
     fontFamily: '编辑器字体',
     fontSize: '编辑器字体大小',
+    markdownBreaks: 'Markdown 软换行',
+    markdownBreaksDesc: '单个换行渲染为 <br>（Joplin 对齐）。',
+    markdownTypographer: '智能标点',
+    markdownTypographerDesc: '智能引号与破折号，可能影响代码/URL 内引号。',
     scrollBeyondLastLine: '可滚动超过最后一行',
     scrollBeyondLastLineDesc: '允许编辑器滚动超过文档结尾，让最后一行不必停在屏幕底部。',
     section: '编辑器',

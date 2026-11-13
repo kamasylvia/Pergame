@@ -170,6 +170,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: 'ABC 記譜選項',
+    abcjsOptionsDesc: 'ABC 塊的 JSON 渲染選項（如 scale 1.2），空 = 預設。',
     displayStatsBar: '顯示統計列',
     displayStatsBarDesc: '在編輯器頂端顯示小型統計列，包含字數、字元數與行數。',
     enableAutoSave: '啟用自動儲存',
@@ -179,6 +181,10 @@ export default {
     enableSpellCheckDesc: '在編輯器中啟用瀏覽器的拼字檢查，變更後可能需要重新載入頁面。',
     fontFamily: '編輯器字型',
     fontSize: '編輯器字型大小',
+    markdownBreaks: 'Markdown 軟換行',
+    markdownBreaksDesc: '單個換行渲染為 <br>（Joplin 對齊）。',
+    markdownTypographer: '智慧標點',
+    markdownTypographerDesc: '智慧引號與破折號，可能影響程式碼/URL 內引號。',
     scrollBeyondLastLine: '可捲動超過最後一行',
     scrollBeyondLastLineDesc: '允許編輯器捲動超過文件結尾，讓最後一行不必停在螢幕底部。',
     section: '編輯器',

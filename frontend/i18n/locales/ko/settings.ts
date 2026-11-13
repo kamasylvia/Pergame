@@ -170,6 +170,8 @@ export default {
   },
 
   editor: {
+    abcjsOptions: 'ABC 표기법 옵션',
+    abcjsOptionsDesc: 'ABC 블록용 JSON 렌더 옵션(예: scale 1.2). 비어 있으면 기본값.',
     displayStatsBar: '통계 바 표시',
     displayStatsBarDesc: '단어 수, 글자 수, 줄 수를 표시하는 작은 통계 바를 에디터 상단에 표시합니다.',
     enableAutoSave: '자동 저장 활성화',
@@ -179,6 +181,10 @@ export default {
     enableSpellCheckDesc: '에디터에서 브라우저 맞춤법 검사를 활성화합니다. 변경 사항을 적용하려면 페이지를 새로고침해야 할 수 있습니다.',
     fontFamily: '에디터 글꼴',
     fontSize: '에디터 글꼴 크기',
+    markdownBreaks: 'Markdown 줄바꿈',
+    markdownBreaksDesc: '단일 줄바꿈을 <br>로 렌더링 (Joplin 호환).',
+    markdownTypographer: '타이포그래퍼',
+    markdownTypographerDesc: '스마트 따옴표와 대시. 코드/URL에 영향 가능.',
     scrollBeyondLastLine: '마지막 줄 아래로 스크롤',
     scrollBeyondLastLineDesc: '문서 끝을 지나서도 스크롤할 수 있게 하여 마지막 줄이 화면 맨 아래에 머물지 않도록 합니다.',
     section: '에디터',

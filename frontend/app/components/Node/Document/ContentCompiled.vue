@@ -15,6 +15,8 @@ import compile from '~/helpers/markdown';
 import { rerenderImages } from '~/helpers/DOM';
 import { renderMermaidDiagrams } from '~/helpers/mermaid-render';
 import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
+import { renderExtEmbeds } from '~/helpers/markdown/embeds';
+import { renderAbcBlocks } from '~/helpers/abc-render';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ node?: Partial<Node> }>();
@@ -141,10 +143,17 @@ function runMermaidRender() {
 function runPdfEmbeds() {
   if (!rootElement.value) return;
   renderPdfEmbeds(rootElement.value);
+  renderExtEmbeds(rootElement.value);
+}
+
+function runAbcRender() {
+  if (!rootElement.value) return;
+  renderAbcBlocks(rootElement.value);
 }
 
 onMounted(() => {
   runMermaidRender();
+  runAbcRender();
   runPdfEmbeds();
   const unsub = subscribeDrawioCacheInvalidated(() => {
     rerenderImages(rootElement.value!);
@@ -160,7 +169,9 @@ watch(
   async () => {
     await nextTick();
     runMermaidRender();
+    runAbcRender();
     runPdfEmbeds();
+    if (rootElement.value) renderExtEmbeds(rootElement.value);
   },
 );
 

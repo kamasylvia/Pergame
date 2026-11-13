@@ -5,7 +5,7 @@
 ## 批次 A — 前端批次(纯前端,独立于重写;**待开工令**)
 
 - [x] **媒体播放器内置化**(video-md → 内置,2026-11-12 完成):issue #6;`html5MediaPlugin` 补 `preload`/`#t=`/`ogv` + PDF 占位符,`ContentCompiled` 后挂载 `PDFViewer`(mermaid 同款);附带修复 Rust `sanitize_html` 对齐 Go bluemonday 策略(audio/video/object/data-*/checkbox/form/SVG/MathML)。
-- [ ] **Joplin md 特性集对齐**:issue #7;breaks/typographer(带设置开关)/ins/multimd-table/deflist/abbr/embeds/ABC;约 5-6 天;spec 同上 §3。
+- [x] **Joplin md 特性集对齐** ✅(2026-11-13):issue #7;breaks(默认开)/typographer(默认关)双开关+compile 按设置缓存实例;ins/multimd-table/deflist/abbr 四插件(multimd 垫 `md.utils.assign`);embeds 白名单(YouTube-nocookie/Bilibili/Vimeo)+consent 壳+懒加载;ABC(abcjs 懒加载+abcjsOptions 设置)。浏览器实测 9/9 渲染。Fountain 后置(待需求确认)。
 - [ ] **M0 ob 语法兼容(全量四件,2026-11-07 采纳)**:wikilinks 解析(名字解析走搜索 API)、callout 渲染(复用现有容器 CSS)、properties/frontmatter 渲染(schema 与 #5 dataview `metadata.*` 同批设计)、导入改写;`![[embed]]`/transclusion 后置;3-5 天。
 
 ## 批次 B — 重写批次(Rust + pg + 功能域;**等用户开工令**)
