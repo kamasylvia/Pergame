@@ -56,6 +56,20 @@
 | 本地误删恢复 | 回收站 | 用户明确要求,替代 git 级版本历史 | ✅ 实现(2026-11-09) |
 | git 级版本控制 | — | 用户明确否决,不再评估 | ❌ 不做 |
 
+### 交接清单(新会话 / 新 agent 照做)
+
+1. **读,按序**:`~/.zcode/AGENTS.md`(全局)→ 本仓 `AGENTS.md` → `.work/TODO.md` → 本文 §2/§3 → `.work/LESSONS.md` 最近两节 → 相关 spec(`features/*.md`、`plugin-system/DESIGN.md`)。
+2. **环境**:`rustup override set 1.100.0`(backend-rs 目录);`bun install --registry https://registry.npmmirror.com`(改完 `git checkout -- bun.lock`)。活测凭据:Infisical DEVOPS 项目 → 生成 `~/.cache/pergame/local.env`(`DATABASE_*` 指向 `qnap.elf-balance.ts.net`、`S3_*` 指向 QuObjects 8010、随机 `JWT_SECRET`、`ALLOW_UNSECURE=true`、`TZ=Asia/Shanghai`);**该文件在仓外,勿入库**。
+3. **起服务**:backend `set -a; . ~/.cache/pergame/local.env; set +a; cargo run`(8201);frontend `NUXT_PUBLIC_API_PROXY_TARGET=http://localhost:8201 NUXT_PUBLIC_CDN_PROXY_TARGET=http://qnap.elf-balance.ts.net:8010 bun run dev`(3000);插件验证加 `NUXT_PUBLIC_DEV_PLUGINS=http://localhost:3000/plugins/demo NUXT_PUBLIC_APP_VERSION=0.0.11`。
+4. **验证门**:`cargo test --lib`(128)/ `--doc`(6)/ 集成 18(`--test-threads=1`)、`cargo clippy --all-targets`、本次改动文件的 `rustfmt --check`;前端 `bun run lint` + `lint:css` + `lint:sfc` + `nuxi typecheck`。
+5. **浏览器验证**:本机装的是 **Playwright Chromium**(`~/.cache/pergame/pw`,`bun add playwright` + `bun x playwright install chromium`);camoufox 未安装(1.3GB,过慢)。登录用 `form.requestSubmit()`(合成点击不触发本仓表单提交),登录后等 `waitForURL(/dashboard/)`,勿自己 `goto`。
+6. **生产约束**:NAS 库 = 生产库 `pergame`;migration `0007`–`0010` 已落库**冻结**,只能追加 `0011+`。本地跑集成会真连该库,测试自清理,但**勿手改数据**。
+7. **收尾**:`.work/TODO.md`(勾选/新增缺口)+ 本文 §2/§3 + `.work/LESSONS.md`(新坑)+ 相关 spec 同批更新;单提交(Conventional Commits,body 写 what+why+验证),推 origin。
+
+**可直接粘贴给新 agent 的开场**:
+
+> 续接 Pergame 仓库。先读 `AGENTS.md`、`.work/TODO.md`、`.work/pergame-infra/GOAL-STATE.md`(§3 交接清单 + 最近批次)、`.work/LESSONS.md` 最近两节,然后按 §3「下一步动作」继续。环境与验证门见交接清单第 2–5 条;不要重排 migration 编号,不要提交 `.env`/凭据。
+
 ### 下一步动作(按序)
 
 1. ~~**回收站机制**~~ ✅ **已完成(2026-11-09)**:`migration 0005` + repo 软删/恢复/彻底删/清空 + `/api/trash` 四端点 + 前端 `/dashboard/trash` + 保留期 sweeper(`TRASH_RETENTION_DAYS` 默认 30)。spec = `features/trash.md`。**待活环境验证**:集成用例 `trash_lifecycle`(`cargo test --test integration -- --ignored`)。
