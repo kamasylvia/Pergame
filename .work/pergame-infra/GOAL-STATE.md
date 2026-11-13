@@ -34,7 +34,7 @@
 | B2 | MCP server(随 B1) | issue #3;spec `features/mcp-server.md` |
 | B3 | 目录索引文件 ✅(2026-11-13) | issue #4;spec `features/directory-index.md`(裁决+实施记录) |
 | B4 | Dataview 查询引擎 ✅(2026-11-13) | issue #5;spec `features/dataview.md`(开放问题全裁决+实施记录) |
-| B5 | 插件系统 PS-A..E(排 B1 主体后,与 B2-B4 合流;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` |
+| B5 | 插件系统 PS-A..E(**PS-A 内核 ✅2026-11-13**;PS-B/C/D/E 待做;含 ReadItLater 移植) | issue #8;spec `plugin-system/DESIGN.md` §10 实施记录 |
 
 **B6(Backup v2)已取消(2026-11-08)**:issue #9 关闭,设计存档 `features/backup-v2.md`;替代 = 运维件 `scripts/dr-backup.sh`(N pg 源 × M rclone 目的地,已 dry-run 验证,实机验证待人工)。
 
@@ -79,6 +79,7 @@
 
 ### 最近完成的批次(供考古)
 
+- **插件系统 PS-A 内核(2026-11-13)**:`frontend/app/types/plugin.ts` 契约(`HOST_API_VERSION=1`)+ `services/plugins/{manifest,registry,context,loader}.ts` + `app/plugins/plugin-host.client.ts`(`NUXT_PUBLIC_DEV_PLUGINS`)+ `public/plugins/demo` 参考插件 + docs `5.administer/3.plugins.md`。manifest 全校验(slug/semver/主版本/entry 穿越/capabilities)、DisposableBag LIFO、坏插件隔离回滚、net 门禁(域名白名单 + GET/POST + 8 MiB)。验证:25 项内核断言 + 真实 HTTP 分发与 ESM 求值 e2e。清理:修 1 真 bug(`..` 路径穿越曾被放行)。
 - **目录索引文件(2026-11-13,issue #4 ✅)**:`metadata.index=true` 身份标记(服务端签发;客户端 create/update 提交的键被剥离)+ 建夹自动创建(`POST /nodes` 响应 `{node,index}`)+ 读夹懒重建(GET 回 `auto_index`)+ `migration 0010` 分部唯一索引 `idx_nodes_index_child` + 锁定(改名/移动/删除/pin 全拒,内容可编辑;check-then-insert 竞态由唯一索引折回;MCP `update_note`/`move_node`/`delete_node` 同步拒绝)+ 设置批量改名(`indexFileName` → 同请求 UPDATE 存量含回收站行,响应 `index_renamed`)+ 可见性开关 `displayIndexFiles` + index 块子树渲染(过滤自身/其他 index、目录优先 + 图标)+ 目录行跳转懒建 + 全站排序 index 置顶 + 还原归档去重(重复 index 剥标记 + warning)。单测 128 绿;集成新增 `directory_index_lifecycle`,并修正 trash/restore/DQL 5 处受 index 影响的计数断言。spec = `features/directory-index.md`。
 
 - **Dataview 查询引擎(2026-11-13,issue #5 ✅)**:`src/dql.rs`(lexer+递归下降+参数化 planner)+`POST /api/nodes/query`(仅本人/5s 超时)+前端 dataview/index 块+index 预设。单测 6/6+集成 17/17+浏览器 3 块+跳转。tag 匹配容空格;shared 跨用户 v1 不做。#4 index 落地前提就绪。

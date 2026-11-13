@@ -194,6 +194,12 @@ export default defineNuxtConfig({
       apiProxyTarget: '',
       // NUXT_PUBLIC_CDN_PROXY_TARGET, e.g. http://rustfs:9000
       cdnProxyTarget: '',
+
+      // Plugin dev mode (PS-A): comma-separated base URLs serving
+      // manifest.json + main.mjs. Empty = plugin host idle.
+      devPlugins: '',
+      // App version handed to plugins (`ctx.api.host.version`).
+      appVersion: '',
     },
   },
 

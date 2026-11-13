@@ -161,3 +161,16 @@ export interface PluginContext {
 2. v1 是否要"隔离模式"(iframe)?→ 建议:不要,记 v2
 3. 插件市场/签名 → v2;v1 管理员手动装
 4. `net.fetch` 是否限方式(GET/POST)+ 大小 → 建议限
+
+## 10. 实施记录
+
+### PS-A 内核(2026-11-13 ✅)
+
+- **契约**:`frontend/app/types/plugin.ts`(`HOST_API_VERSION = 1`、`PluginManifest`、`PluginContext`、`Disposable`、L1 客户端接口)。该文件不依赖 Nuxt/Vue,内核可在 app 外加载与测试。
+- **manifest 校验**(`services/plugins/manifest.ts`):id slug、semver、`apiVersion` 主版本相等、`capabilities` 白名单(`nodes:read|nodes:write|ui|markdown:render|settings` + `net:<domain>`/`net:*`)、`entry` 必须是**插件根内**的相对 `.mjs`(拒绝 `..`/绝对路径/反斜杠),一次报全部错误。
+- **注册回收**(`registry.ts`):`DisposableBag` LIFO 释放,卸载后再注册立即释放(避免迟到注册泄漏)。
+- **加载器**(`loader.ts`):`load(manifest, entryUrl)` / `loadFromUrl(base)`;重复 id、错误主版本、缺 default export、onload 抛错 → 记 failed 并回滚已注册资源,不影响其他插件;`unload` 先 `onunload` 再清 bag。
+- **上下文**(`context.ts`):`api.version/host`、`manifest`、`nodes`(get/listChildren/create/update/remove,走同一 REST 与权限)、`resources.upload`、`search.fulltext/query`、`settings`(PS-A 内存 KV,PS-D 落 `user_settings` 命名空间)、`ui.notice`、`net.fetch`(capability 域名白名单 + 仅 GET/POST + 8 MiB 上限,响应按字节截断校验)。
+- **启动**:`app/plugins/plugin-host.client.ts` 读 `NUXT_PUBLIC_DEV_PLUGINS`(逗号分隔 base URL),`useNuxtApp().$pluginHost` 暴露给 PS-B。
+- **参考插件**:`frontend/public/plugins/demo/`(manifest + main.mjs,数一遍文档并 notice)。
+- **验证**:25 项内核断言(manifest 拒绝矩阵/网络门禁/生命周期/隔离/KV)+ 真实 HTTP 取 manifest 与入口、真实 ESM 求值 e2e(载入 → notice → unload)。本机无浏览器(见 TODO 缺口),浏览器内交互留待有环境时补验。
