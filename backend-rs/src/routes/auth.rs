@@ -135,10 +135,9 @@ pub async fn login(
             }),
             vec![],
         )),
-        LoginOutcome::Full {
-            user,
-            refresh_token,
-        } => {
+        LoginOutcome::Full(boxed) => {
+            let user = boxed.user;
+            let refresh_token = boxed.refresh_token;
             let cfg = crate::config::global();
             let token = jwt::sign_access_token(user.id, user.role, cfg.auth.access_token_expiry)
                 .map_err(|_| {

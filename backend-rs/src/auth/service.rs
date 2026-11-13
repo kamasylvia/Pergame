@@ -21,13 +21,20 @@ pub fn now_ms() -> i64 {
 /// What `login` produced: a full session or a TOTP challenge.
 pub enum LoginOutcome {
     /// Password verified; session created; refresh token issued.
-    Full { user: User, refresh_token: String },
+    /// Boxed: `User` is ~250B, dwarfing the other variant (clippy::perf).
+    Full(Box<LoginSuccess>),
     /// TOTP required (enabled) or must be enrolled first (forced).
     TwoFa {
         message: &'static str,
         pre_auth_token: String,
         user_id: Uuid,
     },
+}
+
+/// Successful login payload (boxed inside [`LoginOutcome::Full`]).
+pub struct LoginSuccess {
+    pub user: User,
+    pub refresh_token: String,
 }
 
 fn bad_credentials() -> ApiError {
@@ -88,10 +95,10 @@ pub async fn login(
 
     let refresh = super::totp::create_login_session(db, user.id, ip, user_agent).await?;
 
-    Ok(LoginOutcome::Full {
+    Ok(LoginOutcome::Full(Box::new(LoginSuccess {
         user,
         refresh_token: refresh,
-    })
+    })))
 }
 
 /// Rotate a refresh token into a new session pair.
@@ -174,17 +181,15 @@ pub async fn signup(db: &mut Db, input: SignupInput) -> Result<User, ApiError> {
     // Empty password triggers the "account created by admin" email flow in Go:
     // a set-password invitation JWT (sub only, no expiry — signSetToken parity)
     // is emailed; without a mail client that path fails there too.
-    let password_provided = input
-        .password
-        .as_deref()
-        .map(|p| !p.is_empty())
-        .unwrap_or(false);
-    let password_hash = if password_provided {
-        Some(
-            bcrypt::hash(input.password.as_deref().unwrap(), bcrypt::DEFAULT_COST)
+    let provided = input.password.as_deref().filter(|p| !p.is_empty());
+    let password_hash = match provided {
+        Some(pw) => Some(
+            bcrypt::hash(pw, bcrypt::DEFAULT_COST)
                 .map_err(|_| ApiError::BadRequest("failed to hash password".into()))?,
-        )
-    } else {
+        ),
+        None => None,
+    };
+    if provided.is_none() {
         if input.email.as_deref().unwrap_or("").is_empty() {
             return Err(ApiError::BadRequest("no email provided".into()));
         }
@@ -215,8 +220,7 @@ pub async fn signup(db: &mut Db, input: SignupInput) -> Result<User, ApiError> {
             ));
         }
         let _ = user_id; // id generated again below for the insert (Go parity: one id)
-        None
-    };
+    }
 
     let now = now_ms();
     let user = User {

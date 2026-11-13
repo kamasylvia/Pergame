@@ -80,7 +80,7 @@ pub async fn create_backup(
     let store = state.backups.clone();
     let sql = state.db.clone();
     let user_id = auth.user_id();
-    let spawn_job_id = job_id.clone();
+    let spawn_job_id = job_id;
     if let Some(storage) = state.storage.clone() {
         tokio::spawn(async move {
             crate::backup::run_backup(

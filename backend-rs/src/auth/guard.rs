@@ -138,8 +138,10 @@ mod tests {
         assert_eq!(NodeAction::Delete.required_level(), PERM_ADMIN);
         assert_eq!(NodeAction::Share.required_level(), PERM_ADMIN);
         assert_eq!(NodeAction::ManagePermissions.required_level(), PERM_ADMIN);
-        assert!(PERM_NONE < PERM_READ && PERM_READ < PERM_WRITE);
-        assert!(PERM_WRITE < PERM_ADMIN && PERM_ADMIN < PERM_OWNER);
+        const {
+            assert!(PERM_NONE < PERM_READ && PERM_READ < PERM_WRITE);
+            assert!(PERM_WRITE < PERM_ADMIN && PERM_ADMIN < PERM_OWNER);
+        }
     }
 
     #[test]

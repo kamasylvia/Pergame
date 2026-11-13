@@ -141,7 +141,10 @@ impl Config {
         // Section-wise parse: toml::Value → per-table serde. (The whole-doc
         // toml::from_str::<Config> path silently drops array fields — bisection
         // documented in .work/LESSONS.md.)
-        let value: toml::Value = toml::from_str(&raw_toml()).expect("invalid config.toml");
+        let value: toml::Value = toml::from_str(&raw_toml()).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "invalid config.toml; using built-in defaults");
+            toml::Value::Table(Default::default())
+        });
         let mut cfg = Config::default();
         if let Some(table) = value.get("Database") {
             if let Ok(db) = DatabaseConfig::deserialize(table.clone()) {

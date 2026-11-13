@@ -241,10 +241,7 @@ async fn serve_object(
         None => format!("{user_id}/{}", obj.key),
     };
     let reader = tokio_util::io::ReaderStream::new(stream.into_async_read());
-    let logged = LogStream {
-        inner: reader,
-        key: key.clone(),
-    };
+    let logged = LogStream { inner: reader, key };
     let body = Body::from_stream(logged);
     let mut builder = Response::builder();
     if content_range.is_some() {

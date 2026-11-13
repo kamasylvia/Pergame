@@ -2316,7 +2316,10 @@ async fn user_quota_enforced_and_cleared() {
     assert_eq!(status, 400, "over-file-cap upload must fail: {r:?}");
     let (status, r) = upload_file(&client, "small.txt", "text/plain", &[b'y'; 60]).await;
     assert_eq!(status, 400, "over-total-cap upload must fail: {r:?}");
-    assert_eq!(r.message.as_deref(), Some("Total size of uploads exceeds the limit"));
+    assert_eq!(
+        r.message.as_deref(),
+        Some("Total size of uploads exceeds the limit")
+    );
     // Quota endpoint reflects the caps.
     let (status, r) = get(&client, "/users/@me/quota").await;
     assert_eq!(status, 200);
@@ -2339,12 +2342,26 @@ async fn blob_dedup_shared_across_users() {
     assert_eq!(status, 200, "upload A failed: {:?}", up_a.message);
     let (status, up_b) = upload_file(&client_b, "shared.txt", "text/plain", payload).await;
     assert_eq!(status, 200, "upload B failed: {:?}", up_b.message);
-    let sha_a = up_a.result["metadata"]["content_sha256"].as_str().expect("sha A").to_string();
-    let sha_b = up_b.result["metadata"]["content_sha256"].as_str().expect("sha B").to_string();
+    let sha_a = up_a.result["metadata"]["content_sha256"]
+        .as_str()
+        .expect("sha A")
+        .to_string();
+    let sha_b = up_b.result["metadata"]["content_sha256"]
+        .as_str()
+        .expect("sha B")
+        .to_string();
     assert_eq!(sha_a, sha_b, "identical bytes share one blob");
     // Both download the same bytes.
-    for (client, id) in [(&client_a, result_id_string(&up_a)), (&client_b, result_id_string(&up_b))] {
-        let resp = client.http.get(format!("{BASE_URL}/resources/{id}/file")).send().await.unwrap();
+    for (client, id) in [
+        (&client_a, result_id_string(&up_a)),
+        (&client_b, result_id_string(&up_b)),
+    ] {
+        let resp = client
+            .http
+            .get(format!("{BASE_URL}/resources/{id}/file"))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(resp.status().as_u16(), 200);
         assert_eq!(resp.bytes().await.unwrap().as_ref(), payload);
     }
@@ -2355,7 +2372,12 @@ async fn blob_dedup_shared_across_users() {
     let (status, _) = del(&client_a, &format!("/trash/{id_a}")).await;
     assert_eq!(status, 200);
     let id_b = result_id_string(&up_b);
-    let resp = client_b.http.get(format!("{BASE_URL}/resources/{id_b}/file")).send().await.unwrap();
+    let resp = client_b
+        .http
+        .get(format!("{BASE_URL}/resources/{id_b}/file"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status().as_u16(), 200, "B keeps bytes after A purges");
     assert_eq!(resp.bytes().await.unwrap().as_ref(), payload);
     cleanup_user(&user_a).await;

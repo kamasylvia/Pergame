@@ -276,7 +276,7 @@ mod tests {
             assert_eq!(c.len(), 8);
             assert!(c.chars().all(|ch| ch.is_ascii_digit()));
         }
-        let mut sorted = codes.clone();
+        let mut sorted = codes;
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), 8, "codes must be unique");

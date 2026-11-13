@@ -45,17 +45,17 @@ pub async fn acquire(pool: &PgPool, storage: &S3Storage, bytes: &[u8]) -> Result
     // Upload only when we created the row: a concurrent uploader that won
     // the race already wrote identical bytes (same key, same content), and
     // S3 PUT is idempotent anyway.
-    if row.map(|r| r.0) == Some(1) {
-        if let Err(e) = storage.put_blob(&sha, bytes.to_vec()).await {
-            // Roll back the reservation so a retry uploads again.
-            let _ = sqlx::query("DELETE FROM object_blobs WHERE sha256 = $1 AND refcount = 1")
-                .bind(&sha)
-                .execute(pool)
-                .await;
-            return Err(ApiError::Internal(Box::new(std::io::Error::other(
-                e.to_string(),
-            ))));
-        }
+    if row.map(|r| r.0) == Some(1)
+        && let Err(e) = storage.put_blob(&sha, bytes.to_vec()).await
+    {
+        // Roll back the reservation so a retry uploads again.
+        let _ = sqlx::query("DELETE FROM object_blobs WHERE sha256 = $1 AND refcount = 1")
+            .bind(&sha)
+            .execute(pool)
+            .await;
+        return Err(ApiError::Internal(Box::new(std::io::Error::other(
+            e.to_string(),
+        ))));
     }
     Ok(sha)
 }

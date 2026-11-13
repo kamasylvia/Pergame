@@ -121,11 +121,10 @@ pub async fn get_public_node(
 ) -> Result<impl IntoResponse, ApiError> {
     let id = resolve_id(&node_id)?;
     let node = node_repo::get_public(&state.db, id).await?;
-    if node.is_none() {
+    let Some(node) = node else {
         // Go: nil service result marshals to `null`.
         return Ok(ApiOk::ok(serde_json::Value::Null));
-    }
-    let node = node.unwrap();
+    };
     let children = if node.role == 1 || node.role == 2 || node.role == 3 {
         node_repo::public_descendants(&state.db, id).await?
     } else {
@@ -309,9 +308,7 @@ pub async fn update_node(
     let level = match level {
         Ok(l) => Some(l),
         Err((_, err)) => {
-            let bypass = db_node.access >= 2
-                && db_node.accessibility.is_some()
-                && db_node.accessibility.unwrap() == 3;
+            let bypass = db_node.access >= 2 && db_node.accessibility == Some(3);
             if !bypass {
                 return Err(err);
             }

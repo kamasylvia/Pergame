@@ -149,7 +149,7 @@ mod tests {
         assert!(decrypt(&params, "pw", &blob).is_err());
         let bad_salt = EncryptionParams {
             salt_b64: "!!!".into(),
-            ..params.clone()
+            ..params
         };
         assert!(encrypt(&bad_salt, "pw", b"data").is_err());
         assert!(decrypt(&bad_salt, "pw", &blob).is_err());

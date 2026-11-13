@@ -49,6 +49,15 @@ schemars = "1"
 [dev-dependencies]
 proptest = "1.12"
 
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "deny"
+perf = "deny"
+redundant_clone = "deny"
+
 [profile.release]
 lto = "thin"
 strip = true
