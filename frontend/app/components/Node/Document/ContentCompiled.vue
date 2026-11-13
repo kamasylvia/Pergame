@@ -1,4 +1,10 @@
 <template>
+  <div v-if="properties.length" class="doc-properties">
+    <div v-for="prop in properties" :key="prop.key" class="doc-property">
+      <span class="doc-property-key">{{ prop.key }}</span>
+      <span class="doc-property-value">{{ prop.value }}</span>
+    </div>
+  </div>
   <!-- eslint-disable vue/no-v-html -->
   <article
     ref="rootElement"
@@ -12,6 +18,7 @@
 
 <script setup lang="ts">
 import compile from '~/helpers/markdown';
+import { parseFrontmatter } from '~/helpers/markdown/frontmatter';
 import { rerenderImages } from '~/helpers/DOM';
 import { renderMermaidDiagrams } from '~/helpers/mermaid-render';
 import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
@@ -41,10 +48,12 @@ const rootElement = ref<HTMLElement>();
 // markdown source but no compiled HTML — the editor only compiles on save.
 // Rendering straight from the source keeps such a note readable instead of
 // blank, without re-compiling what the editor already produced.
+const frontmatter = computed(() => parseFrontmatter(props.node?.content ?? ''));
+const properties = computed(() => frontmatter.value.properties);
 const html = computed(() => {
   if (props.node?.content_compiled?.trim()) return props.node.content_compiled;
   if (!props.node?.content?.trim()) return '';
-  return compile(props.node.content, id => nodesStore.getById(id)?.name);
+  return compile(frontmatter.value.content, id => nodesStore.getById(id)?.name);
 });
 
 defineExpose({ rootElement });
@@ -187,5 +196,32 @@ watch(
 <style lang="scss" scoped>
 article {
   max-width: 100%;
+}
+
+.doc-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.doc-property {
+  display: flex;
+  gap: 12px;
+}
+
+.doc-property-key {
+  min-width: 110px;
+  color: var(--text-secondary);
+}
+
+.doc-property-value {
+  flex: 1;
+  word-break: break-word;
 }
 </style>

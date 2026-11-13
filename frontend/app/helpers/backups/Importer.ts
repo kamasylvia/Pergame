@@ -68,6 +68,48 @@ function normalizeName(name?: string) {
   return name?.split('.').slice(0, -1).join('.') || name;
 }
 
+export const IMPORT_RES_PREFIX = '__IMPORT_RES__';
+
+/** Resolve a markdown link target against the importing file's directory. */
+function resolveImportPath(fromEntryId: string, target: string): string | null {
+  if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/|#|data:)/i.test(target)) return null;
+  const clean = target.split('#')[0]!.split('?')[0]!;
+  if (!clean) return null;
+  const base = fromEntryId.split('/').slice(0, -1);
+  const parts: string[] = [...base];
+  for (const seg of clean.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+    } else {
+      try {
+        parts.push(decodeURIComponent(seg));
+      } catch {
+        parts.push(seg);
+      }
+    }
+  }
+  return parts.join('/');
+}
+
+/**
+ * Rewrite local attachment references (`![a](./x.png)`, `[t](../y.pdf)`)
+ * to `__IMPORT_RES__:<entry-id>__` placeholders. The importer store swaps
+ * them for the uploaded resource URLs once resources exist.
+ */
+export function rewriteImportAttachmentRefs(
+  markdown: string,
+  fromEntryId: string,
+  resourcePaths: Set<string>,
+): string {
+  return markdown.replace(/(!?\[[^\]]*\]\()([^)\s]+)(\))/g, (match, open: string, target: string, close: string) => {
+    const resolved = resolveImportPath(fromEntryId, target);
+    if (!resolved || !resourcePaths.has(resolved)) return match;
+    return `${open}${IMPORT_RES_PREFIX}${resolved}__${close}`;
+  });
+}
+
 export class Importer {
   options: ImportOptions;
 
@@ -138,6 +180,10 @@ export class Importer {
   async normalizedToNodes() {
     const to_process = [...this.normalized_files];
     const resourceTasks: ResourceImportTask[] = [];
+    // Import-local paths that will become uploaded resources.
+    const resourcePaths = new Set(
+      to_process.filter(e => e.filetype === 'resource').map(e => e.id),
+    );
     while (to_process.length) {
       const entry = to_process.shift()!;
 
@@ -152,6 +198,7 @@ export class Importer {
       }
       const parentId = entry.id.split('/').slice(0, -1).join('/') || undefined;
       if (entry.filetype === 'text_based') {
+        if (content) content = rewriteImportAttachmentRefs(content, entry.id, resourcePaths);
         this.nodes.push({
           id: entry.id,
           parent_id: parentId || this.options.defaultValues?.defaultParent,

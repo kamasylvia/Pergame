@@ -1,6 +1,7 @@
 import { usePreferencesStore } from '~/stores/preferences/preferences';
 import MarkdownIt, { type MarkdownIt as MarkdownItType } from 'markdown-it';
 import { containerPlugin } from './container';
+import { parseFrontmatter } from './frontmatter';
 import { anchorPlugin } from './anchor';
 import { containerSvg } from './containers-svg';
 import { copyCodePlugin } from './code-block';
@@ -83,6 +84,8 @@ function getCompiler(breaks: boolean, typographer: boolean) {
 }
 
 export default function compile(str: string = '', resolveNode?: (id: string) => string | undefined): string {
+  // Frontmatter renders as a properties table (ContentCompiled), never inline.
+  str = parseFrontmatter(str).content;
   // Replace &lt; &gt; &amp; to < > & (to avoid markdown-it escape)
   str = str.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   let breaks = true;

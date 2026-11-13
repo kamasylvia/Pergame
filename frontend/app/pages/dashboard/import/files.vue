@@ -175,7 +175,7 @@ async function processImport() {
 }
 
 async function importNodes() {
-  await nodesImporterStore.importAllNodesAndResources({ toCreate: importJob.value.toCreate, toUpdate: importJob.value.toUpdate }, importJob);
+  await nodesImporterStore.importAllNodesAndResources({ toCreate: importJob.value.toCreate, toUpdate: importJob.value.toUpdate }, importJob, true);
 }
 </script>
 

@@ -175,6 +175,20 @@ export const useNodesImporterStore = defineStore('nodesImporter', () => {
       if (node.content) node.content = node.content.replace(regex, newId);
       if (node.content_compiled) node.content_compiled = node.content_compiled?.replace(regex, newId);
     }
+    // Import attachment placeholders (__IMPORT_RES__:<entry-id>__) become
+    // resource file URLs once resources exist (resources-first order).
+    if (node.content?.includes('__IMPORT_RES__')) {
+      node.content = node.content.replace(/__IMPORT_RES__(.+?)__/g, (_m, entryId: string) => {
+        const newId = corresponding[entryId];
+        return newId ? `/api/resources/${newId}/file` : _m;
+      });
+    }
+    if (node.content_compiled?.includes('__IMPORT_RES__')) {
+      node.content_compiled = node.content_compiled.replace(/__IMPORT_RES__(.+?)__/g, (_m, entryId: string) => {
+        const newId = corresponding[entryId];
+        return newId ? `/api/resources/${newId}/file` : _m;
+      });
+    }
   }
 
   return {
