@@ -73,6 +73,7 @@
           </AppButton>
         </div>
       </div>
+    </div>
     <AppDrop ref="dropComponent" multiple :max-files="10" @select="selectFiles" />
     <div class="upload-actions">
       <AppButton type="primary" :disabled="!selectedFiles.length" @click="submitFiles">
@@ -372,6 +373,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  fetchQuota();
   document.addEventListener('keydown', handleKeydown);
 });
 
