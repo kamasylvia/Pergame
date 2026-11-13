@@ -18,7 +18,16 @@ export default {
     promptPlural: 'Glissez-déposez vos fichiers ici ou {link} pour sélectionner',
     removeFile: 'Supprimer le fichier',
   },
+  dedupe: {
+    done: '{migrated} migrés, {saved} économisés',
+    failed: 'Échec de la migration',
+    hint: 'Migrer les objets vers des blobs adressés par contenu (économise les doublons).',
+    run: 'Migrer',
+    running: 'Migration…',
+    title: 'Déduplication',
+  },
   diagram: 'Éditeur de diagramme',
+
   edit: {
     description: 'Gérer les ressources et fichiers sur le serveur. Vous pouvez modifier les métadonnées et supprimer des fichiers du serveur.',
     title: 'Mettre à jour le fichier',
@@ -62,6 +71,6 @@ export default {
     title: 'Aperçu',
     unavailable: 'Aperçu non disponible pour ce type de fichier',
   },
-
   storageUsed: 'Espace utilisé',
+  unlimited: 'Illimité',
 };

@@ -54,6 +54,17 @@ pub struct McpAuthState {
 
 /// Mints a new token: `(plaintext, sha256_hex)`. The plaintext is returned to
 /// the user once and never persisted.
+///
+/// # Examples
+///
+/// ```
+/// use pergame_rs::mcp::{TOKEN_PREFIX, generate_token, hash_token};
+///
+/// let (plaintext, hash) = generate_token();
+/// assert!(plaintext.starts_with(TOKEN_PREFIX));
+/// assert_eq!(hash.len(), 64);
+/// assert_eq!(hash_token(&plaintext), hash);
+/// ```
 pub fn generate_token() -> (String, String) {
     use base64::Engine as _;
     use rand::RngExt;
@@ -78,6 +89,7 @@ pub fn hash_token(token: &str) -> String {
 }
 
 #[derive(Debug, sqlx::FromRow)]
+/// One `api_tokens` row (hash excluded from all serialization).
 pub struct ApiTokenRow {
     pub id: Uuid,
     pub name: String,
@@ -105,6 +117,7 @@ impl From<ApiTokenRow> for ApiTokenView {
     }
 }
 
+/// The caller's tokens, newest first.
 pub async fn list_tokens(db: &PgPool, user_id: Uuid) -> Result<Vec<ApiTokenRow>, sqlx::Error> {
     sqlx::query_as::<_, ApiTokenRow>(
         "SELECT id, name, created_timestamp, last_used_timestamp
@@ -121,6 +134,7 @@ pub struct CreatedToken {
     pub plaintext: String,
 }
 
+/// Mint a named token for one user (plaintext returned once).
 pub async fn create_token(
     db: &PgPool,
     user_id: Uuid,
@@ -316,6 +330,7 @@ pub fn locked_error() -> ErrorData {
     )
 }
 
+/// Acting identity the bearer middleware injected for this request.
 pub fn actor_of(
     ctx: &rmcp::service::RequestContext<rmcp::RoleServer>,
 ) -> Result<McpActor, ErrorData> {
@@ -383,5 +398,13 @@ mod tests {
             format!("Bearer {plain}").parse().unwrap(),
         );
         assert_eq!(bearer_token(&headers), Some(plain.as_str()));
+    }
+
+    #[test]
+    fn mcp_path_matches_mount_only() {
+        assert!(is_mcp_path("/api/mcp"));
+        assert!(is_mcp_path("/api/mcp/sse"));
+        assert!(!is_mcp_path("/api/mcpx"));
+        assert!(!is_mcp_path("/api/nodes"));
     }
 }

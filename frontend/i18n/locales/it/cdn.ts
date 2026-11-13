@@ -18,7 +18,16 @@ export default {
     promptPlural: 'Trascina e rilascia i tuoi file qui o {link} per selezionarli',
     removeFile: 'Rimuovi file',
   },
+  dedupe: {
+    done: '{migrated} migrati, {saved} risparmiati',
+    failed: 'Migrazione fallita',
+    hint: 'Sposta gli oggetti legacy nei blob indirizzati per contenuto (risparmia sui duplicati).',
+    run: 'Avvia migrazione',
+    running: 'Migrazione…',
+    title: 'Deduplicazione',
+  },
   diagram: 'Editor di diagrammi',
+
   edit: {
     description: 'Gestisci le risorse e i file sul server. Puoi modificare i metadati ed eliminare i file.',
     title: 'Aggiorna file',
@@ -62,6 +71,6 @@ export default {
     title: 'Anteprima',
     unavailable: 'Anteprima non disponibile per questo tipo di file',
   },
-
   storageUsed: 'Spazio utilizzato',
+  unlimited: 'Illimitato',
 };

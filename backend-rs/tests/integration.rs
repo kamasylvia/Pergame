@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 //! Integration tests against a running backend-rs instance.
 //!
 //! Mirrors `backend/tests/` (the Go black-box suite): same routes, same
@@ -700,7 +702,7 @@ async fn soft_links_lifecycle() {
 #[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
 async fn backup_zip_contains_links() {
     let client = Client::new();
-    let (_owner_id, suffix) = signup_and_login_tagged(&client, "bklinks").await;
+    let (owner_id, suffix) = signup_and_login_tagged(&client, "bklinks").await;
 
     let mk = |name: String| json!({"name": name, "role": 1});
     let (status, r) = post_json(&client, "/nodes", &mk(format!("ws1-{suffix}"))).await;
@@ -728,7 +730,15 @@ async fn backup_zip_contains_links() {
     assert_eq!(status, 201, "link create failed: {:?}", r.message);
     let link_id = result_id_string(&r);
 
-    // Documents-only backup job.
+    // Direct-write snapshots need a target; zero targets persist nothing.
+    let target_id = create_target_with_probe(
+        &client,
+        false,
+        &format!("bkl-{suffix}"),
+        &owner_id,
+        "bklinks",
+    )
+    .await;
     let (status, r) = post_json(&client, "/backup", &json!({"include_documents": true})).await;
     assert_eq!(status, 202, "backup start failed: {:?}", r.message);
     let job_id = r
@@ -853,6 +863,15 @@ async fn backup_zip_contains_links() {
             .is_some(),
         "created_timestamp must stay numeric"
     );
+    // Clear target objects (namespace-scoped; other tests unaffected), then the user.
+    let (status, _) = post_json(
+        &client,
+        &format!("/backup/targets/{target_id}/empty"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    cleanup_user(&owner_id).await;
 }
 
 // ---------------------------------------------------------- snapshot restore
@@ -887,6 +906,16 @@ async fn snapshot_restore_roundtrip() {
     )
     .await;
     assert_eq!(status, 201);
+
+    // Direct-write snapshots need a target; zero targets persist nothing.
+    let target_id = create_target_with_probe(
+        &client,
+        false,
+        &format!("rtr-{suffix}"),
+        &owner_id,
+        "rtrestore",
+    )
+    .await;
 
     // Snapshot the current state.
     let (status, r) = post_json(&client, "/backup", &json!({"include_documents": true})).await;
@@ -970,7 +999,7 @@ async fn snapshot_restore_roundtrip() {
     let (status, r) = post_json(
         &client,
         &format!("/backup/snapshots/{snapshot_id}/restore"),
-        &json!({}),
+        &json!({"force": true}),
     )
     .await;
     assert_eq!(status, 200, "restore failed: {:?}", r.message);
@@ -1029,7 +1058,13 @@ async fn snapshot_restore_roundtrip() {
             .contains("zip"),
         "download must be application/zip"
     );
-    let _ = owner_id;
+    let (status, _) = post_json(
+        &client,
+        &format!("/backup/targets/{target_id}/empty"),
+        &json!({}),
+    )
+    .await;
+    assert_eq!(status, 200);
     cleanup_user(&owner_id).await;
 }
 
@@ -1056,6 +1091,25 @@ async fn make_admin(user_id: &str) {
         .expect("promote to admin");
 }
 
+async fn demote_user(user_id: &str) {
+    let host = std::env::var("DATABASE_HOST").expect("DATABASE_HOST");
+    let port = std::env::var("DATABASE_PORT").unwrap_or_else(|_| "5432".into());
+    let db = std::env::var("DATABASE_NAME").expect("DATABASE_NAME");
+    let user = std::env::var("DATABASE_USER").expect("DATABASE_USER");
+    let pass = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD");
+    let dsn = format!("postgresql://{user}:{pass}@{host}:{port}/{db}");
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&dsn)
+        .await
+        .expect("test db connect");
+    sqlx::query("UPDATE users SET role = 1 WHERE id = $1")
+        .bind(user_id.parse::<uuid::Uuid>().expect("uuid user id"))
+        .execute(&pool)
+        .await
+        .expect("demote to user");
+}
+
 fn target_body(name: &str, user_id: &str, endpoint: &str, bucket: &str) -> Value {
     json!({
         "kind": "s3",
@@ -1073,6 +1127,53 @@ fn target_body(name: &str, user_id: &str, endpoint: &str, bucket: &str) -> Value
         "enabled": true,
         "users": [user_id],
     })
+}
+
+/// Create a backup target through the test-before-save gate: probe the draft
+/// first, then echo the connection_token on save. `admin` selects the route
+/// family (`/admin/backup/targets` needs an admin session).
+async fn create_target_with_probe(
+    client: &Client,
+    admin: bool,
+    name: &str,
+    user_id: &str,
+    prefix: &str,
+) -> String {
+    let bucket = std::env::var("TARGET_TEST_BUCKET")
+        .expect("TARGET_TEST_BUCKET (an existing S3 bucket for target tests)");
+    let endpoint = std::env::var("S3_ENDPOINT").expect("S3_ENDPOINT");
+    let mut body = target_body(name, user_id, &endpoint, &bucket);
+    body["prefix"] = json!(prefix);
+    let base = if admin {
+        "/admin/backup/targets"
+    } else {
+        "/backup/targets"
+    };
+    let (status, r) = post_json(
+        client,
+        &format!("{base}/probe-draft"),
+        &json!({ "target": body }),
+    )
+    .await;
+    assert_eq!(status, 200, "probe-draft failed: {:?}", r.message);
+    assert_eq!(
+        r.result.get("reachable").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let token = r
+        .result
+        .get("connection_token")
+        .and_then(|v| v.as_str())
+        .expect("token")
+        .to_string();
+    body["connection_token"] = json!(token);
+    let (status, r) = post_json(client, base, &body).await;
+    assert_eq!(status, 200, "target create failed: {:?}", r.message);
+    r.result
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("target id")
+        .to_string()
 }
 
 /// Covers the whole target lifecycle against a real S3 bucket provided by
@@ -1126,33 +1227,39 @@ async fn snapshot_targets_lifecycle() {
 
     // Create the target: secrets must come back masked.
     let name = format!("tgt-{}", &user_id[user_id.len().saturating_sub(8)..]);
-    let (status, r) = post_json(
-        &client,
-        "/admin/backup/targets",
-        &target_body(&name, &user_id, &endpoint, &bucket),
-    )
-    .await;
-    assert_eq!(status, 200, "target create failed: {:?}", r.message);
-    let target_id = r
+    let target_id = create_target_with_probe(&client, true, &name, &user_id, "e2e").await;
+    let (status, r) = get(&client, "/admin/backup/targets").await;
+    assert_eq!(status, 200);
+    let created = r
         .result
-        .get("id")
-        .and_then(|v| v.as_str())
+        .as_array()
         .unwrap()
-        .to_string();
+        .iter()
+        .find(|t| t.get("id").and_then(|v| v.as_str()) == Some(target_id.as_str()))
+        .expect("target in list");
     assert_eq!(
-        r.result.get("secret_key").and_then(|v| v.as_str()),
+        created.get("secret_key").and_then(|v| v.as_str()),
         Some("***"),
         "credentials must be masked on the wire"
     );
 
     // Identity dedup: a second config for the same storage is rejected.
-    let (status, _) = post_json(
+    // (Probed first so the 409 is the dedup gate, not the save gate.)
+    let mut dup = target_body(&format!("{name}-dup"), &user_id, &endpoint, &bucket);
+    let (status, r) = post_json(
         &client,
-        "/admin/backup/targets",
-        &target_body(&format!("{name}-dup"), &user_id, &endpoint, &bucket),
+        "/admin/backup/targets/probe-draft",
+        &json!({ "target": dup }),
     )
     .await;
-    assert_eq!(status, 409, "duplicate storage identity must be rejected");
+    assert_eq!(status, 200, "dup probe failed: {:?}", r.message);
+    dup["connection_token"] = r.result.get("connection_token").cloned().unwrap();
+    let (status, r) = post_json(&client, "/admin/backup/targets", &dup).await;
+    assert_eq!(
+        status, 409,
+        "duplicate storage identity must be rejected: {:?}",
+        r.message
+    );
 
     // Masked round-trip: send *** back and keep the stored credential working.
     let (status, r) = get(&client, "/admin/backup/targets").await;
@@ -1180,7 +1287,8 @@ async fn snapshot_targets_lifecycle() {
     );
     let _ = row;
 
-    // Manual fan-out replicates the snapshot objects.
+    // Manual sync triggers a real snapshot (direct-write): poll the spawned
+    // job, then the target must hold the snapshot objects.
     let (status, r) = post_json(
         &client,
         &format!("/admin/backup/targets/{target_id}/sync"),
@@ -1188,27 +1296,28 @@ async fn snapshot_targets_lifecycle() {
     )
     .await;
     assert_eq!(status, 200, "sync failed: {:?}", r.message);
-    let results = r.result.as_array().expect("sync results");
-    assert!(
-        results
-            .iter()
-            .any(|x| x.get("copied").and_then(|v| v.as_u64()).unwrap_or(0) > 0),
-        "at least one object must be copied: {results:?}"
-    );
-
-    // Second sync is a no-op (content-addressed dedup).
-    let (_, r) = post_json(
-        &client,
-        &format!("/admin/backup/targets/{target_id}/sync"),
-        &json!({}),
-    )
-    .await;
-    let results = r.result.as_array().expect("sync results");
-    assert!(
-        results
-            .iter()
-            .all(|x| x.get("copied").and_then(|v| v.as_u64()) == Some(0)),
-        "second sync must copy nothing: {results:?}"
+    let jobs = r.result.as_array().expect("sync jobs");
+    assert_eq!(jobs.len(), 1, "one user listed, one job: {jobs:?}");
+    let sync_job = jobs[0]
+        .get("job_id")
+        .and_then(|v| v.as_str())
+        .expect("job id")
+        .to_string();
+    for _ in 0..120 {
+        let (_, r) = get(&client, &format!("/backup/{sync_job}")).await;
+        if let Some(err) = r.result.get("error").and_then(|v| v.as_str()) {
+            panic!("sync snapshot failed: {err}");
+        }
+        if r.result.get("progress").and_then(|v| v.as_i64()) == Some(100) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    let (_, r) = get(&client, &format!("/backup/{sync_job}")).await;
+    assert_eq!(
+        r.result.get("progress").and_then(|v| v.as_i64()),
+        Some(100),
+        "sync snapshot must finish"
     );
 
     // Probe sees the replicated objects.
@@ -2093,10 +2202,11 @@ async fn orphan_resource_lifecycle() {
     let (status, up) = upload_file(&client, "orphan-probe.txt", "text/plain", payload).await;
     assert_eq!(status, 200, "upload failed: {:?}", up.message);
     let file_id = result_id_string(&up);
-    let key = up.result["metadata"]["transformed_path"]
+    let sha = up.result["metadata"]["content_sha256"]
         .as_str()
-        .expect("transformed_path")
+        .expect("content_sha256")
         .to_string();
+    let key = format!("blobs/{sha}");
 
     // Referenced while the node exists.
     let (_, listed) = get(&client, "/resources/orphans").await;
@@ -2161,4 +2271,93 @@ async fn orphan_resource_lifecycle() {
     );
 
     cleanup_user(&user_id).await;
+}
+
+/// Per-user quotas: admin sets a tiny total cap, uploads past it fail with
+/// the quota message; clearing the cap (null) restores the default.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn user_quota_enforced_and_cleared() {
+    let client = Client::new();
+    let (user_id, username) = signup_and_login_tagged(&client, "quota").await;
+    make_admin(&user_id).await;
+    // Re-login to pick up the admin role for the PATCH calls, then demote
+    // back: the quota must apply to the user as a non-admin.
+    let relogin = client
+        .http
+        .post(format!("{BASE_URL}/auth"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("username={username}&password=testpass123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relogin.status().as_u16(), 200);
+    // Set quotas via admin PATCH.
+    let (status, _) = patch_json(
+        &client,
+        &format!("/users/{user_id}"),
+        &json!({"max_file_size": 100, "max_total_size": 50}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    // Demote to a regular user so the quota applies (re-login: the JWT
+    // carries the role, and admins bypass quotas).
+    demote_user(&user_id).await;
+    let relogin = client
+        .http
+        .post(format!("{BASE_URL}/auth"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("username={username}&password=testpass123"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relogin.status().as_u16(), 200);
+    let (status, r) = upload_file(&client, "big.txt", "text/plain", &[b'x'; 200]).await;
+    assert_eq!(status, 400, "over-file-cap upload must fail: {r:?}");
+    let (status, r) = upload_file(&client, "small.txt", "text/plain", &[b'y'; 60]).await;
+    assert_eq!(status, 400, "over-total-cap upload must fail: {r:?}");
+    assert_eq!(r.message.as_deref(), Some("Total size of uploads exceeds the limit"));
+    // Quota endpoint reflects the caps.
+    let (status, r) = get(&client, "/users/@me/quota").await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["max_file_size"], 100);
+    assert_eq!(r.result["max_total_size"], 50);
+    cleanup_user(&user_id).await;
+}
+
+/// Cross-user dedup: two users uploading identical bytes share one blob
+/// (same content_sha256); purging one keeps the bytes for the other.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn blob_dedup_shared_across_users() {
+    let client_a = Client::new();
+    let (user_a, _) = signup_and_login_tagged(&client_a, "ddpa").await;
+    let client_b = Client::new();
+    let (user_b, _) = signup_and_login_tagged(&client_b, "ddpb").await;
+    let payload = b"shared-bytes-probe-0123456789";
+    let (status, up_a) = upload_file(&client_a, "shared.txt", "text/plain", payload).await;
+    assert_eq!(status, 200, "upload A failed: {:?}", up_a.message);
+    let (status, up_b) = upload_file(&client_b, "shared.txt", "text/plain", payload).await;
+    assert_eq!(status, 200, "upload B failed: {:?}", up_b.message);
+    let sha_a = up_a.result["metadata"]["content_sha256"].as_str().expect("sha A").to_string();
+    let sha_b = up_b.result["metadata"]["content_sha256"].as_str().expect("sha B").to_string();
+    assert_eq!(sha_a, sha_b, "identical bytes share one blob");
+    // Both download the same bytes.
+    for (client, id) in [(&client_a, result_id_string(&up_a)), (&client_b, result_id_string(&up_b))] {
+        let resp = client.http.get(format!("{BASE_URL}/resources/{id}/file")).send().await.unwrap();
+        assert_eq!(resp.status().as_u16(), 200);
+        assert_eq!(resp.bytes().await.unwrap().as_ref(), payload);
+    }
+    // Purging A's copy keeps B's readable (refcount 2 -> 1).
+    let id_a = result_id_string(&up_a);
+    let (status, _) = del(&client_a, &format!("/nodes/{id_a}")).await;
+    assert_eq!(status, 200);
+    let (status, _) = del(&client_a, &format!("/trash/{id_a}")).await;
+    assert_eq!(status, 200);
+    let id_b = result_id_string(&up_b);
+    let resp = client_b.http.get(format!("{BASE_URL}/resources/{id_b}/file")).send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200, "B keeps bytes after A purges");
+    assert_eq!(resp.bytes().await.unwrap().as_ref(), payload);
+    cleanup_user(&user_a).await;
+    cleanup_user(&user_b).await;
 }

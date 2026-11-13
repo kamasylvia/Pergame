@@ -5,11 +5,13 @@
 use lettre::message::Mailbox;
 use lettre::{SmtpTransport, Transport};
 
+/// Implicit-TLS SMTP client; None when env is unset (callers degrade).
 pub struct MailClient {
     transport: SmtpTransport,
     from: String,
 }
 
+/// Build from `SMTP_HOST/SMTP_MAIL/SMTP_PASSWORD` (+ optional `SMTP_MAIL_FROM`).
 pub fn from_env() -> Option<MailClient> {
     let host = std::env::var("SMTP_HOST").ok()?;
     let username = std::env::var("SMTP_MAIL").ok()?;
@@ -67,6 +69,15 @@ impl MailClient {
 
 /// Renders a Go html/template file that only uses {{.Var}} placeholders by
 /// substituting the given key/value pairs (email templates are flat).
+///
+/// # Examples
+///
+/// ```
+/// use pergame_rs::mail::render_go_template;
+///
+/// let out = render_go_template("Hi {{.Name}}, code {{.Code}}", &[("Name", "Ada"), ("Code", "42")]);
+/// assert_eq!(out, "Hi Ada, code 42");
+/// ```
 pub fn render_go_template(template: &str, vars: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (key, value) in vars {
@@ -75,5 +86,29 @@ pub fn render_go_template(template: &str, vars: &[(&str, &str)]) -> String {
     out
 }
 
+/// Password-reset email template (`emails/password-reset.html`).
 pub const PASSWORD_RESET_TEMPLATE: &str = include_str!("../emails/password-reset.html");
+/// Account-created email template (`emails/account-create.html`).
 pub const ACCOUNT_CREATE_TEMPLATE: &str = include_str!("../emails/account-create.html");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn template_substitutes_pairs() {
+        let out = render_go_template(
+            "Hi {{.Name}} <{{.Mail}}>",
+            &[("Name", "Ada"), ("Mail", "a@x")],
+        );
+        assert_eq!(out, "Hi Ada <a@x>");
+        // Unknown placeholders pass through untouched.
+        assert_eq!(render_go_template("{{.Nope}}", &[]), "{{.Nope}}");
+    }
+
+    #[test]
+    fn templates_embed() {
+        assert!(PASSWORD_RESET_TEMPLATE.contains("{{ .ResetURL }}"));
+        assert!(ACCOUNT_CREATE_TEMPLATE.contains("{{ .Username }}"));
+    }
+}

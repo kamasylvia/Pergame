@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+/// One `oidc_links` row (provider account bound to a local user).
 pub struct OidcLinkRow {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -14,6 +15,7 @@ pub struct OidcLinkRow {
     pub updated_timestamp: i64,
 }
 
+/// All provider links for one user.
 pub async fn get_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<OidcLinkRow>, sqlx::Error> {
     sqlx::query_as::<_, OidcLinkRow>(
         "SELECT id, user_id, provider_name, provider_user_id, created_timestamp, updated_timestamp
@@ -24,6 +26,7 @@ pub async fn get_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<OidcLinkRow
     .await
 }
 
+/// Find a link by (provider, subject) pair.
 pub async fn get_by_provider_and_subject(
     pool: &PgPool,
     provider_name: &str,
@@ -40,6 +43,7 @@ pub async fn get_by_provider_and_subject(
     .await
 }
 
+/// Insert a link row (uniqueness enforced by caller/DB).
 pub async fn create(
     pool: &PgPool,
     id: Uuid,
@@ -62,6 +66,7 @@ pub async fn create(
     .map(|_| ())
 }
 
+/// Delete a link row by id.
 pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM user_oidc_providers WHERE id = $1")
         .bind(id)

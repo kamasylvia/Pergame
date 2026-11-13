@@ -7,10 +7,12 @@
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
+/// `iss` claim value for all tokens minted here.
 pub const JWT_ISSUER: &str = "pergame";
 const PRE_AUTH_EXPIRY_SECS: i64 = 3 * 60;
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Access-token claims (`sub` = user id, `role` as string).
 pub struct AccessClaims {
     pub sub: String,
     pub iss: String,
@@ -20,6 +22,7 @@ pub struct AccessClaims {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Short-lived TOTP pre-auth claims (`pre_auth: true`, 3 min).
 pub struct PreAuthClaims {
     pub sub: String,
     pub iss: String,
@@ -47,6 +50,7 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
+/// Sign an access token with the given TTL.
 pub fn sign_access_token(
     user_id: uuid::Uuid,
     role: i32,
@@ -66,6 +70,7 @@ pub fn sign_access_token(
     )
 }
 
+/// Sign a 3-minute pre-auth token for the TOTP flow.
 pub fn sign_pre_auth_token(user_id: uuid::Uuid) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = PreAuthClaims {
         sub: user_id.to_string(),
@@ -132,6 +137,7 @@ pub fn refresh_token() -> String {
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation, serialized by ENV_LOCK.
 mod tests {
     use super::*;
     use std::sync::Mutex;
@@ -192,5 +198,16 @@ mod tests {
         let t = refresh_token();
         assert_eq!(t.len(), 90);
         assert!(t.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn expired_token_rejected() {
+        with_secret("test-secret-for-unit", || {
+            let uid = uuid::Uuid::now_v7();
+            // Far-past TTL => expired (jsonwebtoken allows 60s leeway by default).
+            let token = sign_access_token(uid, 1, -3600).unwrap();
+            assert!(verify_access_token(&token).is_err());
+            assert!(verify_access_token("not.a.token").is_err());
+        });
     }
 }

@@ -1,3 +1,4 @@
+//! Shared axum state: database handles, storage, OIDC, backup locks.
 use sqlx::PgPool;
 use toasty::Db;
 
@@ -6,6 +7,7 @@ use crate::oidc::SharedManager;
 use crate::storage::S3Storage;
 
 #[derive(Clone)]
+/// Shared axum state (all handles cheap to clone).
 pub struct AppState {
     pub db: PgPool,
     /// Toasty ORM handle (same database; schema owned by sqlx migrations).

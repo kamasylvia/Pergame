@@ -10,6 +10,7 @@ use crate::error::ApiError;
 use crate::models::{RecoveryCode, User};
 use uuid::Uuid;
 
+/// Wall-clock unix millis (TOTP/backup-code timestamps).
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -54,7 +55,11 @@ pub fn generate_secret(username: &str) -> Result<(String, String), ApiError> {
                 "failed to generate TOTP key",
             )))
         })?;
-    Ok((totp.secret().to_base32(), totp.to_string()))
+    let url = totp.to_url().map_err(|e| {
+        tracing::error!(error = %e, "totp url failed");
+        ApiError::Internal(Box::new(std::io::Error::other("failed to build TOTP url")))
+    })?;
+    Ok((totp.secret().to_base32(), url))
 }
 
 /// 8 backup codes: 8-digit numbers in [10000000, 100000000), Go parity.
@@ -246,4 +251,34 @@ pub async fn create_login_session_type(
             ApiError::Unauthorized("failed to create session".into())
         })?;
     Ok(refresh)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_generates_otpauth_url() {
+        let (secret, url) = generate_secret("ada").unwrap();
+        assert!(!secret.is_empty());
+        assert!(url.starts_with("otpauth://totp/"));
+        assert!(url.contains("Pergame"));
+        // The secret round-trips through the validator's parser.
+        assert!(totp_for_secret(&secret).is_ok());
+        assert!(totp_for_secret("not-base32!!").is_err());
+    }
+
+    #[test]
+    fn backup_codes_are_eight_unique_8digit() {
+        let codes = generate_backup_codes();
+        assert_eq!(codes.len(), 8);
+        for c in &codes {
+            assert_eq!(c.len(), 8);
+            assert!(c.chars().all(|ch| ch.is_ascii_digit()));
+        }
+        let mut sorted = codes.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 8, "codes must be unique");
+    }
 }

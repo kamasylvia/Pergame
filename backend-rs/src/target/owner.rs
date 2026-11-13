@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::config::TargetConn;
 use crate::error::ApiError;
 
+/// Claim marker path inside a target namespace.
 pub const OWNER_KEY: &str = "refs/owner.json";
 
 const CROCKFORD: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -23,6 +24,16 @@ const CROCKFORD: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// timestamp, 16 chars of randomness). Allocated by the server when a target
 /// is created — operators never type or see it in the form, which is what
 /// makes two instances sharing a store isolated without configuration.
+///
+/// # Examples
+///
+/// ```
+/// use pergame_rs::target::owner::new_namespace_id;
+///
+/// let id = new_namespace_id();
+/// assert_eq!(id.len(), 26);
+/// assert!(id.bytes().all(|b| b"0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(&b)));
+/// ```
 pub fn new_namespace_id() -> String {
     let mut out = [0u8; 26];
     let mut ms = std::time::SystemTime::now()
@@ -43,6 +54,7 @@ pub fn new_namespace_id() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One ownership claim (who + when).
 pub struct TargetOwner {
     /// Stable instance identity (INSTANCE_ID env or derived hostname/db pair).
     pub instance_id: String,
@@ -79,6 +91,7 @@ fn hostname() -> String {
         .unwrap_or_else(|| "unknown-host".into())
 }
 
+/// Fresh claim for this deployment.
 pub fn current_owner() -> TargetOwner {
     TargetOwner {
         instance_id: instance_id(),
@@ -145,6 +158,7 @@ pub async fn claim(conn: &TargetConn, force: bool) -> Result<ClaimOutcome, ApiEr
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation; no other test touches INSTANCE_ID.
 mod tests {
     use super::*;
 
@@ -158,5 +172,21 @@ mod tests {
         let derived = instance_id();
         assert!(!derived.is_empty());
         assert!(derived.contains('/'));
+    }
+
+    #[test]
+    fn current_owner_roundtrips_json() {
+        let owner = current_owner();
+        assert!(!owner.instance_id.is_empty());
+        assert!(!owner.host.is_empty());
+        assert!(owner.claimed_at > 0);
+        let bytes = serde_json::to_vec(&owner).unwrap();
+        let back: TargetOwner = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(back.instance_id, owner.instance_id);
+    }
+
+    #[test]
+    fn hostname_falls_back_never_empty() {
+        assert!(!hostname().is_empty());
     }
 }

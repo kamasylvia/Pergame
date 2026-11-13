@@ -18,7 +18,16 @@ export default {
     promptPlural: 'Drag and drop your files here or {link} to select',
     removeFile: 'Remove file',
   },
+  dedupe: {
+    done: '{migrated} migrated, {saved} saved',
+    failed: 'Migration failed',
+    hint: 'Move legacy objects to content-addressed blobs (saves space on duplicates).',
+    run: 'Run migration',
+    running: 'Migrating…',
+    title: 'Deduplication',
+  },
   diagram: 'Diagram editor',
+
   edit: {
     description: 'Manage resources and files on the server. You can edit metadata and delete files.',
     title: 'Update file',
@@ -62,6 +71,6 @@ export default {
     title: 'Preview',
     unavailable: 'Preview not available for this file type',
   },
-
   storageUsed: 'Storage used',
+  unlimited: 'Unlimited',
 };

@@ -1,34 +1,13 @@
-mod auth;
-mod backup;
-mod config;
-mod db;
-mod db_toasty;
-mod error;
-mod extract;
-mod locks;
-mod logger;
-mod mail;
-mod mcp;
-mod models;
-mod oidc;
-mod repo;
-mod response;
-mod restore;
-mod routes;
-mod snapcrypto;
-mod state;
-mod storage;
-mod target;
-mod types;
-mod utils;
+#![deny(unsafe_code)]
 
 use std::net::SocketAddr;
 
 use axum::Router;
-
 use axum::routing::{delete, get, patch, post, put};
-
-pub use state::AppState;
+use pergame_rs::{
+    AppState, auth, backup, config, db, db_toasty, locks, logger, mcp, oidc, routes, storage,
+    target,
+};
 
 #[tokio::main]
 async fn main() {
@@ -132,6 +111,10 @@ async fn main() {
         .route(
             "/api/admin/backup/status",
             get(routes::admin_backup::lock_status),
+        )
+        .route(
+            "/api/admin/storage/migrate-blobs",
+            post(routes::admin_backup::migrate_blobs),
         )
         .route("/api/auth", post(routes::auth::login))
         // POST is the contract (upstream Go registers `POST /refresh` and the
@@ -376,6 +359,7 @@ async fn main() {
         .route("/api/trash/{nodeId}", delete(routes::trash::purge_node))
         .route("/api/users", post(routes::users::create_user))
         .route("/api/users/@me", get(routes::users::get_me))
+        .route("/api/users/@me/quota", get(routes::users::get_my_quota))
         // MCP API tokens (spec features/mcp-server.md): session-authenticated
         // management for bearer tokens used by the /api/mcp endpoint.
         .route(
@@ -463,7 +447,7 @@ async fn main() {
     /// Body cap for upload routes: the configured per-file limit plus room for
     /// multipart framing. The handler's own size check remains authoritative.
     fn upload_body_limit() -> axum::extract::DefaultBodyLimit {
-        let max = crate::config::global().cdn.max_size;
+        let max = config::global().cdn.max_size;
         axum::extract::DefaultBodyLimit::max((max + 1024 * 1024) as usize)
     }
 
@@ -508,17 +492,19 @@ async fn main() {
 }
 
 /// Trash retention sweeper (spec .work/features/trash.md §2.2). Reads
-/// TRASH_RETENTION_DAYS (0/absent = never auto-purge) and
+/// TRASH_RETENTION_DAYS (unset/empty = never auto-purge; a number enables
+/// it, 0 purges everything on every tick) and
 /// TRASH_SWEEP_INTERVAL_HOURS (default 24) from the environment.
 fn spawn_trash_sweeper(state: AppState) {
-    let days: u64 = std::env::var("TRASH_RETENTION_DAYS")
+    let days: Option<u64> = std::env::var("TRASH_RETENTION_DAYS")
         .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(30);
-    if days == 0 {
-        tracing::info!("TRASH_RETENTION_DAYS=0: trash auto-purge disabled");
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .and_then(|v| v.parse().ok());
+    let Some(days) = days else {
+        tracing::info!("TRASH_RETENTION_DAYS unset/empty: trash auto-purge disabled");
         return;
-    }
+    };
     let hours: u64 = std::env::var("TRASH_SWEEP_INTERVAL_HOURS")
         .ok()
         .and_then(|v| v.trim().parse().ok())

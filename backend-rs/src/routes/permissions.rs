@@ -19,7 +19,9 @@ fn toasty_err(e: String) -> ApiError {
 }
 use uuid::Uuid;
 
+/// Minimum level to read a node's permission list.
 pub const PERM_READ: i32 = 1;
+/// Minimum level to manage permissions/invitations.
 pub const PERM_ADMIN: i32 = 3;
 
 fn resolve(param: &str) -> Result<Uuid, ApiError> {
@@ -90,6 +92,7 @@ fn invitation_json(row: &(Uuid, String, i32, Uuid, i64)) -> serde_json::Value {
 }
 
 #[derive(Debug, Deserialize)]
+/// GET permissions query (`recursive` flag as string).
 pub struct PermissionsQuery {
     #[serde(default)]
     pub recursive: String,
@@ -118,6 +121,7 @@ pub async fn get_node_permissions(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST permissions body (grantee + level).
 pub struct CreatePermissionBody {
     #[serde(default)]
     pub user_id: String,
@@ -165,6 +169,7 @@ pub async fn create_permission(
 }
 
 #[derive(Debug, Deserialize)]
+/// PATCH permissions body (new level).
 pub struct UpdatePermissionBody {
     #[serde(default)]
     pub permission: i32,
@@ -258,6 +263,7 @@ pub async fn get_node_invitations(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST invitations body (level the code grants).
 pub struct CreateInvitationBody {
     #[serde(default)]
     pub permission_level: i32,
@@ -336,6 +342,7 @@ pub async fn delete_invitation(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST join body (invitation code or URL).
 pub struct JoinBody {
     #[serde(default)]
     pub code: String,
@@ -409,4 +416,55 @@ pub async fn join_invitation(
         "permission": serde_json::to_value(&perm).unwrap_or(json!(null)),
         "node": serde_json::to_value(&node).unwrap_or(json!(null)),
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codes_use_restricted_alphabet() {
+        for _ in 0..50 {
+            let code = generate_invitation_code(6);
+            assert_eq!(code.len(), 6);
+            assert!(code.bytes().all(|b| CODE_ALPHABET.contains(&b)));
+            assert!(!code.bytes().any(|b| matches!(b, b'0' | b'1' | b'I' | b'O')));
+        }
+    }
+
+    #[test]
+    fn parses_bare_code_url_and_segment() {
+        assert_eq!(parse_invitation_code("abc234").unwrap(), "ABC234");
+        assert_eq!(
+            parse_invitation_code("https://x.test/join?code=abc234").unwrap(),
+            "ABC234"
+        );
+        assert_eq!(
+            parse_invitation_code("https://x.test/invite/abc234").unwrap(),
+            "ABC234"
+        );
+        assert!(parse_invitation_code("").is_err());
+        assert!(parse_invitation_code("short").is_err());
+        assert!(parse_invitation_code("ABC2345").is_err());
+        assert!(
+            parse_invitation_code("ABC230").is_err(),
+            "0 not in alphabet"
+        );
+        assert!(
+            parse_invitation_code("ABC231").is_err(),
+            "1 not in alphabet"
+        );
+    }
+
+    #[test]
+    fn invitation_json_shape() {
+        let id = Uuid::now_v7();
+        let node = Uuid::now_v7();
+        let v = invitation_json(&(id, "ABC123".into(), 1, node, 42));
+        assert_eq!(v["id"], id.to_string());
+        assert_eq!(v["invitation_code"], "ABC123");
+        assert_eq!(v["permission_level"], 1);
+        assert_eq!(v["node_id"], node.to_string());
+        assert_eq!(v["created_timestamp"], 42);
+    }
 }

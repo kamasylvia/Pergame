@@ -9,3 +9,16 @@
 pub fn new_id() -> uuid::Uuid {
     uuid::Uuid::now_v7()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_are_v7_unique() {
+        let a = new_id();
+        let b = new_id();
+        assert_ne!(a, b);
+        assert_eq!(a.get_version(), Some(uuid::Version::SortRand));
+    }
+}

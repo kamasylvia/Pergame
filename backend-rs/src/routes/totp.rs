@@ -71,6 +71,7 @@ async fn resolve_user_id(
 }
 
 #[derive(Debug, Deserialize, Default)]
+/// POST /auth/2fa/request body (pre-auth token from login).
 pub struct PreAuthBody {
     #[serde(default)]
     pub pre_auth_token: String,
@@ -102,6 +103,7 @@ pub async fn request_activation(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /auth/2fa/confirm body (pre-auth + enrollment code).
 pub struct ConfirmBody {
     #[serde(default)]
     pub pre_auth_token: String,
@@ -134,6 +136,7 @@ pub async fn confirm_activation(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /auth/2fa/verify body (pre-auth + TOTP/recovery code).
 pub struct VerifyBody {
     #[serde(default)]
     pub pre_auth_token: String,
@@ -174,6 +177,7 @@ pub async fn verify_totp(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /auth/2fa/disable body (current TOTP code).
 pub struct DisableBody {
     #[serde(default)]
     pub code: String,

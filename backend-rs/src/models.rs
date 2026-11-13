@@ -103,6 +103,7 @@ pub struct NodeSearchRow {
 
 #[derive(Debug, Model, Serialize, Deserialize)]
 #[table = "users"]
+/// Toasty `users` model (auth, TOTP, OIDC-adjacent profile fields).
 pub struct User {
     /// Application-assigned UUIDv7 (no `#[auto]` — not a DB sequence).
     #[key]
@@ -154,10 +155,19 @@ pub struct User {
 
     #[column("updated_timestamp")]
     pub updated_timestamp: i64,
+
+    /// Per-user single-file cap (bytes); None = fall back to [Cdn] config.
+    #[column("max_file_size")]
+    pub max_file_size: Option<i64>,
+
+    /// Per-user total-uploads cap (bytes); None = fall back to [Cdn] config.
+    #[column("max_total_size")]
+    pub max_total_size: Option<i64>,
 }
 
 #[derive(Debug, Model)]
 #[table = "sessions"]
+/// Toasty `sessions` model (refresh-token sessions, 30-day TTL).
 pub struct Session {
     #[key]
     #[column("id")]

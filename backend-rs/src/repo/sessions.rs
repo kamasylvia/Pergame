@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+/// Session list entry (`type` column renamed; refresh token included for matching).
 pub struct SessionView {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -21,6 +22,7 @@ pub struct SessionView {
     pub logout_timestamp: i64,
 }
 
+/// All sessions of one user (device list).
 pub async fn list_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<SessionView>, sqlx::Error> {
     sqlx::query_as::<_, SessionView>(
         "SELECT id, user_id, refresh_token, expire_token, last_refresh_timestamp, active,
@@ -32,6 +34,7 @@ pub async fn list_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<SessionVie
     .await
 }
 
+/// Delete one session; false when it was not theirs.
 pub async fn delete_by_id_and_user(
     pool: &PgPool,
     id: Uuid,
@@ -45,6 +48,7 @@ pub async fn delete_by_id_and_user(
     Ok(res.rows_affected() > 0)
 }
 
+/// Delete all sessions of one user (logout everywhere).
 pub async fn delete_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM sessions WHERE user_id = $1")
         .bind(user_id)

@@ -18,7 +18,16 @@ export default {
     promptPlural: '將檔案拖曳至此，或{link}選擇檔案',
     removeFile: '移除檔案',
   },
+  dedupe: {
+    done: '已遷移 {migrated} 個，節省 {saved}',
+    failed: '遷移失敗',
+    hint: '將舊物件遷移到內容定址 blob（重複檔案省空間）。',
+    run: '開始遷移',
+    running: '遷移中…',
+    title: '去重遷移',
+  },
   diagram: '圖表編輯器',
+
   edit: {
     description: '管理伺服器上的資源與檔案。你可以編輯中繼資料或刪除檔案。',
     title: '更新檔案',
@@ -62,6 +71,6 @@ export default {
     title: '預覽',
     unavailable: '此檔案類型無法預覽',
   },
-
   storageUsed: '已使用的儲存空間',
+  unlimited: '無限制',
 };

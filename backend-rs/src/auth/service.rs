@@ -10,6 +10,7 @@ use crate::models::{Session, User};
 /// Sessions last 30 days (Go: `30 * 24 * time.Hour`).
 const SESSION_TTL_MS: i64 = 30 * 24 * 3600 * 1000;
 
+/// Wall-clock unix millis (session timestamps, expiry math).
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -17,6 +18,7 @@ pub fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
+/// What `login` produced: a full session or a TOTP challenge.
 pub enum LoginOutcome {
     /// Password verified; session created; refresh token issued.
     Full { user: User, refresh_token: String },
@@ -37,6 +39,7 @@ pub fn new_id() -> Uuid {
     crate::types::new_id()
 }
 
+/// Verify credentials and open a session (or issue a TOTP pre-auth token).
 pub async fn login(
     db: &mut Db,
     username: &str,
@@ -91,6 +94,7 @@ pub async fn login(
     })
 }
 
+/// Rotate a refresh token into a new session pair.
 pub async fn refresh_session(db: &mut Db, refresh_token: &str) -> Result<(User, String), ApiError> {
     let mut session = Session::filter_by_refresh_token(refresh_token)
         .first()
@@ -142,6 +146,7 @@ pub async fn logout(db: &mut Db, refresh_token: &str) {
     }
 }
 
+/// Signup request (username + optional profile; password separate upstream).
 pub struct SignupInput {
     pub username: String,
     pub firstname: Option<String>,
@@ -153,6 +158,7 @@ pub struct SignupInput {
     pub totp_forced: bool,
 }
 
+/// Create a local user (rejects duplicates, hashes the password).
 pub async fn signup(db: &mut Db, input: SignupInput) -> Result<User, ApiError> {
     if User::filter_by_username(&input.username)
         .first()
@@ -228,6 +234,8 @@ pub async fn signup(db: &mut Db, input: SignupInput) -> Result<User, ApiError> {
         totp_forced: input.totp_forced,
         created_timestamp: now,
         updated_timestamp: now,
+        max_file_size: None,
+        max_total_size: None,
     };
     User::create()
         .id(user.id)
@@ -294,5 +302,26 @@ mod tests {
     #[test]
     fn login_error_text_matches_go() {
         assert_eq!(bad_credentials().message(), "invalid credentials");
+    }
+
+    #[test]
+    fn new_id_is_v7_and_token_carries_sub() {
+        let id = new_id();
+        assert_eq!(id.get_version(), Some(uuid::Version::SortRand));
+        assert!(now_ms() > 0);
+        // set_password_token is a sub-only HS256 JWT (no exp claim).
+        let token = set_password_token(id);
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+        validation.validate_exp = false;
+        validation.required_spec_claims.clear();
+        let secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "development-jwt-secret".into());
+        let data = jsonwebtoken::decode::<serde_json::Value>(
+            &token,
+            &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+            &validation,
+        )
+        .unwrap();
+        assert_eq!(data.claims["sub"], id.to_string());
     }
 }

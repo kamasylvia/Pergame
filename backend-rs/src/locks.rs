@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Default)]
+/// Process-wide backup/restore lock registry (one instance owns the workspace).
 pub struct WorkspaceLocks {
     /// Shared guard: one permit per running backup (refcounted by clones).
     backup_permits: RwLock<usize>,
@@ -29,6 +30,7 @@ pub struct WorkspaceLocks {
 }
 
 impl WorkspaceLocks {
+    /// Empty registry (no backups, no restore).
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
@@ -109,6 +111,7 @@ impl WorkspaceLocks {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+/// Status-endpoint projection of the lock state.
 pub struct LockSnapshot {
     pub backups_in_flight: usize,
     pub restore_in_flight: bool,
@@ -117,12 +120,14 @@ pub struct LockSnapshot {
 }
 
 #[derive(Debug, Clone)]
+/// Why a lock acquisition was refused.
 pub enum LockError {
     RestoreInFlight,
     BackupBusy,
     TargetBusy(Vec<uuid::Uuid>),
 }
 
+/// Held by one running backup; releases its targets on drop.
 pub struct BackupGuard {
     locks: Arc<WorkspaceLocks>,
     targets: Vec<uuid::Uuid>,
@@ -143,6 +148,7 @@ impl Drop for BackupGuard {
     }
 }
 
+/// Held by the running restore; clears the flag on drop.
 pub struct RestoreGuard {
     locks: Arc<WorkspaceLocks>,
 }
@@ -189,10 +195,12 @@ fn is_read_method(method: &axum::http::Method) -> bool {
 /// type, which is awkward with a nested Router).
 static LOCKS: std::sync::OnceLock<Arc<WorkspaceLocks>> = std::sync::OnceLock::new();
 
+/// Install the registry for the read-only middleware (once, at startup).
 pub fn install(locks: Arc<WorkspaceLocks>) {
     let _ = LOCKS.set(locks);
 }
 
+/// Registry handle (fresh empty one before `install`).
 pub fn global() -> Arc<WorkspaceLocks> {
     LOCKS.get().cloned().unwrap_or_else(WorkspaceLocks::new)
 }
@@ -258,5 +266,50 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         assert!(!locks.is_read_only().await);
         assert!(!locks.is_restoring().await);
+    }
+
+    #[tokio::test]
+    async fn exempts_machinery_not_content() {
+        for exempt in [
+            "/api/backup",
+            "/api/backup/snapshots/1/restore",
+            "/api/admin/backup/targets",
+            "/api/health",
+            "/api/auth/refresh",
+            "/api/mcp",
+            "/api/mcp/sse",
+        ] {
+            assert!(is_exempt(exempt), "{exempt} must stay writable");
+        }
+        for blocked in [
+            "/api/nodes",
+            "/api/users/@me",
+            "/api/trash/1",
+            "/api/stats/users",
+        ] {
+            assert!(!is_exempt(blocked), "{blocked} must lock");
+        }
+        use axum::http::Method;
+        assert!(is_read_method(&Method::GET));
+        assert!(is_read_method(&Method::HEAD));
+        assert!(is_read_method(&Method::OPTIONS));
+        assert!(!is_read_method(&Method::POST));
+        assert!(!is_read_method(&Method::PUT));
+        assert!(!is_read_method(&Method::DELETE));
+    }
+
+    #[tokio::test]
+    async fn snapshot_reports_state() {
+        let locks = WorkspaceLocks::new();
+        let snap = locks.snapshot().await;
+        assert!(!snap.read_only);
+        assert_eq!(snap.backups_in_flight, 0);
+        assert!(!snap.restore_in_flight);
+        let t = uuid::Uuid::now_v7();
+        let _b = locks.acquire_backup(&[t]).await.unwrap();
+        let snap = locks.snapshot().await;
+        assert!(snap.read_only);
+        assert_eq!(snap.backups_in_flight, 1);
+        assert_eq!(snap.busy_targets, vec![t]);
     }
 }

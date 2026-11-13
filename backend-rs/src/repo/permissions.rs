@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::models::{NodeRow, Permission, PermissionRow};
 
+/// Permissions granted directly on one node.
 pub async fn get_by_node(db: &mut Db, node_id: Uuid) -> Result<Vec<PermissionRow>, String> {
     let rows = Permission::filter_by_node_id(node_id)
         .exec(db)
@@ -26,6 +27,7 @@ pub async fn get_by_node(db: &mut Db, node_id: Uuid) -> Result<Vec<PermissionRow
         .collect())
 }
 
+/// Permissions on a node plus all inheriting descendants (CTE).
 pub async fn get_by_node_recursive(
     pool: &PgPool,
     node_id: Uuid,
@@ -48,6 +50,7 @@ pub async fn get_by_node_recursive(
     .await
 }
 
+/// One permission row by id.
 pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<PermissionRow>, String> {
     let row = Permission::filter_by_id(id)
         .first()
@@ -63,6 +66,7 @@ pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<PermissionRow>, S
     }))
 }
 
+/// Permission of one user on one node, if any.
 pub async fn get_by_node_and_user(
     db: &mut Db,
     node_id: Uuid,
@@ -83,6 +87,7 @@ pub async fn get_by_node_and_user(
     }))
 }
 
+/// Grant a permission row.
 pub async fn create(
     db: &mut Db,
     id: Uuid,
@@ -103,6 +108,7 @@ pub async fn create(
         .map_err(|e| e.to_string())
 }
 
+/// Change the granted level of one row.
 pub async fn update(db: &mut Db, id: Uuid, permission: i32) -> Result<(), String> {
     let mut row = Permission::filter_by_id(id)
         .first()
@@ -118,6 +124,7 @@ pub async fn update(db: &mut Db, id: Uuid, permission: i32) -> Result<(), String
         .map_err(|e| e.to_string())
 }
 
+/// Revoke one permission row.
 pub async fn delete(db: &mut Db, id: Uuid) -> Result<(), String> {
     Permission::filter_by_id(id)
         .delete()
@@ -127,6 +134,7 @@ pub async fn delete(db: &mut Db, id: Uuid) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Invitation (id/code/level/node/created) by id.
 pub async fn get_invitation_by_id(
     pool: &PgPool,
     id: Uuid,
@@ -140,6 +148,7 @@ pub async fn get_invitation_by_id(
     .await
 }
 
+/// Invitation tuple by join code.
 pub async fn get_invitation_by_code(
     pool: &PgPool,
     code: &str,
@@ -153,6 +162,7 @@ pub async fn get_invitation_by_code(
     .await
 }
 
+/// Invitation tuples issued for one node.
 pub async fn invitations_by_node(
     pool: &PgPool,
     node_id: Uuid,
@@ -166,6 +176,7 @@ pub async fn invitations_by_node(
     .await
 }
 
+/// Create an invitation code for a node.
 pub async fn create_invitation(
     pool: &PgPool,
     id: Uuid,
@@ -188,6 +199,7 @@ pub async fn create_invitation(
     .map(|_| ())
 }
 
+/// Delete an invitation code.
 pub async fn delete_invitation(pool: &PgPool, id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM node_invitations WHERE id = $1")
         .bind(id)

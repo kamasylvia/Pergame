@@ -18,7 +18,16 @@ export default {
     promptPlural: '파일을 여기로 드래그 앤 드롭하거나 {link}해서 선택하세요',
     removeFile: '파일 제거',
   },
+  dedupe: {
+    done: '{migrated}개 마이그레이션, {saved} 절약',
+    failed: '마이그레이션 실패',
+    hint: '레거시 객체를 콘텐츠 주소 지정 블롭으로 이동 (중복 절약).',
+    run: '마이그레이션 실행',
+    running: '마이그레이션 중…',
+    title: '중복 제거',
+  },
   diagram: '다이어그램 편집기',
+
   edit: {
     description: '서버에 있는 리소스와 파일을 관리합니다. 메타데이터를 수정하거나 파일을 삭제할 수 있습니다.',
     title: '파일 업데이트',
@@ -62,6 +71,6 @@ export default {
     title: '미리보기',
     unavailable: '이 파일 형식은 미리보기를 지원하지 않습니다',
   },
-
   storageUsed: '사용된 저장 용량',
+  unlimited: '무제한',
 };

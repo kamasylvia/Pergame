@@ -18,7 +18,16 @@ export default {
     promptPlural: 'Ziehe deine Dateien hierher oder klicke auf {link}, um sie auszuwählen',
     removeFile: 'Datei entfernen',
   },
+  dedupe: {
+    done: '{migrated} migriert, {saved} gespart',
+    failed: 'Migration fehlgeschlagen',
+    hint: 'Alte Objekte zu inhaltsadressierten Blobs zusammenführen ( spart Speicherplatz bei Duplikaten).',
+    run: 'Migration starten',
+    running: 'Migriert …',
+    title: 'Deduplizierung',
+  },
   diagram: 'Diagrammeditor',
+
   edit: {
     description: 'Verwalte Ressourcen und Dateien auf dem Server. Du kannst Metadaten bearbeiten und Dateien löschen.',
     title: 'Datei aktualisieren',
@@ -62,6 +71,6 @@ export default {
     title: 'Vorschau',
     unavailable: 'Für diesen Dateityp ist keine Vorschau verfügbar',
   },
-
   storageUsed: 'Belegter Speicherplatz',
+  unlimited: 'Unbegrenzt',
 };

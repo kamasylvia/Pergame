@@ -7,6 +7,7 @@ use uuid::Uuid;
 // ------------------------------------------------------------------ settings
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+/// One `user_settings` row (general/editor/advanced JSON blobs).
 pub struct SettingsRow {
     pub user_id: Uuid,
     pub general: serde_json::Value,
@@ -14,6 +15,7 @@ pub struct SettingsRow {
     pub advanced: serde_json::Value,
 }
 
+/// Settings row of one user, if any.
 pub async fn get_settings(
     pool: &PgPool,
     user_id: Uuid,
@@ -51,6 +53,7 @@ pub async fn upsert_settings(
 
 // --------------------------------------------------------------------- stats
 
+/// Total user count.
 pub async fn users_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
     let (v,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
         .fetch_one(pool)
@@ -58,6 +61,7 @@ pub async fn users_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
     Ok(v)
 }
 
+/// Total (non-purged) node count.
 pub async fn nodes_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
     let (v,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM nodes")
         .fetch_one(pool)
@@ -65,6 +69,7 @@ pub async fn nodes_total(pool: &PgPool) -> Result<i64, sqlx::Error> {
     Ok(v)
 }
 
+/// Sum of node content sizes (bytes).
 pub async fn nodes_total_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
     let (v,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM nodes")
         .fetch_one(pool)
@@ -73,11 +78,13 @@ pub async fn nodes_total_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
 }
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+/// `(month, count)` bucket for growth charts.
 pub struct MonthlyCount {
     pub month: String,
     pub count: i64,
 }
 
+/// Users created per month since `since` (unix ms).
 pub async fn users_monthly_growth(
     pool: &PgPool,
     since: i64,
@@ -94,6 +101,7 @@ pub async fn users_monthly_growth(
     .await
 }
 
+/// Nodes created per month since `since` (unix ms).
 pub async fn nodes_monthly_growth(
     pool: &PgPool,
     since: i64,
@@ -111,6 +119,7 @@ pub async fn nodes_monthly_growth(
 }
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize)]
+/// `(user, node count, total size)` leaderboard entry.
 pub struct NodeOwnerStats {
     pub user_id: Uuid,
     pub username: String,
@@ -155,6 +164,7 @@ enum TopOrder {
     TotalSize,
 }
 
+/// Top users by node count.
 pub async fn top_users_by_node_count(
     pool: &PgPool,
     limit: i32,
@@ -162,6 +172,7 @@ pub async fn top_users_by_node_count(
     top_users(pool, limit, TopOrder::NodeCount).await
 }
 
+/// Top users by total content size.
 pub async fn top_users_by_node_size(
     pool: &PgPool,
     limit: i32,

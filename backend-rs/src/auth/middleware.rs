@@ -10,12 +10,14 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
+/// Authenticated identity from the `Authorization` cookie JWT.
 pub struct AuthUser {
     pub id: Uuid,
     pub role: i32,
 }
 
 impl AuthUser {
+    /// The acting user's id.
     pub fn user_id(&self) -> Uuid {
         self.id
     }

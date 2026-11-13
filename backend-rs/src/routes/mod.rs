@@ -1,3 +1,4 @@
+//! HTTP route handlers, wired in `main.rs` (one module per `/api` area).
 pub mod admin_backup;
 pub mod api_tokens;
 pub mod auth;

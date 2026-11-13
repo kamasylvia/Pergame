@@ -13,14 +13,20 @@ use crate::error::ApiError;
 use crate::models::NodeRow;
 use crate::repo::nodes as node_repo;
 
+/// Permission levels (ascending): no access.
 pub const PERM_NONE: i32 = 0;
+/// Permission levels (ascending): read.
 pub const PERM_READ: i32 = 1;
+/// Permission levels (ascending): write.
 pub const PERM_WRITE: i32 = 2;
+/// Permission levels (ascending): manage subtree.
 pub const PERM_ADMIN: i32 = 3;
+/// Permission levels (ascending): owner / app admin.
 pub const PERM_OWNER: i32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)] // Share is part of the Go action set; ported for API completeness
+/// Node operation being authorized.
 pub enum NodeAction {
     Read,
     Update,
@@ -30,6 +36,7 @@ pub enum NodeAction {
 }
 
 impl NodeAction {
+    /// Minimum permission level this action requires.
     pub fn required_level(self) -> i32 {
         match self {
             Self::Read => PERM_READ,
@@ -40,6 +47,7 @@ impl NodeAction {
 }
 
 #[derive(Debug, Clone)]
+/// The user + role requesting access.
 pub struct Actor {
     pub user_id: uuid::Uuid,
     pub role: i32,
@@ -54,10 +62,12 @@ impl From<crate::auth::AuthUser> for Actor {
     }
 }
 
+/// True when the role is app admin (`role == 2`).
 pub fn is_app_admin(role: i32) -> bool {
     role == 2
 }
 
+/// Ok when acting on self or as app admin, else 403.
 pub fn require_user_access(actor: &Actor, target: uuid::Uuid) -> Result<(), ApiError> {
     if actor.user_id == target || is_app_admin(actor.role) {
         Ok(())
@@ -66,6 +76,7 @@ pub fn require_user_access(actor: &Actor, target: uuid::Uuid) -> Result<(), ApiE
     }
 }
 
+/// Resolve the actor's effective level on a node (owner/admin short-circuit).
 pub async fn check_node_action(
     pool: &PgPool,
     actor: &Actor,
@@ -114,4 +125,38 @@ pub async fn check_node_action_status(
     check_node_action(pool, actor, node, action)
         .await
         .map_err(|e| (e.status(), e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn action_levels_match_go() {
+        assert_eq!(NodeAction::Read.required_level(), PERM_READ);
+        assert_eq!(NodeAction::Update.required_level(), PERM_WRITE);
+        assert_eq!(NodeAction::Delete.required_level(), PERM_ADMIN);
+        assert_eq!(NodeAction::Share.required_level(), PERM_ADMIN);
+        assert_eq!(NodeAction::ManagePermissions.required_level(), PERM_ADMIN);
+        assert!(PERM_NONE < PERM_READ && PERM_READ < PERM_WRITE);
+        assert!(PERM_WRITE < PERM_ADMIN && PERM_ADMIN < PERM_OWNER);
+    }
+
+    #[test]
+    fn self_or_admin_passes() {
+        let me = uuid::Uuid::now_v7();
+        let actor = Actor {
+            user_id: me,
+            role: 1,
+        };
+        assert!(require_user_access(&actor, me).is_ok());
+        assert!(require_user_access(&actor, uuid::Uuid::now_v7()).is_err());
+        let admin = Actor {
+            user_id: uuid::Uuid::now_v7(),
+            role: 2,
+        };
+        assert!(require_user_access(&admin, me).is_ok());
+        assert!(is_app_admin(2));
+        assert!(!is_app_admin(1));
+    }
 }

@@ -32,6 +32,7 @@ fn resolve(param: &str) -> Result<Uuid, ApiError> {
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /nodes/:id/links body (target parent folder).
 pub struct CreateLinkBody {
     #[serde(default)]
     pub parent_id: String,
@@ -175,4 +176,17 @@ pub async fn list_user_links(
         .await
         .map_err(ApiError::from)?;
     Ok(ApiOk::ok(rows))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_resolves_or_rejects() {
+        let id = Uuid::now_v7();
+        assert_eq!(resolve(&id.to_string()).unwrap(), id);
+        assert!(resolve("").is_err());
+        assert!(resolve("nope").is_err());
+    }
 }

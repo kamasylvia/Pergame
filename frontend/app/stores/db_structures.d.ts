@@ -96,6 +96,8 @@ export interface User {
   email?: string;
   totp_enabled: boolean;
   totp_forced?: boolean;
+  max_file_size?: number | null; // bytes; null = instance default
+  max_total_size?: number | null; // bytes; null = instance default
   created_timestamp: number;
   updated_timestamp: number;
 }

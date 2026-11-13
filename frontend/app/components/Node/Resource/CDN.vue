@@ -11,16 +11,16 @@
     <div class="storage-indicator">
       <div class="storage-info">
         <span class="storage-label">{{ t('cdn.storageUsed') }}</span>
-        <span class="storage-values">{{ readableFileSize(nodesStore.getTotalUsedStorage) }} / {{ readableFileSize(MAX_STORAGE) }}</span>
+        <span class="storage-values">{{ readableFileSize(quota.used) }} / {{ quota.max === null ? t('cdn.unlimited') : readableFileSize(quota.max) }}</span>
       </div>
-      <div class="progress-bar">
+      <div v-if="quota.max !== null" class="progress-bar">
         <div
           class="progress-fill"
           :style="{ width: storagePercentage + '%' }"
           :class="{ warning: storagePercentage > 80, danger: storagePercentage > 95 }"
         ></div>
       </div>
-      <span class="storage-percentage">{{ storagePercentage.toFixed(1) }}%</span>
+      <span v-if="quota.max !== null" class="storage-percentage">{{ storagePercentage.toFixed(1) }}%</span>
     </div>
     <!-- Orphan objects: stored bytes no node references (SiYuan's "unused
          assets"). Nothing is deleted until the user asks. -->
@@ -56,6 +56,23 @@
         </li>
       </ul>
     </div>
+    <!-- Blob dedup migration (admin only): moves legacy per-user objects to
+         content-addressed blobs/{sha256}. Idempotent, rerunnable. -->
+    <div v-if="userStore.user?.role === 2" class="orphan-panel">
+      <div class="orphan-head">
+        <div class="orphan-info">
+          <span class="orphan-label">{{ t('cdn.dedupe.title') }}</span>
+          <span class="orphan-desc">
+            <template v-if="migrateResult">{{ t('cdn.dedupe.done', { migrated: migrateResult.migrated, saved: readableFileSize(migrateResult.bytes_saved) }) }}</template>
+            <template v-else>{{ t('cdn.dedupe.hint') }}</template>
+          </span>
+        </div>
+        <div class="orphan-actions">
+          <AppButton type="secondary" small :disabled="migrating" @click="migrateBlobs">
+            {{ migrating ? t('cdn.dedupe.running') : t('cdn.dedupe.run') }}
+          </AppButton>
+        </div>
+      </div>
     <AppDrop ref="dropComponent" multiple :max-files="10" @select="selectFiles" />
     <div class="upload-actions">
       <AppButton type="primary" :disabled="!selectedFiles.length" @click="submitFiles">
@@ -137,6 +154,7 @@ const props = defineProps<{
 }>();
 
 const nodesStore = useNodesStore();
+const userStore = useUserStore();
 const resourcesStore = useResourcesStore();
 
 const router = useRouter();
@@ -160,7 +178,34 @@ const uploadProgress = ref({ current: 0, total: 0 });
 const dropComponent = ref();
 const filter = ref('');
 
-const MAX_STORAGE = 1024 * 1024 * 1024; // 1 GB in bytes
+const quota = reactive<{ used: number, max: number | null }>({ used: 0, max: null });
+
+const fetchQuota = async () => {
+  const response = await makeRequest<{ used_bytes: number, max_file_size: number | null, max_total_size: number | null }>('users/@me/quota', 'GET');
+  if (response.status === 'success' && response.result) {
+    quota.used = response.result.used_bytes;
+    quota.max = response.result.max_total_size;
+  }
+};
+
+const migrating = ref(false);
+const migrateResult = ref<{ migrated: number, skipped: number, bytes_saved: number } | null>(null);
+
+const migrateBlobs = async () => {
+  migrating.value = true;
+  migrateResult.value = null;
+  try {
+    const response = await makeRequest<{ migrated: number, skipped: number, bytes_saved: number }>('admin/storage/migrate-blobs', 'POST', {});
+    if (response.status === 'success' && response.result) {
+      migrateResult.value = response.result;
+      await fetchQuota();
+    } else {
+      notifications.add({ type: 'error', title: t('cdn.dedupe.failed'), message: response.message });
+    }
+  } finally {
+    migrating.value = false;
+  }
+};
 
 const orphans = reactive({ items: [] as { key: string, size: number }[], count: 0, bytes: 0, scanned: false, scanning: false, purging: false });
 
@@ -212,7 +257,7 @@ const nodes = computed(() => {
 });
 const filteredResources = ref(nodes.value);
 
-const storagePercentage = computed(() => Math.min((nodesStore.getTotalUsedStorage / MAX_STORAGE) * 100, 100));
+const storagePercentage = computed(() => (quota.max ? Math.min((quota.used / quota.max) * 100, 100) : 0));
 const linksText = computed(() => fileLinks.value.join('\n'));
 
 // DataTable setup

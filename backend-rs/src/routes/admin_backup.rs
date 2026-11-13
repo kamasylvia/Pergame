@@ -151,6 +151,7 @@ pub async fn probe_draft_target(
 }
 
 #[derive(Debug, serde::Deserialize)]
+/// POST probe-draft body (unsaved target draft + optional id for edit checks).
 pub struct ProbeDraftBody {
     #[serde(default)]
     pub id: Option<uuid::Uuid>,
@@ -193,6 +194,7 @@ pub async fn empty_target(
 }
 
 #[derive(Debug, serde::Deserialize)]
+/// POST sync body (optional user scope; default = all listed users).
 pub struct SyncTargetBody {
     #[serde(default)]
     pub user_id: Option<String>,
@@ -290,6 +292,68 @@ pub async fn lock_status(
     Ok(ApiOk::ok(state.locks.snapshot().await))
 }
 
+/// POST /api/admin/storage/migrate-blobs — move legacy per-user objects to
+/// content-addressed `blobs/{sha256}` (cross-user dedup). Idempotent: nodes
+/// already carrying `content_sha256` are skipped; rerunning only processes
+/// the remainder. Returns {migrated, skipped, bytes_saved}.
+pub async fn migrate_blobs(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_admin(&auth)?;
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::BadRequest("storage not configured".into()))?;
+    let rows: Vec<(uuid::Uuid, uuid::Uuid, Option<serde_json::Value>)> = sqlx::query_as(
+        "SELECT id, user_id, metadata FROM nodes WHERE role = 4 AND deleted_at IS NULL
+         AND (metadata IS NULL OR metadata->>'content_sha256' IS NULL)",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(ApiError::from)?;
+    let mut migrated = 0usize;
+    let mut skipped = 0usize;
+    let mut bytes_saved = 0i64;
+    for (id, user_id, metadata) in rows {
+        let Some(path) = metadata
+            .as_ref()
+            .and_then(|m| m.get("transformed_path"))
+            .and_then(|v| v.as_str())
+        else {
+            skipped += 1;
+            continue;
+        };
+        let bytes = match storage.get_user_object(user_id, path).await {
+            Ok(b) => b,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let before = crate::blobs::refcount(&state.db, &crate::blobs::sha_of(&bytes)).await;
+        let sha = crate::blobs::acquire(&state.db, &storage, &bytes).await?;
+        if before > 0 {
+            bytes_saved += bytes.len() as i64;
+        }
+        let _ = sqlx::query(
+            "UPDATE nodes SET metadata = jsonb_set(COALESCE(metadata, '{}'), '{content_sha256}', to_jsonb($1::text)) WHERE id = $2",
+        )
+        .bind(&sha)
+        .bind(id)
+        .execute(&state.db)
+        .await;
+        // Legacy object is now shadowed; delete it (best-effort).
+        storage.delete_user_object(user_id, path).await;
+        migrated += 1;
+    }
+    Ok(ApiOk::ok(serde_json::json!({
+        "migrated": migrated,
+        "skipped": skipped,
+        "bytes_saved": bytes_saved,
+    })))
+}
+
 /// GET /api/admin/backup/targets/:id/export/:snapshot_id — download a
 /// portable zip of one snapshot stored on a target (fork §6 "export zip").
 pub async fn export_target_snapshot(
@@ -365,4 +429,23 @@ pub async fn export_target_snapshot(
         bytes,
     )
         .into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_gate() {
+        let admin = AuthUser {
+            id: uuid::Uuid::nil(),
+            role: 2,
+        };
+        assert!(require_admin(&admin).is_ok());
+        let user = AuthUser {
+            id: uuid::Uuid::nil(),
+            role: 1,
+        };
+        assert!(matches!(require_admin(&user), Err(ApiError::Forbidden(_))));
+    }
 }

@@ -16,6 +16,7 @@ use super::repo;
 use crate::backup::{BackupManifest, SNAPSHOT_KEEP};
 
 #[derive(Debug, Default, Serialize)]
+/// Per-target write report (copied/skipped/pruned counts + first error).
 pub struct FanoutResult {
     pub target: String,
     pub copied: usize,

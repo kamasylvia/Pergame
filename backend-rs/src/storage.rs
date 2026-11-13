@@ -21,11 +21,13 @@ use aws_smithy_runtime_api::client::http::SharedHttpClient;
 
 use aws_sdk_s3::Client;
 use aws_sdk_s3::operation::create_bucket::CreateBucketOutput;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::error::ApiError;
 
 #[derive(Debug, Clone)]
+/// Service-bucket client (attachments + inline zips; snapshots live on targets).
 pub struct S3Storage {
     pub client: Client,
     pub bucket: String,
@@ -52,6 +54,7 @@ fn resolve_endpoint(endpoint_raw: &str, secure_env: Option<&str>) -> String {
     format!("{scheme}://{endpoint_raw}")
 }
 
+/// Build from `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY` (+ optional `S3_BUCKET`).
 pub fn parse_env() -> Result<S3Storage, String> {
     let endpoint = env("S3_ENDPOINT").ok_or("S3 NOT CONFIGURED")?;
     let access = env("S3_ACCESSKEY").ok_or("S3 NOT CONFIGURED")?;
@@ -140,6 +143,100 @@ impl S3Storage {
                     ))))
                 }
             }
+        }
+    }
+
+    /// PUT bytes at the content-addressed key `blobs/{sha256}`.
+    pub async fn put_blob(&self, sha: &str, content: Vec<u8>) -> Result<(), ApiError> {
+        let object_key = format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha);
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .body(content.into())
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                tracing::error!(error = %e, %object_key, "put_blob failed");
+                ApiError::Internal(Box::new(std::io::Error::other("failed to store file")))
+            })
+    }
+
+    /// GET bytes from `blobs/{sha256}`.
+    pub async fn get_blob(&self, sha: &str) -> Result<Vec<u8>, ApiError> {
+        let object_key = format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha);
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(%object_key, error = %e, "get_blob failed");
+                ApiError::BadRequest("object not found".into())
+            })?;
+        let bytes = resp
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                tracing::error!(%object_key, error = %e, "blob body read failed");
+                ApiError::BadRequest("failed to read object".into())
+            })?
+            .into_bytes();
+        Ok(bytes.to_vec())
+    }
+
+    /// Streaming GET from `blobs/{sha256}` with optional Range. Mirrors
+    /// `get_user_object_stream` return shape (body, len, range, etag).
+    pub async fn get_blob_stream(
+        &self,
+        sha: &str,
+        range: Option<&str>,
+    ) -> Result<
+        (
+            aws_sdk_s3::primitives::ByteStream,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ),
+        ApiError,
+    > {
+        let object_key = format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha);
+        let mut req = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&object_key);
+        if let Some(r) = range {
+            req = req.range(r);
+        }
+        let resp = req.send().await.map_err(|e| {
+            tracing::warn!(%object_key, error = %e, "get_blob failed");
+            ApiError::NotFound("object not found".into())
+        })?;
+        Ok((
+            resp.body,
+            resp.content_length,
+            resp.content_range,
+            resp.e_tag,
+        ))
+    }
+
+    /// Delete `blobs/{sha256}` (best-effort; refcount already hit 0).
+    pub async fn delete_blob(&self, sha: &str) {
+        let object_key = format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha);
+        if let Err(e) = self
+            .client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+        {
+            tracing::warn!(%object_key, error = %e, "failed to delete blob");
         }
     }
 
@@ -398,14 +495,24 @@ impl S3Storage {
         Ok(bytes.to_vec())
     }
 
-    /// Storage cleanup for a deleted resource node: metadata path first, then
-    /// prefix sweep (Go DeleteSingleResource parity).
+    /// Storage cleanup for a deleted resource node: deduped blobs release
+    /// one reference (last one deletes the object); legacy per-user paths
+    /// delete directly; unknown shapes fall back to the prefix sweep
+    /// (Go DeleteSingleResource parity).
     pub async fn delete_resource_files(
         &self,
+        pool: &PgPool,
         user_id: Uuid,
         node_id: Uuid,
         metadata: Option<&serde_json::Value>,
     ) {
+        if let Some(meta) = metadata
+            && let Some(sha) = meta.get("content_sha256").and_then(|v| v.as_str())
+            && sha.len() == 64
+        {
+            crate::blobs::release(pool, self, sha).await;
+            return;
+        }
         if let Some(meta) = metadata
             && let Some(path) = meta.get("transformed_path").and_then(|v| v.as_str())
             && !path.is_empty()
@@ -418,6 +525,7 @@ impl S3Storage {
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation; no other test touches S3_*.
 mod tests {
     use super::*;
 
@@ -456,5 +564,34 @@ mod tests {
         assert!(load_custom_ca_client(path.to_str().unwrap()).is_ok());
         assert!(load_custom_ca_client("/nonexistent/pergame-ca.pem").is_err());
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn parse_env_requires_trio_and_defaults_bucket() {
+        // S3_* is only read by storage; no other test touches it.
+        unsafe {
+            std::env::remove_var("S3_ENDPOINT");
+            std::env::remove_var("S3_ACCESSKEY");
+            std::env::remove_var("S3_SECRETKEY");
+            std::env::remove_var("S3_BUCKET");
+        }
+        assert!(parse_env().is_err());
+        unsafe {
+            std::env::set_var("S3_ENDPOINT", "localhost:9000");
+            std::env::set_var("S3_ACCESSKEY", "ak");
+            std::env::set_var("S3_SECRETKEY", "sk");
+        }
+        let s = parse_env().unwrap();
+        assert_eq!(s.bucket, "pergame");
+        unsafe {
+            std::env::set_var("S3_BUCKET", "custom");
+        }
+        assert_eq!(parse_env().unwrap().bucket, "custom");
+        unsafe {
+            std::env::remove_var("S3_ENDPOINT");
+            std::env::remove_var("S3_ACCESSKEY");
+            std::env::remove_var("S3_SECRETKEY");
+            std::env::remove_var("S3_BUCKET");
+        }
     }
 }

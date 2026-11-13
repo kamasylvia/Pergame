@@ -16,6 +16,18 @@ use ammonia::Builder;
 ///   `src/controls/alt` (markdown-it media renderer).
 /// - KaTeX/MathML + SVG allow-lists mirror Go; without them math and svg
 ///   embeds are stripped on save.
+///
+/// # Examples
+///
+/// ```
+/// use pergame_rs::utils::sanitize_html;
+///
+/// assert_eq!(sanitize_html(None), "");
+/// assert_eq!(sanitize_html(Some("")), "");
+/// let clean = sanitize_html(Some("<p>hi</p><script>alert(1)</script>"));
+/// assert!(clean.contains("hi"));
+/// assert!(!clean.contains("script"));
+/// ```
 pub fn sanitize_html(input: Option<&str>) -> String {
     let Some(s) = input else {
         return String::new();
@@ -200,6 +212,32 @@ pub fn sanitize_html(input: Option<&str>) -> String {
         );
     }
     b.clean(s).to_string()
+}
+
+#[cfg(test)]
+mod proptests {
+    use proptest::prelude::*;
+
+    use super::sanitize_html;
+
+    proptest! {
+        /// Sanitization never panics and never emits active content, no
+        /// matter the input bytes.
+        #[test]
+        fn no_active_content_survives(s in "\\PC{0,256}") {
+            let out = sanitize_html(Some(&s));
+            prop_assert!(!out.contains("<script"));
+            prop_assert!(!out.contains("javascript:"));
+            prop_assert!(!out.to_lowercase().contains("onerror="));
+        }
+
+        /// Plain text without markup passes through unchanged (modulo
+        /// entity escaping of `&<>"`).
+        #[test]
+        fn plain_text_roundtrips(s in "[a-zA-Z0-9 .,;:!?()\\-]{1,128}") {
+            prop_assert_eq!(sanitize_html(Some(&s)), s.replace('&', "&amp;"));
+        }
+    }
 }
 
 #[cfg(test)]

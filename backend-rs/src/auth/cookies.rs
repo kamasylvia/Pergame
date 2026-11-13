@@ -4,9 +4,12 @@
 
 use cookie::Cookie;
 
+/// Access-JWT cookie name.
 pub const ACCESS_COOKIE: &str = "Authorization";
+/// Refresh-token cookie name.
 pub const REFRESH_COOKIE: &str = "RefreshToken";
 
+/// True unless `ALLOW_UNSECURE=true`/`1` (dev over plain HTTP).
 pub fn secure_cookies() -> bool {
     !matches!(
         std::env::var("ALLOW_UNSECURE").as_deref(),
@@ -14,6 +17,7 @@ pub fn secure_cookies() -> bool {
     )
 }
 
+/// Sanitized `COOKIE_DOMAIN` value, or None for host-only cookies.
 pub fn cookie_domain() -> Option<String> {
     let raw = std::env::var("COOKIE_DOMAIN").ok()?;
     let cleaned = sanitize_cookie_domain(&raw);
@@ -44,7 +48,16 @@ fn needs_leading_dot(domain: &str) -> bool {
     {
         return false;
     }
-    d.matches('.').count() >= 1
+    // Two or more non-empty labels: "a-." / "a..b" are malformed and stay
+    // host-only rather than gaining a scope that never matches.
+    let mut non_empty = 0;
+    for label in d.split('.') {
+        if label.is_empty() {
+            return false;
+        }
+        non_empty += 1;
+    }
+    non_empty >= 2
 }
 
 /// A `Domain` attribute may not carry a scheme or a port: browsers and HTTP
@@ -87,28 +100,33 @@ fn build(name: &'static str, value: String, max_age_secs: i64) -> Cookie<'static
     cookie.build()
 }
 
+/// Access-token cookie with the given lifetime.
 pub fn access_cookie(token: &str, max_age_secs: i64) -> Cookie<'static> {
     build(ACCESS_COOKIE, token.to_string(), max_age_secs)
 }
 
+/// Refresh-token cookie with the given lifetime.
 pub fn refresh_cookie(token: &str, max_age_secs: i64) -> Cookie<'static> {
     build(REFRESH_COOKIE, token.to_string(), max_age_secs)
 }
 
+/// Expired access cookie (logout).
 pub fn clear_access_cookie() -> Cookie<'static> {
     build(ACCESS_COOKIE, String::new(), -1)
 }
 
+/// Expired refresh cookie (logout).
 pub fn clear_refresh_cookie() -> Cookie<'static> {
     build(REFRESH_COOKIE, String::new(), -1)
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation, serialized by ENV_LOCK.
 mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    pub(super) static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn set_env(key: &str, value: &str) {
         let _guard = ENV_LOCK.lock().unwrap();
@@ -149,6 +167,60 @@ mod tests {
         let c = clear_access_cookie();
         assert_eq!(c.max_age(), Some(time::Duration::ZERO));
         assert_eq!(c.value(), "");
+    }
+}
+
+#[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation, serialized by ENV_LOCK.
+mod domain_proptests {
+    use proptest::prelude::*;
+
+    use super::{cookie_domain, needs_leading_dot, sanitize_cookie_domain};
+
+    proptest! {
+        /// Sanitization never emits a scheme, port, path, or trailing dot;
+        /// the result is always safe to put in a `Domain` attribute.
+        #[test]
+        fn sanitized_domain_is_cookie_safe(s in "\\PC{0,128}") {
+            let out = sanitize_cookie_domain(&s);
+            prop_assert!(!out.contains("://"));
+            prop_assert!(!out.contains('/'));
+            prop_assert!(!out.contains('?'));
+            prop_assert!(!out.contains('#'));
+            prop_assert!(!out.ends_with('.'));
+            if !out.starts_with('[') {
+                prop_assert!(!out.contains(':'));
+            }
+        }
+
+        /// Leading-dot scoping only ever applies to multi-label DNS names.
+        #[test]
+        fn leading_dot_needs_two_labels(s in "[a-z0-9.\\-]{1,64}") {
+            if needs_leading_dot(&s) {
+                let labels: Vec<&str> = s.trim_start_matches('.').split('.').collect();
+                prop_assert!(labels.len() >= 2);
+                prop_assert!(labels.iter().all(|l| !l.is_empty()));
+                prop_assert!(!s.starts_with('['));
+            }
+        }
+
+        /// `cookie_domain` agrees with the sanitizer: None exactly when the
+        /// sanitized value is empty.
+        #[test]
+        fn domain_none_iff_empty(host in "[a-z0-9.\\-:]{0,32}") {
+            // SAFETY: serialized by the sibling tests module's ENV_LOCK; the
+            // proptest runner is single-threaded within this case.
+            let _guard = super::tests::ENV_LOCK.lock().unwrap();
+            unsafe {
+                std::env::set_var("COOKIE_DOMAIN", &host);
+            }
+            let via_fn = cookie_domain();
+            unsafe {
+                std::env::remove_var("COOKIE_DOMAIN");
+            }
+            let clean = sanitize_cookie_domain(&host);
+            prop_assert_eq!(via_fn.is_none(), clean.is_empty());
+        }
     }
 }
 

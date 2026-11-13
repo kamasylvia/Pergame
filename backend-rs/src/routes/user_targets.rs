@@ -306,3 +306,44 @@ pub async fn export_target_snapshot(
     )
         .into_response())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regular_users_scoped_to_self() {
+        let me = Uuid::now_v7();
+        let auth = AuthUser { id: me, role: 1 };
+        let mut input = target_repo::TargetInput {
+            kind: "s3".into(),
+            name: "t".into(),
+            endpoint: String::new(),
+            bucket: String::new(),
+            prefix: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
+            secure: true,
+            region: "us-east-1".into(),
+            provider: "Other".into(),
+            keep_last: 10,
+            max_age_days: 0,
+            schedule: String::new(),
+            enabled: true,
+            users: vec![Uuid::nil(), Uuid::max()],
+            namespace: String::new(),
+            connection_token: None,
+        };
+        scope_users(&auth, &mut input);
+        assert_eq!(input.users, vec![me]);
+        // Admins keep free choice.
+        let admin = AuthUser {
+            id: Uuid::nil(),
+            role: 2,
+        };
+        let mut input2 = input.clone();
+        input2.users = vec![Uuid::nil(), Uuid::max()];
+        scope_users(&admin, &mut input2);
+        assert_eq!(input2.users.len(), 2);
+    }
+}

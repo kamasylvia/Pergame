@@ -121,3 +121,26 @@
 - 验证用的 token 该直插库(算 sha256 即可)而不是绕 UI;用完 `DELETE FROM api_tokens WHERE name='...'`,与本批笔记一起清,`logs` 里的 `mcp.tool.*` 审计行保留即可。
 - **外置盘 + darwin 27.2:proc-macro dylib dlopen 失败**(`mis-aligned LINKEDIT string pool`):proc-macro dylib(`libsqlx_macros-*.dylib`)无法加载,错误链式传导成莫名 E0432(`pub use self::encode::Encode` 等未解析——真因是 derive 宏 dylib 崩了)。**终判(2026-11-13):与盘无关**——内置盘重链出完全相同的坏 dylib(同 hash 同 fileOffset);真因 = rustc 1.95.0 的 linker 在 macOS 27.2 新 dyld 下产出不合规 dylib。修法 = **rustup override set 1.100.0**(backend-rs 目录;1.100 链出的 dylib 合规,release 全量编译通过)。判别法:`python3 -c "import ctypes; ctypes.CDLL(dylib)"` 直接 dlopen 验证;先验盘、再验 dylib 内容、最后动工具链,别先入为主。
 - **`.cargo` registry 在外置盘会被误伤排查**:sqlx 报 E0432 时曾疑 Resilio 同步损坏,实测 `.crate` 缓存 shasum 与 crates.io index 一致、tarball 内也无该文件——损坏假设排除,别先入为主;先验 checksum 再动手删。
+
+## 2026-11-13 Rust 质量改进批次
+
+- **纯 binary crate 跑不起 doc-tests**:`cargo test --doc` 报 `no library targets`。修法 = 抽 `src/lib.rs`(全部 `pub mod` + 注释) + `main.rs` 收敛为 wiring(`use pergame_rs::{...}`)。附带收益:单测与集成测同一份代码。
+- **`#[forbid(unsafe_code)]` 与 test 内 scoped allow 互斥**:forbid 让任何 `allow(unsafe_code)` 直接编译错。正确形态 = crate 根 `#![deny(unsafe_code)]` + 每个 `#[cfg(test)]` mod 上 `#[allow(unsafe_code)]`(本仓 6 处:cookies x2/jwt/config/storage/owner,全是 env 突变)。
+- **sqlx 0.9 删了 `Transaction` 的 `Executor` impl**:靠 `DerefMut` 到内层 Connection。owned `Transaction` 传 `&mut *tx`;借来的 `&mut Transaction` 必须 `&mut **tx`,否则 E0277(help 只列 PgConnection/PgListener,误导)。
+- **存在性探测别用业务类型接**:`SELECT 1::bigint` 配 `Option<(Uuid,)>` 在 UUIDv7 批量改名中被顺手改错 → 环检查恒 500。规则:存在性查询一律 `Option<(i64,)>`。
+- **还原 INSERT 必须父后子**:archive 数组顺序任意,子先父后直接撞 `nodes_parent_id_fkey`。修法 = 先全量 `parent_id=NULL` 插入,第二轮 `UPDATE` 挂父(trash 块同理有此风险,ON CONFLICT 救不了外键错,同 tx 照 abort)。
+- **totp-rs 6 的 `Display` 不是 otpauth URL**:`totp.to_string()` 得 `digits: 6; step: 30; ...` 摘要,二维码扫不出。真 URL = `to_url()`(需 otpauth feature,已启用)。`qr_code_url` 字段名即契约,改 Totp 构造必须断言 URL 前缀。
+- **集成测试随直写/门禁语义过期**:零 target 快照不持久化(列表恒空)+ test-before-save 门 + 还原 force 门,三处旧测试全挂。修法 = 测试自带 target(helper 走 probe-draft 拿 token 再建)+ 还原传 `{"force": true}` + 测后 `empty` 清对象。测试桶名 = `pergame-tgt-test`(非文档旧名)。
+- **jsonwebtoken 默认 60s leeway**:过期测试用 -10 秒 TTL 必 flaky,用 -3600。
+- **cookie 域空 label 不得加前导点**:`needs_leading_dot("a-.")` 曾为 true → Domain 永不匹配。proptest 抓到,修实现(≥2 非空 label 才加)。
+- **拆文件代理会互相覆盖**:restore 代理写了半截 apply.rs 被 kill,残留 11 行头文件 + 错位 mod.rs。规则:并行拆分前先快照,收割时 `wc -l` + `cargo check` 逐个验,半成品从 git 恢复源文件手工重切。
+
+## 2026-11-13 配额与去重批次
+
+- **`edit` 的 PUT N.=M 是替换不是插入**:多次 `PUT 12.=12` 顶掉整行模块声明(auth/response 丢失致全仓 E0432)。插入用 `PUT >N:` / `PUT <N:`;替换后立刻 `cargo check`。
+- **sqlx INT4 不能解进 i64**:`refcount INT` 配 `Option<(i64,)>` 运行期 500。规则:INT 列一律 i32,RETURNING 同。
+- **acquire 先+1 后 PUT 要回滚**:PUT 失败残留 refcount 行,重试因 refcount≠1 跳过 PUT → 行在物无。修法 = PUT 失败删 refcount=1 的行。
+- **sqlx 0.9 `&mut Transaction` 无 Executor**:借来的 tx 传 `&mut **tx`(经 DerefMut 到 Connection);直接 `&mut *tx` E0277。
+- **migration 落生产库即冻结**:0008/0009 已在生产库应用,勿改文件;调结构只能 0010+。
+- **JWT role 在 token 里**:集成测试改 role 后必须重登,否则走旧身份(配额测试曾因此误测 admin 豁免)。
+- **QuObjects 目录占位符**:`dir/` 零字节 key 在 empty/scan 中要显式排除,迁移后 prefix 下只剩占位符属正常,手动清。

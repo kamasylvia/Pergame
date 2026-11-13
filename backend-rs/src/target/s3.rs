@@ -8,6 +8,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use super::{Fingerprint, ObjectRow, S3StoreParams, internal, join_prefix};
 use uuid::Uuid;
 
+/// S3 object store under one bucket + prefix.
 pub struct S3Target {
     client: Client,
     bucket: String,
@@ -15,6 +16,7 @@ pub struct S3Target {
 }
 
 impl S3Target {
+    /// Build a client (scheme defaults from `secure`).
     pub fn new(p: &S3StoreParams) -> Self {
         let url = if p.endpoint.contains("://") {
             p.endpoint.clone()
@@ -66,6 +68,7 @@ impl S3Target {
             })
     }
 
+    /// True when the object exists.
     pub async fn has(&self, path: &str) -> Result<bool, crate::error::ApiError> {
         let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
             path.to_string()
@@ -102,6 +105,7 @@ impl S3Target {
         }
     }
 
+    /// Write bytes.
     pub async fn put(&self, path: &str, bytes: Vec<u8>) -> Result<(), crate::error::ApiError> {
         self.client
             .put_object()
@@ -114,6 +118,7 @@ impl S3Target {
             .map_err(|e| internal(format!("s3 put {}: {e}", self.key(path))))
     }
 
+    /// Read bytes (missing → NotFound).
     pub async fn get(&self, path: &str) -> Result<Vec<u8>, crate::error::ApiError> {
         let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
             path.to_string()
@@ -147,6 +152,7 @@ impl S3Target {
         Ok(bytes.to_vec())
     }
 
+    /// Delete; true when gone (missing counts as deleted).
     pub async fn delete(&self, path: &str) -> Result<bool, crate::error::ApiError> {
         // Accepts both relative paths and absolute keys (as returned by list).
         let key = if self.prefix.is_empty() || path.starts_with(&format!("{}/", self.prefix)) {
@@ -221,4 +227,27 @@ impl S3Target {
 /// Convenience: fingerprint from config (endpoint|bucket, normalized).
 pub fn fingerprint(p: &S3StoreParams) -> Fingerprint {
     Fingerprint(super::s3_identity(&p.endpoint, &p.bucket))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fingerprint_matches_identity() {
+        let p = S3StoreParams {
+            endpoint: "https://S3.example.com/".into(),
+            bucket: "MyBucket".into(),
+            prefix: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
+            secure: true,
+            region: "us-east-1".into(),
+            provider: "Other".into(),
+        };
+        assert_eq!(
+            fingerprint(&p),
+            Fingerprint("s3.example.com|mybucket".into())
+        );
+    }
 }

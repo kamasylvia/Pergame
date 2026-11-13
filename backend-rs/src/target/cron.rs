@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use time::UtcOffset;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Parsed 5-field cron spec (minute hour dom month dow).
 pub struct CronSpec {
     minutes: Vec<u32>,
     hours: Vec<u32>,
@@ -27,6 +28,21 @@ pub struct CronSpec {
 }
 
 impl CronSpec {
+    /// Parse a 5-field cron expression (minute hour day-of-month month day-of-week).
+    /// Day-of-week accepts 0-7 (7 folds to Sunday).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pergame_rs::target::cron::CronSpec;
+    /// use time::UtcOffset;
+    ///
+    /// let spec = CronSpec::parse("30 3 * * *").unwrap();
+    /// // 2026-11-10T03:30:00Z matches; one minute later does not.
+    /// assert!(spec.matches_in(1794281400, UtcOffset::UTC));
+    /// assert!(!spec.matches_in(1794281400 + 60, UtcOffset::UTC));
+    /// assert!(CronSpec::parse("60 * * * *").is_err());
+    /// ```
     pub fn parse(expr: &str) -> Result<Self, String> {
         let fields: Vec<&str> = expr.split_whitespace().collect();
         if fields.len() != 5 {
@@ -149,6 +165,55 @@ fn parse_field(field: &str, min: u32, max: u32) -> Result<Vec<u32>, String> {
         return Err(format!("empty field {field:?}"));
     }
     Ok(dedup(out))
+}
+
+#[cfg(test)]
+mod proptests {
+    use proptest::prelude::*;
+    use time::UtcOffset;
+
+    use super::CronSpec;
+
+    proptest! {
+        /// In-range quintuples always parse; the spec then matches exactly at
+        /// its own wall-clock minute (UTC) and misses the next minute.
+        #[test]
+        fn roundtrip_minute_hour(
+            (m, h) in (0u32..60, 0u32..24),
+        ) {
+            let spec = CronSpec::parse(&format!("{m} {h} * * *")).unwrap();
+            // 2026-01-01T00:00:00Z + h hours + m minutes.
+            let ts = 1767225600 + i64::from(h) * 3600 + i64::from(m) * 60;
+            prop_assert!(spec.matches_in(ts, UtcOffset::UTC));
+            prop_assert!(!spec.matches_in(ts + 60, UtcOffset::UTC));
+        }
+
+        /// No input panics the parser; accepted specs carry sorted,
+        /// deduplicated, in-range minute/hour sets.
+        #[test]
+        fn parse_never_panics(s in "\\PC{0,64}") {
+            let expr = s.split_whitespace().collect::<Vec<_>>().join(" ");
+            if let Ok(spec) = CronSpec::parse(&expr) {
+                let mut minutes = spec.minutes.clone();
+                minutes.sort_unstable();
+                minutes.dedup();
+                prop_assert_eq!(&spec.minutes, &minutes);
+                prop_assert!(spec.minutes.iter().all(|v| *v < 60));
+                prop_assert!(spec.hours.iter().all(|v| *v < 24));
+            }
+        }
+
+        /// Sunday folds: dow 7 behaves exactly like dow 0.
+        #[test]
+        fn seven_is_sunday(ts in 1_700_000_000i64..1_800_000_000) {
+            let zero = CronSpec::parse("0 0 * * 0").unwrap();
+            let seven = CronSpec::parse("0 0 * * 7").unwrap();
+            prop_assert_eq!(
+                zero.matches_in(ts, UtcOffset::UTC),
+                seven.matches_in(ts, UtcOffset::UTC)
+            );
+        }
+    }
 }
 
 #[cfg(test)]

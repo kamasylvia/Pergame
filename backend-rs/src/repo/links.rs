@@ -55,6 +55,7 @@ pub async fn delete(db: &mut Db, id: Uuid) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Fetch one link row by id.
 pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<LinkRow>, String> {
     let row = NodeLink::filter_by_id(id)
         .first()
@@ -70,6 +71,7 @@ pub async fn get_by_id(db: &mut Db, id: Uuid) -> Result<Option<LinkRow>, String>
     }))
 }
 
+/// Link rows pointing at one node.
 pub async fn links_of_node(db: &mut Db, node_id: Uuid) -> Result<Vec<LinkRow>, String> {
     let rows = NodeLink::filter_by_node_id(node_id)
         .exec(db)
@@ -107,7 +109,7 @@ pub async fn is_self_or_descendant(
     node_id: Uuid,
     candidate_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let hit: Option<(Uuid,)> = sqlx::query_as(
+    let hit: Option<(i64,)> = sqlx::query_as(
         r#"
         WITH RECURSIVE descendants AS (
             SELECT id FROM nodes WHERE id = $1

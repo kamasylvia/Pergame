@@ -13,6 +13,7 @@ use crate::response::ApiOk;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
+/// POST /users body (public signup).
 pub struct CreateUserBody {
     #[serde(default)]
     pub username: String,
@@ -99,6 +100,23 @@ pub async fn get_me(
     Ok(ApiOk::ok(user))
 }
 
+/// GET /users/@me/quota — resolved upload limits + current usage for the
+/// CDN storage bar. `max_* = null` means unlimited.
+pub async fn get_my_quota(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let quota = crate::quota::for_user(&state.db, auth.user_id(), auth.role).await;
+    let used = crate::repo::nodes::uploads_size(&state.db, auth.user_id())
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(serde_json::json!({
+        "used_bytes": used,
+        "max_file_size": quota.max_file,
+        "max_total_size": quota.max_total,
+    })))
+}
+
 /// GET /users/:id
 pub async fn get_user(
     State(state): State<AppState>,
@@ -177,7 +195,20 @@ pub async fn delete_user(
         }
     }
     // Attachments first (best-effort), then the row (cascades the rest).
+    // Blob references release one by one (shared bytes survive until the
+    // last user is gone); the legacy per-user prefix is swept as before.
     if let Some(storage) = &state.storage {
+        let shas: Vec<(String,)> = sqlx::query_as(
+            "SELECT metadata->>'content_sha256' FROM nodes WHERE user_id = $1 AND role = 4
+             AND metadata->>'content_sha256' IS NOT NULL",
+        )
+        .bind(uid)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        for (sha,) in shas {
+            crate::blobs::release(&state.db, storage, &sha).await;
+        }
         storage.delete_user_prefix(uid).await;
     }
     let mut db = state.toasty.clone();

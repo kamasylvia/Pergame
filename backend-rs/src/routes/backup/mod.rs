@@ -1,6 +1,9 @@
 //! /backup routes (Go backup.controller.go parity): create (202 + job_id),
 //! status, cancel.
 
+#[cfg(test)]
+mod tests;
+
 use axum::Json;
 use axum::extract::{Multipart, Path, State};
 use axum::response::IntoResponse;
@@ -15,6 +18,7 @@ use crate::error::ApiError;
 use crate::response::ApiOk;
 
 #[derive(Debug, Deserialize, Default)]
+/// POST /backup body (which members to include + memo).
 pub struct BackupBody {
     #[serde(default)]
     pub include_documents: bool,

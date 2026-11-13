@@ -72,11 +72,13 @@
 
 - **编译/测试环境**:backend-rs 需 `rustup override set 1.100.0`(2026-11-13 起;原 1.95.0 在 macOS 27.2 下 proc-macro dylib dlopen 失败,详见 LESSONS;toasty 要求 ≥1.95,1.100 实测全绿);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。**本地起前后端(连 NAS 基础设施,活测模式)**:backend env = `DATABASE_*`(host 换 `qnap.elf-balance.ts.net`)+ `S3_*`(QuObjects 8010)+ 随机 `JWT_SECRET` + `ALLOW_UNSECURE=true` + `TZ=Asia/Shanghai` + `ADMIN_ACCOUNTS=<laniakea id>`;启动前杀旧 8201 监听(`lsof -t -iTCP:8201`);frontend = `NUXT_PUBLIC_API_PROXY_TARGET=http://localhost:8201 NUXT_PUBLIC_CDN_PROXY_TARGET=http://qnap.elf-balance.ts.net:8010 bun run dev`。
 - **活环境**:NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(`PG_HOST/PG_PORT/PG_USERNAME/PG_PASSWORD`, `QUOBJECT_ENDPOINT/ACCESS_KEY/SECRET_KEY`;QUOBJECT_ENDPOINT 值是容器内主机名,本机用需替换为 `qnap.elf-balance.ts.net`)。Keycloak(`KEYCLOAK_URL` :10002)可复用于 OIDC 测试。
-- **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;10 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET`(一个存在的空桶,fan-out 用例用)。
-- **验证门**:`cargo test`(**49 单测**)、`cargo clippy --all-targets`(0)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
+- **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;14 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET=pergame-tgt-test`(存在的空桶;备份/还原/target 三用例用,带自清理)。
+- **验证门**:`cargo test --lib`(117 单测)+ `cargo test --doc`(6)+ 集成 14、`cargo clippy --all-targets`(0)、`cargo fmt --check`、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
 - **.work 布局**:本文件 + `TODO.md` + `LESSONS.md`;specs 在 `features/`(`backup-restore.md` 是备份子系统唯一正本,含 §1-12);上游追踪 `upstream-sync/TRACKING.md`。
 
 ### 最近完成的批次(供考古)
+
+- **Rust 质量改进批次(2026-11-13,审计 6 项全落地)**:`deny(unsafe_code)`(生产 0 unsafe)+ 删 `croner`/`aws-config` + 6 文件拆分全 <600(restore/backup/resources/nodes/repo/routes-backup)+ rustdoc 全覆盖 + 6 doc-tests(抽 lib.rs)+ llvm-cov 13.8%→24.3% + proptest 3 组 + 单测 44→117。抓 3 真 bug:环检查 bigint↔Uuid 错配恒 500、还原子先父后撞外键(两轮插入)、2FA qr_code_url 非 otpauth(改 to_url)。集成 14/14 全绿(修 3 过时测试:probe-draft token/备份前建 target/还原 force/sync 快照语义)。教训 → LESSONS §2026-11-13。
 
 - **v0.0.8→v0.0.10 发版 + WebDAV 活测(2026-11-12)**:v0.0.8(WebDAV probe 双 prefix 修 + KINDS 下拉 + status 字段);v0.0.9 未单独发(直接合入 v0.0.10);v0.0.10(token 下载 + S3 zip + 有效期 + UI 修)。WebDAV 全链在 QNAP DAV(home)跑通,抓 4 bug:MKCOL 不查 status、list 裸 tail、self-skip 恒失败、status 未派生。下载 401 根因 = cookie 过期,改 token 授权。测试账号/目录全清。
 

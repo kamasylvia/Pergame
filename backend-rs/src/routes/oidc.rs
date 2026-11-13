@@ -82,6 +82,7 @@ pub async fn get_providers(State(state): State<AppState>) -> Result<Response, Ap
 }
 
 #[derive(Debug, Deserialize)]
+/// GET authorize query (`redirect_uri` back to the frontend).
 pub struct AuthorizeQuery {
     #[serde(default)]
     pub redirect_uri: String,
@@ -115,6 +116,7 @@ pub async fn authorize(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST callback body (auth code + state + redirect).
 pub struct CallbackBody {
     #[serde(default)]
     pub code: String,
@@ -193,6 +195,7 @@ pub async fn callback(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST link query (`redirect_uri` back to the frontend).
 pub struct LinkQuery {
     #[serde(default)]
     pub redirect_uri: String,
@@ -329,7 +332,7 @@ async fn create_user_from_oidc(
     user_info: &UserInfo,
 ) -> Result<Uuid, ApiError> {
     let user_id = crate::types::new_id();
-    let username = generate_unique_username(db, user_info.preferred_username.as_deref(), user_id);
+    let username = generate_unique_username(user_info.preferred_username.as_deref(), user_id);
     let now = now_ms();
 
     let avatar = user_info.picture.as_deref().and_then(|p| {
@@ -364,7 +367,7 @@ async fn create_user_from_oidc(
 
 /// Go GenerateUniqueUsername: sanitized preferred name (or "Alex-{adjective}")
 /// + "-%06d" of the id mod 1e6.
-fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: Uuid) -> String {
+fn generate_unique_username(given: Option<&str>, user_id: Uuid) -> String {
     let mut base = String::new();
     if let Some(name) = given {
         let trimmed = name.trim();
@@ -389,4 +392,53 @@ fn generate_unique_username(_db: &mut toasty::Db, given: Option<&str>, user_id: 
     }
     let suffix = format!("{:06}", user_id.as_u128() % 1_000_000);
     format!("{base}-{suffix}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn username_sanitizes_and_suffixes() {
+        let id = Uuid::nil();
+        let u = generate_unique_username(Some("Ada Lovelace!"), id);
+        assert!(u.starts_with("Ada_Lovelace-"), "{u}");
+        assert!(u.ends_with("-000000"), "{u}");
+        // Long names truncate to 20 chars.
+        let long = generate_unique_username(Some("abcdefghijklmnopqrstuvwxyz"), id);
+        assert!(long.starts_with("abcdefghijklmnopqrst-"), "{long}");
+        // Empty falls back to Alex-<Adjective>-<suffix>.
+        let fb = generate_unique_username(None, id);
+        assert!(fb.starts_with("Alex-"), "{fb}");
+    }
+
+    #[tokio::test]
+    async fn envelopes_carry_status_and_cookies() {
+        let resp = ok_json(serde_json::json!({"a": 1}));
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["status"], "success");
+        assert_eq!(v["result"]["a"], 1);
+        let with_cookie = envelope_with_cookies(
+            StatusCode::CREATED,
+            serde_json::json!(null),
+            vec![crate::auth::cookies::access_cookie("t", 60)],
+        );
+        assert_eq!(with_cookie.status(), StatusCode::CREATED);
+        let set_cookie: Vec<_> = with_cookie
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .collect();
+        assert_eq!(set_cookie.len(), 1);
+        assert!(
+            set_cookie[0]
+                .to_str()
+                .unwrap()
+                .starts_with("Authorization=t")
+        );
+    }
 }

@@ -26,6 +26,7 @@ use crate::repo::nodes as node_repo;
 use super::{McpActor, actor_of, audit, locked_error, mcp_error};
 
 #[derive(Clone)]
+/// MCP tool server (rmcp `ServerHandler`): 7 tools over the REST permission layer.
 pub struct PergameMcp {
     state: AppState,
 }
@@ -33,6 +34,7 @@ pub struct PergameMcp {
 // ---------------------------------------------------------------- arguments
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `search_notes`.
 pub struct SearchArgs {
     /// Full-text query (2+ characters; matches name, description, tags and
     /// content of documents).
@@ -42,18 +44,21 @@ pub struct SearchArgs {
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `list_children`.
 pub struct ListChildrenArgs {
     /// Folder id (workspace or category). Omit for the top level.
     pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `read_note`.
 pub struct ReadNoteArgs {
     /// Node id.
     pub id: String,
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `create_note`.
 pub struct CreateNoteArgs {
     /// Parent folder id. Omit (or an unwritable id) to create at the top level.
     pub folder_id: Option<String>,
@@ -64,6 +69,7 @@ pub struct CreateNoteArgs {
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `update_note`.
 pub struct UpdateNoteArgs {
     /// Node id.
     pub id: String,
@@ -74,6 +80,7 @@ pub struct UpdateNoteArgs {
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `move_node`.
 pub struct MoveNodeArgs {
     /// Node id to move.
     pub id: String,
@@ -82,6 +89,7 @@ pub struct MoveNodeArgs {
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `delete_node`.
 pub struct DeleteNodeArgs {
     /// Node id. The subtree moves to the trash and stays restorable.
     pub id: String,
@@ -111,6 +119,7 @@ fn text<T: serde::Serialize>(value: &T) -> Result<CallToolResult, McpError> {
 }
 
 impl PergameMcp {
+    /// Build over shared app state (pools clone cheaply).
     pub fn new(state: AppState) -> Self {
         Self { state }
     }
@@ -534,5 +543,24 @@ impl ServerHandler for PergameMcp {
              into the trash."
                     .to_string(),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_parse_trims_and_rejects() {
+        let id = Uuid::now_v7();
+        assert_eq!(parse_id(&format!("  {id}  ")).unwrap(), id);
+        assert!(parse_id("nope").is_err());
+        assert!(parse_id("").is_err());
+    }
+
+    #[test]
+    fn text_wraps_json() {
+        let out = text(&serde_json::json!({"a": 1})).unwrap();
+        assert_eq!(out.content.len(), 1);
     }
 }

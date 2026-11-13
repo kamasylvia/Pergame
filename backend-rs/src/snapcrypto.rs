@@ -14,6 +14,7 @@ const SCRYPT_P: u32 = 1;
 const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 
+/// Scrypt parameters stored in each snapshot manifest (self-describing blobs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EncryptionParams {
     pub kdf: String, // "scrypt"
@@ -43,6 +44,7 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
     out
 }
 
+/// Fresh random-salt parameters for a new snapshot.
 pub fn new_params() -> EncryptionParams {
     let salt: [u8; SALT_LEN] = rand::random();
     EncryptionParams {
@@ -55,6 +57,17 @@ pub fn new_params() -> EncryptionParams {
 }
 
 /// Encrypt `plain` (nonce prefixed) under params+passphrase.
+///
+/// # Examples
+///
+/// ```
+/// use pergame_rs::snapcrypto::{decrypt, encrypt, new_params};
+///
+/// let params = new_params();
+/// let blob = encrypt(&params, "correct horse", b"secret").unwrap();
+/// assert_eq!(decrypt(&params, "correct horse", &blob).unwrap(), b"secret".to_vec());
+/// assert!(decrypt(&params, "wrong passphrase", &blob).is_err());
+/// ```
 pub fn encrypt(
     params: &EncryptionParams,
     passphrase: &str,
@@ -124,5 +137,31 @@ mod tests {
         let a = new_params();
         let b = new_params();
         assert_ne!(a.salt_b64, b.salt_b64);
+    }
+
+    #[test]
+    fn decrypt_rejects_short_tampered_bad_salt() {
+        let params = new_params();
+        assert!(decrypt(&params, "pw", &[0u8; 5]).is_err());
+        let mut blob = encrypt(&params, "pw", b"data").unwrap();
+        let last = blob.len() - 1;
+        blob[last] ^= 0xff;
+        assert!(decrypt(&params, "pw", &blob).is_err());
+        let bad_salt = EncryptionParams {
+            salt_b64: "!!!".into(),
+            ..params.clone()
+        };
+        assert!(encrypt(&bad_salt, "pw", b"data").is_err());
+        assert!(decrypt(&bad_salt, "pw", &blob).is_err());
+    }
+
+    #[test]
+    fn params_shape() {
+        let p = new_params();
+        assert_eq!(p.kdf, "scrypt");
+        assert_eq!(p.n, 1 << 15);
+        assert_eq!(p.r, 8);
+        assert_eq!(p.p, 1);
+        assert!(!p.salt_b64.is_empty());
     }
 }

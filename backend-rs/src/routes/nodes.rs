@@ -18,6 +18,7 @@ use crate::response::ApiOk;
 use crate::utils::sanitize_html;
 
 #[derive(Debug, Deserialize)]
+/// GET /nodes/search query (q/content/limit).
 pub struct SearchQuery {
     #[serde(default)]
     pub q: String,
@@ -137,6 +138,7 @@ pub async fn get_public_node(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST/PUT /nodes body (create or full replace).
 pub struct NodeInput {
     #[serde(default)]
     pub parent_id: Option<Uuid>,
@@ -379,4 +381,32 @@ pub async fn delete_node(
         "deleted_at": deleted_at,
         "nodes": affected,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_size_kept_others_derived() {
+        assert_eq!(node_size(4, Some(99), &None, &None), Some(99));
+        assert_eq!(
+            node_size(3, None, &Some("ab".into()), &Some("cde".into())),
+            Some(5)
+        );
+        assert_eq!(node_size(3, None, &None, &None), Some(0));
+    }
+
+    #[test]
+    fn id_resolvers() {
+        let id = Uuid::now_v7();
+        assert_eq!(resolve_id(&id.to_string()).unwrap(), id);
+        assert!(resolve_id("").is_err());
+        assert!(resolve_id("nope").is_err());
+        assert_eq!(resolve_user_param("@me", id).unwrap(), id);
+        assert_eq!(
+            resolve_user_param(&id.to_string(), Uuid::nil()).unwrap(),
+            id
+        );
+    }
 }

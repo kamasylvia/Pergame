@@ -4,6 +4,7 @@
 
 use super::{Fingerprint, ObjectRow, WebdavStoreParams, internal, join_prefix};
 
+/// Minimal DAV object store under one base collection + prefix.
 pub struct WebdavTarget {
     url: String, // base collection URL, no trailing slash
     auth: String,
@@ -40,6 +41,7 @@ fn percent_decode(s: &str) -> String {
 }
 
 impl WebdavTarget {
+    /// Connect with basic auth + 120s timeout.
     pub fn new(p: &WebdavStoreParams) -> Self {
         let url = p.url.trim().trim_end_matches('/').to_string();
         Self {
@@ -165,6 +167,7 @@ impl WebdavTarget {
         self.has(path).await
     }
 
+    /// True when the object exists (HEAD 2xx).
     pub async fn has(&self, path: &str) -> Result<bool, crate::error::ApiError> {
         let url = self.url_for(path);
         let resp = self
@@ -175,6 +178,7 @@ impl WebdavTarget {
         Ok(resp.status().is_success())
     }
 
+    /// Write bytes (MKCOL parents first).
     pub async fn put(&self, path: &str, bytes: Vec<u8>) -> Result<(), crate::error::ApiError> {
         // ensure parent collections (mkdir -p semantics)
         let dir = self.path(path);
@@ -200,6 +204,7 @@ impl WebdavTarget {
         Ok(())
     }
 
+    /// Read bytes (404 → NotFound).
     pub async fn get(&self, path: &str) -> Result<Vec<u8>, crate::error::ApiError> {
         let resp = self
             .request(reqwest::Method::GET, &self.url_for(path))
@@ -219,6 +224,7 @@ impl WebdavTarget {
         Ok(bytes.to_vec())
     }
 
+    /// Delete; true when gone (already-missing counts as deleted).
     pub async fn delete(&self, path: &str) -> Result<bool, crate::error::ApiError> {
         let resp = self
             .request(reqwest::Method::DELETE, &self.url_for(path))
@@ -229,6 +235,7 @@ impl WebdavTarget {
     }
 }
 
+/// Physical identity (URL + claimed hash) for delete/edit gating.
 pub fn fingerprint(p: &WebdavStoreParams, claimed_hash: &str) -> Fingerprint {
     Fingerprint(super::webdav_identity(&p.url, claimed_hash))
 }
@@ -257,4 +264,34 @@ fn base64_encode(data: &[u8]) -> String {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn href_tail_decodes_last_segment() {
+        assert_eq!(href_tail("/dav/prefix/manifests/abc.json"), "abc.json");
+        assert_eq!(href_tail("/dav/my%20file.txt"), "my file.txt");
+        assert_eq!(href_tail("/dav/dir/"), "dir");
+    }
+
+    #[test]
+    fn percent_decode_handles_edges() {
+        assert_eq!(percent_decode("a%20b"), "a b");
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("%zz"), "%zz");
+        assert_eq!(percent_decode(""), "");
+    }
+
+    #[test]
+    fn base64_matches_rfc_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(base64_encode(b"user:pass"), "dXNlcjpwYXNz");
+    }
 }

@@ -109,7 +109,7 @@ async fn purge_with_storage(state: &AppState, node_id: Uuid) -> Result<u64, ApiE
     {
         for (res_id, res_user, metadata) in resources {
             storage
-                .delete_resource_files(res_user, res_id, metadata.as_ref())
+                .delete_resource_files(&state.db, res_user, res_id, metadata.as_ref())
                 .await;
         }
     }
@@ -117,11 +117,9 @@ async fn purge_with_storage(state: &AppState, node_id: Uuid) -> Result<u64, ApiE
 }
 
 /// Retention sweep: physically deletes trash older than `retention_days`.
-/// Called by the startup ticker in main.rs; `retention_days = 0` disables it.
+/// Called by the startup ticker in main.rs. `0` purges everything (the
+/// "disabled" state is expressed by leaving TRASH_RETENTION_DAYS unset).
 pub async fn sweep_expired(state: &AppState, retention_days: u64) -> Result<u64, ApiError> {
-    if retention_days == 0 {
-        return Ok(0);
-    }
     let cutoff = node_repo::now_ms() - (retention_days as i64) * 86_400_000;
     let rows: Vec<(Uuid,)> = sqlx::query_as(
         r#"
@@ -142,4 +140,17 @@ pub async fn sweep_expired(state: &AppState, retention_days: u64) -> Result<u64,
         purged += purge_with_storage(state, root).await?;
     }
     Ok(purged)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_resolves_or_rejects() {
+        let id = Uuid::now_v7();
+        assert_eq!(resolve_id(&id.to_string()).unwrap(), id);
+        assert!(resolve_id("").is_err());
+        assert!(resolve_id("nope").is_err());
+    }
 }

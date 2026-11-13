@@ -6,6 +6,7 @@ use axum::http::request::Parts;
 use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
+/// Client IP + user-agent, extracted from every request.
 pub struct RequestCtx {
     pub ip: String,
     pub user_agent: String,

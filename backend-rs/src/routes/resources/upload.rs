@@ -1,12 +1,6 @@
-//! /resources routes — file upload, avatar upload, file update, authed file
-//! download (fork: replaces the public-bucket CDN reads; see `download_file`).
+//! /resources upload routes — multipart file upload, avatar upload, and file update.
 
-use axum::Json;
-use axum::body::Body;
-use axum::extract::{Multipart, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode, header};
-use axum::response::Response;
-use serde::Deserialize;
+use axum::extract::{Multipart, Path, State};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -96,6 +90,7 @@ fn supported_images() -> Vec<String> {
     v
 }
 
+/// One parsed multipart file part.
 pub struct UploadedPart {
     pub filename: String,
     pub content_type: String,
@@ -146,11 +141,6 @@ async fn read_upload(
     Ok((file, fields))
 }
 
-fn cdn_limits() -> (u64, u64) {
-    let cfg = crate::config::global();
-    (cfg.cdn.max_size, cfg.cdn.max_uploads_size)
-}
-
 fn mime_allowed(list: &[String], mime: &str) -> bool {
     list.iter().any(|t| t == mime)
 }
@@ -183,7 +173,7 @@ pub async fn upload_file(
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let (max_file, max_total) = cdn_limits();
+    let quota = crate::quota::for_user(&state.db, auth.user_id(), auth.role).await;
     let storage = state
         .storage
         .clone()
@@ -213,17 +203,21 @@ pub async fn upload_file(
     if !mime_allowed(&supported_types(), &mime) {
         return Err(ApiError::BadRequest("file type not supported".into()));
     }
-    if file.bytes.len() as u64 > max_file {
+    if let Some(max_file) = quota.max_file
+        && file.bytes.len() as u64 > max_file
+    {
         return Err(ApiError::BadRequest(
             "file too large or failed to get file".into(),
         ));
     }
 
-    let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
-    if (total as u64) + file.bytes.len() as u64 > max_total {
-        return Err(ApiError::BadRequest(
-            "total size of uploads exceeds the limit".into(),
-        ));
+    if let Some(max_total) = quota.max_total {
+        let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
+        if (total as u64) + file.bytes.len() as u64 > max_total {
+            return Err(ApiError::BadRequest(
+                "total size of uploads exceeds the limit".into(),
+            ));
+        }
     }
 
     let id = crate::types::new_id();
@@ -233,7 +227,14 @@ pub async fn upload_file(
         .map(|(_, e)| format!(".{}", e))
         .unwrap_or_default();
     let transformed_path = format!("{}{}", id, ext);
-    let metadata_json = build_metadata(&mime, &file.filename, &transformed_path, metadata.as_ref());
+    let sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
+    let mut metadata_json =
+        build_metadata(&mime, &file.filename, &transformed_path, metadata.as_ref());
+    // Content address: reads prefer blobs/{sha}; transformed_path stays as
+    // the legacy fallback until the blob migration moves old objects.
+    if let Some(obj) = metadata_json.as_object_mut() {
+        obj.insert("content_sha256".into(), serde_json::Value::String(sha));
+    }
 
     let mut name = file.filename.clone();
     if name.len() > 50 {
@@ -282,16 +283,7 @@ pub async fn upload_file(
         .await
         .map_err(ApiError::from)?;
 
-    let object_key = format!("{}/{}{}", actor.user_id, id, ext);
-    storage
-        .put_user_object(
-            actor.user_id,
-            &format!("{}{}", id, ext),
-            file.bytes.clone(),
-            Some(&mime),
-        )
-        .await?;
-    let _ = object_key;
+    // Bytes already went to blobs/{sha256} via acquire(); no per-node object.
 
     let node = node_repo::get_by_id(&state.db, id)
         .await
@@ -311,7 +303,7 @@ pub async fn upload_avatar(
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let (max_file, _) = cdn_limits();
+    let quota = crate::quota::for_user(&state.db, auth.user_id(), auth.role).await;
     let storage = state
         .storage
         .clone()
@@ -333,7 +325,9 @@ pub async fn upload_avatar(
     if !mime_allowed(&supported_images(), &mime) {
         return Err(ApiError::BadRequest("file type not supported".into()));
     }
-    if file.bytes.len() as u64 > max_file {
+    if let Some(max_file) = quota.max_file
+        && file.bytes.len() as u64 > max_file
+    {
         return Err(ApiError::BadRequest(
             "file too large or failed to get file".into(),
         ));
@@ -353,7 +347,7 @@ pub async fn update_file(
     Path(id): Path<String>,
     mut multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let (max_file, max_total) = cdn_limits();
+    let quota = crate::quota::for_user(&state.db, auth.user_id(), auth.role).await;
     let storage = state
         .storage
         .clone()
@@ -414,23 +408,35 @@ pub async fn update_file(
         if !mime_allowed(&supported_types(), &mime) {
             return Err(ApiError::BadRequest("file type not supported".into()));
         }
-        if file.bytes.len() as u64 > max_file {
+        if let Some(max_file) = quota.max_file
+            && file.bytes.len() as u64 > max_file
+        {
             return Err(ApiError::BadRequest(
                 "file too large or failed to get file".into(),
             ));
         }
 
-        let current_size = db_node.size.unwrap_or(0);
-        let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
-        let size_increase = file.bytes.len() as i64 - current_size;
-        if (total as i64) + size_increase > max_total as i64 {
-            return Err(ApiError::BadRequest(
-                "total size of uploads exceeds the limit".into(),
-            ));
+        if let Some(max_total) = quota.max_total {
+            let current_size = db_node.size.unwrap_or(0);
+            let total = node_repo::uploads_size(&state.db, actor.user_id).await?;
+            let size_increase = file.bytes.len() as i64 - current_size;
+            if (total as u64).saturating_add_signed(size_increase) > max_total {
+                return Err(ApiError::BadRequest(
+                    "total size of uploads exceeds the limit".into(),
+                ));
+            }
         }
 
-        // Go: object key from the EXISTING transformed_path (extension kept).
-        let existing_path = db_node
+        // Deduped replace: acquire the new bytes, release the old reference
+        // (legacy objects delete by path). transformed_path stays for compat.
+        let old_sha = db_node
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("content_sha256"))
+            .and_then(|v| v.as_str())
+            .filter(|s| s.len() == 64)
+            .map(|s| s.to_string());
+        let old_path = db_node
             .metadata
             .as_ref()
             .and_then(|m| m.get("transformed_path"))
@@ -438,13 +444,19 @@ pub async fn update_file(
             .unwrap_or("")
             .to_string();
         let file_len = file.bytes.len();
-        storage
-            .put_user_object(actor.user_id, &existing_path, file.bytes, Some(&mime))
-            .await?;
+        let new_sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
+        match old_sha {
+            Some(sha) if sha != new_sha => crate::blobs::release(&state.db, &storage, &sha).await,
+            None if !old_path.is_empty() => {
+                storage.delete_user_object(actor.user_id, &old_path).await
+            }
+            _ => {}
+        }
 
         let mut metadata = db_node.metadata.clone().unwrap_or(json!({}));
         if let Some(obj) = metadata.as_object_mut() {
             obj.insert("filetype".into(), json!(mime));
+            obj.insert("content_sha256".into(), json!(new_sha));
         }
 
         let size = Some(file_len as i64);
@@ -488,315 +500,34 @@ pub async fn update_file(
     Ok(ApiOk::ok(json!(updated)))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct DownloadQuery {
-    #[serde(default)]
-    pub download: bool,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// S3 object location resolved from a resource node: the storage key relative
-/// to the `{user_id}/` prefix, the MIME type, and the original filename.
-struct ObjectRef {
-    key: String,
-    mime: String,
-    filename: String,
-}
-
-fn object_ref(node: &NodeRow) -> Option<ObjectRef> {
-    let meta = node.metadata.as_ref()?;
-    let key = meta.get("transformed_path")?.as_str()?;
-    if key.is_empty() {
-        return None;
+    #[test]
+    fn allow_lists_fall_back_to_builtins() {
+        assert!(!supported_types().is_empty());
+        assert!(!supported_images().is_empty());
+        let cfg = crate::config::global();
+        assert!(cfg.cdn.max_size > 0 && cfg.cdn.max_uploads_size > 0);
     }
-    Some(ObjectRef {
-        key: key.to_string(),
-        mime: meta
-            .get("filetype")
-            .and_then(|v| v.as_str())
-            .unwrap_or("application/octet-stream")
-            .to_string(),
-        filename: meta
-            .get("original_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&node.name)
-            .to_string(),
-    })
-}
 
-/// Authorization for a resource read: owner/app-admin pass; other signed-in
-/// users need node Read (ancestor-chain permission) or a public subtree;
-/// anonymous callers need the node (or an ancestor) to be public
-/// (`get_public`, accessibility = 3), which is what lets public-doc embeds
-/// load without a session.
-async fn authorize_read(
-    state: &AppState,
-    auth: Option<&AuthUser>,
-    node_id: Uuid,
-) -> Result<NodeRow, ApiError> {
-    let node = node_repo::get_by_id(&state.db, node_id)
-        .await
-        .map_err(ApiError::from)?
-        .ok_or(ApiError::NotFound("not found".into()))?;
-    if let Some(a) = auth {
-        let actor: Actor = a.clone().into();
-        if guard::check_node_action(&state.db, &actor, &node, NodeAction::Read)
-            .await
-            .is_ok()
-        {
-            return Ok(node);
-        }
-        // Signed in but no grant: public subtrees stay readable (same rule
-        // as anonymous callers).
+    #[test]
+    fn mime_match_is_exact() {
+        let list = vec!["image/png".to_string()];
+        assert!(mime_allowed(&list, "image/png"));
+        assert!(!mime_allowed(&list, "image/jpeg"));
+        assert!(!mime_allowed(&list, "image/png "));
     }
-    node_repo::get_public(&state.db, node_id)
-        .await
-        .map_err(ApiError::from)?
-        .ok_or(ApiError::Forbidden("forbidden".into()))
-}
 
-/// Builds the file response: streams S3 bytes (Range passthrough for
-/// audio/video seeks), sets content-type/length, and forces a download
-/// filename only when `?download=true`.
-async fn serve_object(
-    state: &AppState,
-    user_id: Uuid,
-    obj: &ObjectRef,
-    headers: &HeaderMap,
-    download: bool,
-) -> Result<Response, ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
-    let range = headers
-        .get(header::RANGE)
-        .and_then(|v| v.to_str().ok())
-        .filter(|v| v.starts_with("bytes="));
-    let (stream, len, content_range, etag) = storage
-        .get_user_object_stream(user_id, &obj.key, range)
-        .await?;
-    let body = Body::from_stream(tokio_util::io::ReaderStream::new(stream.into_async_read()));
-    let mut builder = Response::builder();
-    if content_range.is_some() {
-        builder = builder.status(StatusCode::PARTIAL_CONTENT);
+    #[test]
+    fn metadata_user_keys_override() {
+        let base = build_metadata("image/png", "a.png", "u/a.png", None);
+        assert_eq!(base["filetype"], "image/png");
+        let extra = serde_json::json!({"filetype": "custom", "x": 1});
+        let merged = build_metadata("image/png", "a.png", "u/a.png", Some(&extra));
+        assert_eq!(merged["filetype"], "custom");
+        assert_eq!(merged["original_path"], "a.png");
+        assert_eq!(merged["x"], 1);
     }
-    builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
-    builder = builder.header(header::ACCEPT_RANGES, "bytes");
-    if let Some(n) = len {
-        builder = builder.header(header::CONTENT_LENGTH, n.to_string());
-    }
-    if let Some(cr) = content_range {
-        builder = builder.header(header::CONTENT_RANGE, cr);
-    }
-    if let Some(tag) = etag {
-        builder = builder.header(header::ETAG, tag);
-    }
-    if download {
-        builder = builder.header(
-            header::CONTENT_DISPOSITION,
-            format!(
-                "attachment; filename=\"{}\"",
-                obj.filename.replace('"', "_")
-            ),
-        );
-    }
-    builder
-        .body(body)
-        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
-}
-
-/// GET /resources/:id/file — authed file download (fork addition, no Go
-/// counterpart: upstream served bytes straight off the public bucket).
-/// Anonymous access is allowed only for public-subtree nodes.
-pub async fn download_file(
-    State(state): State<AppState>,
-    auth: Option<AuthUser>,
-    Path(id): Path<String>,
-    Query(q): Query<DownloadQuery>,
-    headers: HeaderMap,
-) -> Result<Response, ApiError> {
-    let node_id =
-        Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
-    let node = authorize_read(&state, auth.as_ref(), node_id).await?;
-    if node.role != 4 {
-        return Err(ApiError::BadRequest("not a resource".into()));
-    }
-    let obj = object_ref(&node).ok_or(ApiError::NotFound("object not found".into()))?;
-    serve_object(&state, node.user_id, &obj, &headers, q.download).await
-}
-
-/// GET /resources/:id/file/:name — same bytes, with the original filename in
-/// the path. Markdown renderers (and browsers saving a file) decide by the
-/// extension: `/file` alone cannot tell a PDF from an image, so an embedded
-/// PDF would render as a plain link.
-pub async fn download_file_named(
-    State(state): State<AppState>,
-    auth: Option<AuthUser>,
-    Path((id, _name)): Path<(String, String)>,
-    Query(q): Query<DownloadQuery>,
-    headers: HeaderMap,
-) -> Result<Response, ApiError> {
-    download_file(State(state), auth, Path(id), Query(q), headers).await
-}
-
-/// GET /users/:id/avatar — public avatar bytes (no node exists for avatars;
-/// the users row decides: missing/empty `avatar` → 404, frontend falls back
-/// to the placeholder). Unauthenticated by design: author avatars render on
-/// public docs.
-pub async fn download_avatar(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Response, ApiError> {
-    let uid = Uuid::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid user ID".into()))?;
-    let mut db = state.toasty.clone();
-    let has_avatar = crate::models::User::filter_by_id(uid)
-        .first()
-        .exec(&mut db)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|u| u.avatar)
-        .is_some_and(|a| !a.is_empty());
-    if !has_avatar {
-        return Err(ApiError::NotFound("not found".into()));
-    }
-    let obj = ObjectRef {
-        key: "avatar".to_string(),
-        mime: "image/*".to_string(),
-        filename: "avatar".to_string(),
-    };
-    serve_object(&state, uid, &obj, &headers, false).await
-}
-
-/// Legacy CDN path compat: old `content_compiled` embeds point at
-/// `/pergame/{user_id}/{transformed_path}`. Resolves the object back to its
-/// node and applies the same authorization as `download_file`.
-pub async fn download_legacy(
-    State(state): State<AppState>,
-    auth: Option<AuthUser>,
-    Path((user_id, file)): Path<(String, String)>,
-    Query(q): Query<DownloadQuery>,
-    headers: HeaderMap,
-) -> Result<Response, ApiError> {
-    let uid =
-        Uuid::parse_str(&user_id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
-    let node_id = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(&file);
-    // Avatar legacy path has no node; same public rule as download_avatar.
-    if node_id == "avatar" {
-        return download_avatar(State(state), Path(user_id), headers).await;
-    }
-    let node_id =
-        Uuid::parse_str(node_id).map_err(|_| ApiError::BadRequest("invalid parameter".into()))?;
-    let node = authorize_read(&state, auth.as_ref(), node_id).await?;
-    if node.role != 4 || node.user_id != uid {
-        return Err(ApiError::NotFound("not found".into()));
-    }
-    let obj = object_ref(&node).ok_or(ApiError::NotFound("object not found".into()))?;
-    if obj.key != file {
-        return Err(ApiError::NotFound("not found".into()));
-    }
-    serve_object(&state, node.user_id, &obj, &headers, q.download).await
-}
-
-// ------------------------------------------------------------- orphans
-
-/// Objects under `{uid}/` that no resource node references. Files of trashed
-/// nodes count as referenced (they must survive until the trash is purged),
-/// and the avatar plus the `inline-zips/` prefix are never candidates.
-async fn scan_orphans(
-    state: &AppState,
-    user_id: Uuid,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
-    let referenced: std::collections::HashSet<String> =
-        node_repo::referenced_resource_paths(&state.db, user_id)
-            .await
-            .map_err(ApiError::from)?
-            .into_iter()
-            .collect();
-
-    let objects = storage.list_user_objects(user_id).await?;
-    let mut out = Vec::new();
-    let mut total = 0i64;
-    for (name, size, mtime) in objects {
-        if name == "avatar" || referenced.contains(&name) {
-            continue;
-        }
-        total += size;
-        out.push(json!({
-            "key": name,
-            "size": size,
-            "last_modified": mtime,
-        }));
-    }
-    out.sort_by(|a, b| b["size"].as_i64().cmp(&a["size"].as_i64()));
-    Ok((out, total))
-}
-
-/// GET /resources/orphans — list stored objects nothing points at.
-pub async fn list_orphans(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let (objects, total) = scan_orphans(&state, auth.user_id()).await?;
-    Ok(ApiOk::ok(json!({
-        "objects": objects,
-        "total_bytes": total,
-        "count": objects.len(),
-    })))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PurgeOrphansInput {
-    /// Object names to delete; omitted/null = every orphan found by the scan.
-    #[serde(default)]
-    pub keys: Option<Vec<String>>,
-}
-
-/// POST /resources/orphans/purge — delete orphans (all, or the named ones).
-/// The scan is repeated here: a file that a node started referencing between
-/// listing and purging is not deleted.
-pub async fn purge_orphans(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    body: Option<Json<PurgeOrphansInput>>,
-) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let storage = state
-        .storage
-        .clone()
-        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
-    let (objects, _) = scan_orphans(&state, auth.user_id()).await?;
-    let orphans: std::collections::HashSet<String> = objects
-        .iter()
-        .filter_map(|o| o["key"].as_str().map(str::to_string))
-        .collect();
-
-    let requested = body.and_then(|b| b.0.keys);
-    let targets: Vec<String> = match requested {
-        Some(keys) => keys.into_iter().filter(|k| orphans.contains(k)).collect(),
-        None => orphans.into_iter().collect(),
-    };
-
-    let mut deleted = 0usize;
-    let mut bytes = 0i64;
-    for key in &targets {
-        if storage
-            .delete_user_object_checked(auth.user_id(), key)
-            .await
-            .is_ok()
-        {
-            deleted += 1;
-            bytes += objects
-                .iter()
-                .find(|o| o["key"].as_str() == Some(key))
-                .and_then(|o| o["size"].as_i64())
-                .unwrap_or(0);
-        }
-    }
-    tracing::info!(%deleted, %bytes, "orphan resources purged");
-    Ok(ApiOk::ok(json!({ "deleted": deleted, "bytes": bytes })))
 }

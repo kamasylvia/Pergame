@@ -5,6 +5,7 @@ use sqlx::postgres::PgPoolOptions;
 
 use crate::config::Config;
 
+/// Connect the sqlx pool (10 conns, 5s acquire timeout).
 pub async fn connect(cfg: &Config) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(10)

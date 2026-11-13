@@ -10,14 +10,16 @@
 
 ## 批次 B — 重写批次(Rust + pg + 功能域;**等用户开工令**)
 
-- [ ] **Rust 后端重写 + PostgreSQL**:issue #1;db 层 = Toasty + sqlx 逃逸层(P1 spike 验证不过则回退 sqlx 为主);全新空库;pg GIN + tsvector。**P0 前置已完成(2026-11-08,见 `rust-migration/RESEARCH.md` §8)**;下一步 = P1(骨架 + Toasty spike),待开工令。
-  - [ ] P0 集成测试运行时验证(待人工:需 mysql + minio + 活后端;`go test ./tests/...`)
+- [x] **Rust 后端重写 + PostgreSQL** ✅(2026-11-08 开工,P1 骨架+Toasty spike PASS → 2026-11-12 已上 QNAP 生产 v0.0.11):issue #1;db 层 = Toasty + sqlx 逃逸层(11 条 `WITH RECURSIVE` 留 sqlx);全新空库;pg GIN + tsvector。
+  - [x] 集成测试运行时验证:14 用例全绿(需活后端 + pg + S3,`cargo test --test integration -- --ignored --test-threads=1`),多次活环境跑通;生产 health/SSR/备份全链已核验。
+- [x] **Rust 代码质量改进项** ✅(2026-11-13,审计 6 项全落地 + 集成测试修复 + 3 真 bug):①`#![deny(unsafe_code)]`(forbid 与 test scoped allow 互斥,deny 等效;生产 unsafe 0,8 处全在 `#[cfg(test)]`);②删 `croner`/`aws-config`;③拆分 6 文件全 <600(restore→apply/plan/portable/members、backup→mod/store/run/schedule、resources→upload/download/orphans、nodes→mod/trash、repo→mod/tests、routes/backup→mod/tests);④rustdoc 全覆盖 + 6 doc-tests(抽 `src/lib.rs` 纯 binary 才跑得起);⑤llvm-cov 行 13.8%→24.3%(纯逻辑多 85%+,余量需活 pg/S3)+ proptest 3 组(cron/sanitize/cookie);⑥PGO/SoA/SIMD 判 N/A。**真 bug**:环检查 `(Uuid,)`↔bigint 错配恒 500(UUIDv7 批量改残留)、还原子先父后撞外键(改两轮插入)、2FA `qr_code_url` 返 Display 摘要非 otpauth URL(改 `to_url()`)。**集成**:14/14 全绿(修 3 过时测试:target 走 probe-draft token、备份前建 target、还原传 force、sync 改快照语义)。单测 44→117。
+- [x] **Per-user 配额 + 内容寻址去重** ✅(2026-11-13):①users.max_file/total_size(NULL=回落 config;config 0=无限制;admin 豁免;PATCH 双 Option 清 null;`GET /users/@me/quota`;CDN 条读服务端+无限制态;用户管理页配额输入);②空/缺省=无限制口径(TRASH_RETENTION unset/空=不清理,0=全清;SNAPSHOT_INTERVAL unset/空=关,0=非法 warn 关;全局审计余量无限制语义);③去重(`object_blobs`+`blobs/{sha256}`+refcount;upload/update/restore acquire;purge/删账户递减;末引用删对象;备份读 blob 优先;orphan 扫失引 blob)。**生产迁移实测**:30 对象全迁 `bytes_saved=0`(无重复)。单测 117→119,集成 14→16,覆盖率行 22.9%。
 - [x] **MCP server** ✅(2026-11-12,issue #3 保持开启待用户确认):`rmcp 3.9` + `/api/mcp` streamable HTTP + bearer token middleware + 7 工具 + `api_tokens` 表(migration 0007)+ 设置页 `?p=apiTokens` + docs `use/mcp`。**已实测**:隔离库全链(token 生命周期/7 工具/越权 -32003/环 -32602/回收站/吊销 401)+ 只读窗口(四写 -32023、三读放行、REST 同窗 423)+ 生产库真数据(list/read/search/create/update/delete 全通)。**未做**:速率限制(P1 裁决不做);docker 镜像未含(下次 release 才上 QNAP)。
 - [ ] **目录索引文件**:issue #4;自动建 index、设置管名(批量改名)/可见性、永远置顶(order=-1 双端强制);index 块 = #5 预设;spec = `features/directory-index.md`。
 - [ ] **Dataview 查询引擎**:issue #5;DQL 子集、内置字段+metadata JSONB、`POST /api/nodes/query`、前端容器块;spec = `features/dataview.md`。
 - [ ] **自建插件系统**:issue #8(已批准);PS-A..E ≈ 3.5-4.5 周,排重写主体后;ReadItLater 移植 = 生态验证头牌;spec = `plugin-system/DESIGN.md`(§9 已定案)。
 
-- [ ] **笔记软连接/克隆**(Trilium 对位):同笔记多目录出现;克隆表 node_links + 环校验 + 三端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`(已含模型决策:克隆表方案,否决 content 分离重构)。
+- [x] **笔记软连接/克隆**(Trilium 对位)✅(2026-11-09,NL-A/B/C 三阶段):克隆表 node_links + 环校验 + 端点 + 树 CTE 扩展 + 前端;规格 = `features/note-links.md`。
 
 - [ ] **改名 Pergamena**(2026-11-09 定,替代现名 Pergame;**仅决定,不执行**):执行时全层落地——crate/binary、JWT/TOTP issuer、S3 桶与库名默认值、compose 容器、frontend/docs 品牌、GitHub 仓改名;破坏性,单独批次。
 
@@ -28,8 +30,8 @@
 
 ## 待人工验证
 
-> **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。
-> 后端 80 路由 / 18.5k 行 Rust / 218 Vue / 7 migration;61 单测 + 10 集成全绿;
+> **2026-11-10 成熟度评估**:可开始人工测试,定位为「开发验证测试」而非验收测试。(2026-11-13 校数:119 单测 + 6 doc-tests + 16 集成全绿,~20.5k 行 Rust / 79 文件,9 migration)
+> 后端 80 路由 / 218 Vue;
 > 认证/2FA/OIDC/节点/软链接/回收站/快照/还原/fan-out/只读锁均已对真实 pg + 对象存储活测。
 > 部署步骤 = 思源 `Pergame 外部基础设施部署指南`(id 20261111085400-74zeey6);旧版指南已删。
 

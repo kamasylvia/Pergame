@@ -5,9 +5,11 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
+/// Embedded default `config.toml`.
 pub const DEFAULT_CONFIG: &str = include_str!("../config.toml");
 
 #[derive(Debug, Clone, Default, serde::Deserialize)]
+/// Merged config: embedded default → `CONFIG_PATH` → prefixed env (`DATABASE_*`, …).
 pub struct Config {
     #[serde(default)]
     pub database: DatabaseConfig,
@@ -18,6 +20,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+/// Postgres connection block.
 pub struct DatabaseConfig {
     /// Retained for config.toml parity (pgx is the only supported value).
     #[allow(dead_code)]
@@ -49,6 +52,7 @@ impl Default for DatabaseConfig {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+/// Upload/CDN limits block.
 pub struct CdnConfig {
     #[serde(default = "default_max_size", rename = "MaxSize")]
     pub max_size: u64,
@@ -72,6 +76,7 @@ impl Default for CdnConfig {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+/// JWT lifetime block (seconds).
 pub struct AuthConfig {
     #[serde(default = "default_access_expiry", rename = "AccessTokenExpiry")]
     pub access_token_expiry: i64,
@@ -131,6 +136,7 @@ fn raw_toml() -> String {
 }
 
 impl Config {
+    /// Load from embedded default + `CONFIG_PATH` + env overrides.
     pub fn load() -> Self {
         // Section-wise parse: toml::Value → per-table serde. (The whole-doc
         // toml::from_str::<Config> path silently drops array fields — bisection
@@ -180,6 +186,7 @@ impl Config {
         cfg
     }
 
+    /// `postgres://user:pass@host:port/name` for sqlx and Toasty.
     pub fn postgres_url(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}",
@@ -191,6 +198,7 @@ impl Config {
         )
     }
 
+    /// Listen port (`BACKEND_PORT`, default 8201).
     pub fn backend_port(&self) -> u16 {
         std::env::var("BACKEND_PORT")
             .ok()
@@ -201,11 +209,13 @@ impl Config {
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
+/// Process-wide config, initialized once.
 pub fn global() -> &'static Config {
     CONFIG.get_or_init(Config::load)
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)] // Test-only env mutation; no other test touches CONFIG_PATH.
 mod tests {
     use super::*;
 
@@ -258,5 +268,44 @@ mod tests {
             cdn.get("SupportedTypes").is_some(),
             "SupportedTypes key missing from [Cdn]"
         );
+    }
+
+    #[test]
+    fn url_and_port_defaults() {
+        let cfg = Config::default();
+        assert!(cfg.postgres_url().starts_with("postgres://"));
+        assert!(cfg.postgres_url().contains(":5432/"));
+        assert_eq!(cfg.backend_port(), 8201);
+    }
+
+    #[test]
+    fn bad_sections_fall_back_to_defaults() {
+        // [Database] with a wrong-typed port fails section deserialize and
+        // keeps defaults instead of aborting the whole load.
+        let value: toml::Value = toml::from_str("[Database]\nPort = \"nope\"\n").unwrap();
+        let table = value.get("Database").unwrap();
+        assert!(DatabaseConfig::deserialize(table.clone()).is_err());
+        let cfg = Config::default();
+        assert_eq!(cfg.database.port, 5432);
+    }
+
+    #[test]
+    fn config_path_override_and_fallback() {
+        // CONFIG_PATH is only read by config; no other test touches it.
+        let path = std::env::temp_dir().join("pergame-config-test.toml");
+        std::fs::write(&path, "[Database]\nHost = \"from-file\"\n").unwrap();
+        unsafe {
+            std::env::set_var("CONFIG_PATH", path.to_str().unwrap());
+        }
+        assert!(raw_toml().contains("from-file"));
+        unsafe {
+            std::env::set_var("CONFIG_PATH", "/nonexistent/pergame.toml");
+        }
+        assert_eq!(raw_toml(), DEFAULT_CONFIG);
+        unsafe {
+            std::env::remove_var("CONFIG_PATH");
+        }
+        assert_eq!(raw_toml(), DEFAULT_CONFIG);
+        std::fs::remove_file(&path).ok();
     }
 }

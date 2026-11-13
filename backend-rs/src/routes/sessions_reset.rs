@@ -87,6 +87,7 @@ pub async fn logout_all_devices(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /auth/request-reset body (account name to email).
 pub struct RequestResetBody {
     #[serde(default)]
     pub username: String,
@@ -172,6 +173,7 @@ pub async fn request_reset(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /auth/reset-password body (email token + new password).
 pub struct ResetPasswordBody {
     #[serde(default)]
     pub token: String,
@@ -231,4 +233,33 @@ pub async fn reset_password(
         .map_err(ApiError::from)?;
 
     Ok(ApiOk::ok(json!("Password reset successfully.")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_token_carries_sub_and_20min_exp() {
+        let id = Uuid::now_v7();
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let token = reset_jwt(id).unwrap();
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+        validation.validate_exp = false;
+        validation.required_spec_claims.clear();
+        let secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "development-jwt-secret".into());
+        let data = jsonwebtoken::decode::<serde_json::Value>(
+            &token,
+            &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+            &validation,
+        )
+        .unwrap();
+        assert_eq!(data.claims["sub"], id.to_string());
+        let exp = data.claims["exp"].as_i64().unwrap();
+        assert!(exp >= before + 20 * 60 && exp <= before + 20 * 60 + 5);
+    }
 }

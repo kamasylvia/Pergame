@@ -29,6 +29,7 @@ pub async fn list_tokens(
 }
 
 #[derive(Debug, Deserialize)]
+/// POST /users/@me/api-tokens body.
 pub struct CreateTokenInput {
     #[serde(default)]
     pub name: String,

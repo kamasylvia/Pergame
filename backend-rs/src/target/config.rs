@@ -12,6 +12,7 @@ use super::{Fingerprint, S3StoreParams, TargetKind, WebdavStoreParams};
 use crate::error::ApiError;
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+/// One `backup_targets` row (secrets held server-side, masked on the wire).
 pub struct BackupTargetRow {
     pub id: uuid::Uuid,
     pub kind: String,
@@ -62,6 +63,7 @@ impl BackupTargetRow {
         effective_prefix(&self.prefix, &self.namespace)
     }
 
+    /// S3 connection params from this row.
     pub fn s3_params(&self) -> S3StoreParams {
         S3StoreParams {
             endpoint: self.endpoint.clone(),
@@ -75,6 +77,7 @@ impl BackupTargetRow {
         }
     }
 
+    /// WebDAV connection params from this row.
     pub fn webdav_params(&self) -> WebdavStoreParams {
         WebdavStoreParams {
             url: self.endpoint.clone(),
@@ -84,6 +87,7 @@ impl BackupTargetRow {
         }
     }
 
+    /// Parse the `kind` column.
     pub fn kind(&self) -> Result<TargetKind, ApiError> {
         match self.kind.as_str() {
             "s3" => Ok(TargetKind::S3),
@@ -132,6 +136,7 @@ pub enum TargetConn {
     },
 }
 
+/// Reachability + object count + ownership seen by probing a target.
 pub struct ProbeOutcome {
     pub reachable: bool,
     pub snapshot_objects: i64,
@@ -161,6 +166,7 @@ impl TargetConn {
         ""
     }
 
+    /// Physical identity used by delete/edit gating.
     pub fn fingerprint(&self) -> Fingerprint {
         match self {
             Self::S3 { fingerprint, .. } => fingerprint.clone(),
@@ -246,6 +252,7 @@ impl TargetConn {
         }
     }
 
+    /// Read bytes (missing → NotFound).
     pub async fn get(&self, path: &str) -> Result<Vec<u8>, ApiError> {
         match self {
             Self::S3 { store, .. } => store.get(path).await,
@@ -253,6 +260,7 @@ impl TargetConn {
         }
     }
 
+    /// Delete; true when gone (missing counts as deleted).
     pub async fn delete(&self, path: &str) -> Result<bool, ApiError> {
         match self {
             Self::S3 { store, .. } => store.delete(path).await,
@@ -266,5 +274,27 @@ impl TargetConn {
             Self::S3 { store, .. } => store.list(prefix).await,
             Self::WebDav { store, .. } => store.list(prefix).await,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effective_prefix_scopes() {
+        assert_eq!(effective_prefix("", ""), "");
+        assert_eq!(effective_prefix("p", ""), "p");
+        assert_eq!(effective_prefix("", "n"), "n");
+        assert_eq!(effective_prefix("/p/", "/n/"), "p/n");
+    }
+
+    #[test]
+    fn snapshot_keys_exclude_placeholders() {
+        assert!(is_snapshot_key("u/manifests/1.json"));
+        assert!(is_snapshot_key("u/blobs-e2e/abc"));
+        assert!(is_snapshot_key("u/refs/latest"));
+        assert!(!is_snapshot_key("u/blobs/"));
+        assert!(!is_snapshot_key("u/other/file.txt"));
     }
 }

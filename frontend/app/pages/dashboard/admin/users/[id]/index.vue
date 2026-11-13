@@ -39,6 +39,14 @@
           </label>
           <AppToggle v-model="user.totp_forced" />
         </div>
+        <div class="user-detail">
+          <label for="max_file_size">Max file size (bytes, empty = instance default)</label>
+          <input id="max_file_size" v-model.number="user.max_file_size" type="number" min="0" placeholder="empty = default" />
+        </div>
+        <div class="user-detail">
+          <label for="max_total_size">Max total storage (bytes, empty = instance default)</label>
+          <input id="max_total_size" v-model.number="user.max_total_size" type="number" min="0" placeholder="empty = default" />
+        </div>
         <div class="container">
           <div class="user-detail">
             <label>Created At</label>

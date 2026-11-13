@@ -12,6 +12,7 @@ use uuid::Uuid;
 const ROLE_NONE: i32 = 1; // 1 << 0
 const ROLE_ADMIN: i32 = 2; // 1 << 1
 
+/// Reconcile user roles against `ADMIN_ACCOUNTS` (promote listed, demote the rest).
 pub async fn load_app_admins(db: &mut Db, sql: &PgPool) {
     let admin_ids: Vec<String> = std::env::var("ADMIN_ACCOUNTS")
         .map(|v| {

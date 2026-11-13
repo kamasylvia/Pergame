@@ -52,6 +52,7 @@ fn get_cookie(req_headers: &axum::http::HeaderMap, name: &str) -> Option<String>
 }
 
 #[derive(Debug, Deserialize)]
+/// Login credentials (form or JSON body).
 pub struct LoginInput {
     #[serde(default)]
     pub username: String,
@@ -96,6 +97,7 @@ pub async fn parse_login_body(req: axum::extract::Request) -> Result<LoginInput,
     }
 }
 
+/// POST /auth — verify credentials, set session cookies (or TOTP challenge).
 pub async fn login(
     State(state): State<AppState>,
     ctx: crate::extract::RequestCtx,
@@ -154,6 +156,7 @@ pub async fn login(
     }
 }
 
+/// POST+GET /auth/refresh — rotate the session pair.
 pub async fn refresh(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -179,6 +182,7 @@ pub async fn refresh(
     ))
 }
 
+/// POST /auth/logout — clear session + cookies.
 pub async fn logout(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -195,4 +199,23 @@ pub async fn logout(
             cookies::clear_refresh_cookie(),
         ],
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cookie_parse_trims_and_matches_name() {
+        let mut h = axum::http::HeaderMap::new();
+        assert_eq!(get_cookie(&h, "RefreshToken"), None);
+        h.insert(
+            header::COOKIE,
+            "a=1; RefreshToken=tok-123 ; b=2".parse().unwrap(),
+        );
+        assert_eq!(get_cookie(&h, "RefreshToken").as_deref(), Some("tok-123"));
+        assert_eq!(get_cookie(&h, "Missing"), None);
+        // Prefix confusion: "Token" must not match "RefreshToken".
+        assert_eq!(get_cookie(&h, "Token"), None);
+    }
 }

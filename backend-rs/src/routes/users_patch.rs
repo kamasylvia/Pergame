@@ -35,9 +35,11 @@ pub fn require_user_access(auth: &AuthUser, target: Uuid) -> Result<(), ApiError
     }
 }
 
+/// App-admin role value.
 pub const ROLE_ADMIN: i32 = 2;
 
 #[derive(Debug, Deserialize)]
+/// PATCH /users/{id} body (profile; type/TOTP-forced/quotas are admin-only).
 pub struct UpdateUserBody {
     #[serde(default)]
     pub firstname: Option<String>,
@@ -51,8 +53,15 @@ pub struct UpdateUserBody {
     pub user_type: Option<i32>,
     #[serde(default)]
     pub totp_forced: Option<bool>,
+    /// Per-user single-file cap (bytes); null = fall back to [Cdn] config.
+    #[serde(default)]
+    pub max_file_size: Option<Option<i64>>,
+    /// Per-user total cap (bytes); null = fall back to [Cdn] config.
+    #[serde(default)]
+    pub max_total_size: Option<Option<i64>>,
 }
 
+/// PATCH /users/{id} — self-or-admin profile update.
 pub async fn update_user(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -71,20 +80,38 @@ pub async fn update_user(
         .flatten()
         .ok_or(ApiError::NotFound("not found".into()))?;
 
-    // Only admins may change type / TOTP-forced; type must be 0 or 1.
-    let (user_type, totp_forced) = if auth.role == ROLE_ADMIN {
+    // Only admins may change type / TOTP-forced / quotas; type must be 0 or 1.
+    // Quotas use double-Option: absent = keep, null = clear to config fallback.
+    let (user_type, totp_forced, max_file_size, max_total_size) = if auth.role == ROLE_ADMIN {
         if let Some(t) = body.user_type
             && t != 0
             && t != 1
         {
             return Err(ApiError::BadRequest("invalid user type".into()));
         }
+        if let Some(Some(v)) = body.max_file_size
+            && v < 0
+        {
+            return Err(ApiError::BadRequest("max_file_size must be >= 0".into()));
+        }
+        if let Some(Some(v)) = body.max_total_size
+            && v < 0
+        {
+            return Err(ApiError::BadRequest("max_total_size must be >= 0".into()));
+        }
         (
             body.user_type.unwrap_or(db_user.user_type),
             body.totp_forced.unwrap_or(db_user.totp_forced),
+            body.max_file_size.unwrap_or(db_user.max_file_size),
+            body.max_total_size.unwrap_or(db_user.max_total_size),
         )
     } else {
-        (db_user.user_type, db_user.totp_forced)
+        (
+            db_user.user_type,
+            db_user.totp_forced,
+            db_user.max_file_size,
+            db_user.max_total_size,
+        )
     };
 
     User::filter_by_id(db_user.id)
@@ -95,6 +122,8 @@ pub async fn update_user(
         .email(body.email.or(db_user.email.clone()))
         .user_type(user_type)
         .totp_forced(totp_forced)
+        .max_file_size(max_file_size)
+        .max_total_size(max_total_size)
         .updated_timestamp(now_ms())
         .exec(&mut db)
         .await
@@ -114,6 +143,7 @@ pub async fn update_user(
 }
 
 #[derive(Debug, Deserialize)]
+/// PATCH /users/{id}/password body.
 pub struct UpdatePasswordBody {
     #[serde(default)]
     pub current_password: String,
@@ -121,6 +151,7 @@ pub struct UpdatePasswordBody {
     pub password: String,
 }
 
+/// PATCH /users/{id}/password — change password (current required unless admin).
 pub async fn update_password(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -174,4 +205,30 @@ pub async fn update_password(
         })?;
 
     Ok(ApiOk::ok(json!("Password updated successfully")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn target_me_or_uuid() {
+        let auth = AuthUser {
+            id: Uuid::now_v7(),
+            role: 1,
+        };
+        assert_eq!(resolve_target("@me", &auth).unwrap(), auth.id);
+        assert!(resolve_target("", &auth).is_err());
+        assert!(resolve_target("nope", &auth).is_err());
+        let other = Uuid::now_v7();
+        assert_eq!(resolve_target(&other.to_string(), &auth).unwrap(), other);
+        // Self passes, strangers fail, admins pass.
+        assert!(require_user_access(&auth, auth.id).is_ok());
+        assert!(require_user_access(&auth, other).is_err());
+        let admin = AuthUser {
+            id: Uuid::nil(),
+            role: ROLE_ADMIN,
+        };
+        assert!(require_user_access(&admin, other).is_ok());
+    }
 }

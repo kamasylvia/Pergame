@@ -23,12 +23,14 @@ use crate::error::ApiError;
 pub struct Fingerprint(pub String);
 
 #[derive(Debug, Clone)]
+/// Supported fan-out store kinds.
 pub enum TargetKind {
     S3,
     WebDav,
 }
 
 impl TargetKind {
+    /// Wire name (`s3` / `webdav`).
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::S3 => "s3",
@@ -42,6 +44,7 @@ pub type ObjectRow = (String, i64, i64);
 
 /// Async-trait-free object store: implemented per kind, driven with plain
 /// async fns on the concrete types (we only ever hold one of three kinds).
+/// S3 connection parameters (parsed from one target row).
 pub struct S3StoreParams {
     pub endpoint: String,
     pub bucket: String,
@@ -53,6 +56,7 @@ pub struct S3StoreParams {
     pub provider: String,
 }
 
+/// WebDAV connection parameters (parsed from one target row).
 pub struct WebdavStoreParams {
     pub url: String,
     pub username: String,
@@ -69,6 +73,7 @@ pub fn s3_identity(endpoint: &str, bucket: &str) -> String {
     )
 }
 
+/// Normalized `url|hash` identity (empty hash = not yet claimed).
 pub fn webdav_identity(url: &str, claimed_hash: &str) -> String {
     if claimed_hash.is_empty() {
         String::new() // never written: no identity yet (gating treats as clear)
@@ -109,5 +114,43 @@ pub(crate) fn join_prefix(prefix: &str, rest: &str) -> String {
         (true, _) => rest.to_string(),
         (false, true) => format!("{p}{rest}"),
         (false, false) => format!("{p}/{rest}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn s3_identity_normalizes_endpoint_and_bucket() {
+        let a = s3_identity("https://s3.example.com/", "MyBucket");
+        let b = s3_identity("http://s3.example.com", "mybucket");
+        assert_eq!(a, b);
+        assert!(a.contains('|'));
+        // Different bucket = different identity.
+        assert_ne!(a, s3_identity("https://s3.example.com", "other"));
+    }
+
+    #[test]
+    fn webdav_identity_empty_hash_means_unclaimed() {
+        assert_eq!(webdav_identity("https://dav.example/x", ""), "");
+        let id = webdav_identity("https://dav.example/x/", "abc123");
+        assert_eq!(id, "dav.example/x|abc123");
+    }
+
+    #[test]
+    fn join_prefix_handles_slashes() {
+        assert_eq!(join_prefix("", "a/b"), "a/b");
+        assert_eq!(join_prefix("p", "a/b"), "p/a/b");
+        assert_eq!(join_prefix("p/", "/a/b"), "p/a/b");
+        assert_eq!(join_prefix("/p/", "a"), "p/a");
+    }
+
+    #[test]
+    fn internal_error_surfaces_detail() {
+        let e = internal("disk gone");
+        assert!(matches!(e, ApiError::BadRequest(m) if m.contains("disk gone")));
+        let nf = not_found("k");
+        assert!(matches!(nf, ApiError::NotFound(_)));
     }
 }

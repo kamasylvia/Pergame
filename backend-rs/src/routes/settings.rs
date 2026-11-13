@@ -32,6 +32,7 @@ pub async fn get_settings(
 }
 
 #[derive(Debug, Deserialize)]
+/// PUT /user/settings body (general/editor/advanced blobs).
 pub struct SaveSettingsBody {
     #[serde(default)]
     pub general: serde_json::Value,
@@ -233,5 +234,40 @@ mod tests {
         let oct = filled.iter().find(|r| r.month == "2026-10").unwrap();
         assert_eq!(oct.count, 7);
         assert!(filled.iter().all(|r| r.month != "2026-11" || r.count == 0));
+    }
+
+    #[test]
+    fn year_boundary_rolls_back() {
+        let keys = last12_month_keys((2026, 1));
+        assert_eq!(keys.first(), Some(&"2025-02".to_string()));
+        assert_eq!(keys.last(), Some(&"2026-01".to_string()));
+        assert_eq!(keys.len(), 12);
+    }
+
+    #[test]
+    fn month_key_to_ms_known_value() {
+        // 2026-11-01T00:00:00Z = 1793491200.
+        let ms = month_key_to_ms(Some(&"2026-11".to_string())).unwrap();
+        assert_eq!(ms, 1793491200 * 1000);
+        assert!(month_key_to_ms(None).is_err());
+        assert!(month_key_to_ms(Some(&"not-a-month".to_string())).is_err());
+        assert!(month_key_to_ms(Some(&"2026-13".to_string())).is_err());
+    }
+
+    #[test]
+    fn require_admin_gates_role() {
+        let admin = AuthUser {
+            id: uuid::Uuid::nil(),
+            role: 2,
+        };
+        assert!(require_admin(&admin).is_ok());
+        let user = AuthUser {
+            id: uuid::Uuid::nil(),
+            role: 1,
+        };
+        assert!(matches!(
+            require_admin(&user),
+            Err(ApiError::Unauthorized(_))
+        ));
     }
 }
