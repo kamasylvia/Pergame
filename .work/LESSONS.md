@@ -119,3 +119,5 @@
 - **本地跑 migration 会让该文件在生产库"冻结"**:`_sqlx_migrations` 记 checksum,之后改同一个 `.sql` 部署必失败,只能追加新文件。临时连生产库验证前想清楚这个代价。
 - **sweeper 类后台任务会真删数据**:连生产库时用 `TRASH_RETENTION_DAYS=0` 关回收站清理;`SNAPSHOT_INTERVAL_HOURS` 不设即关;`backup_targets.schedule` 非空会触发 target 调度器(生产无 target 时安全)。
 - 验证用的 token 该直插库(算 sha256 即可)而不是绕 UI;用完 `DELETE FROM api_tokens WHERE name='...'`,与本批笔记一起清,`logs` 里的 `mcp.tool.*` 审计行保留即可。
+- **外置盘 + darwin 27.2:proc-macro dylib dlopen 失败**(`mis-aligned LINKEDIT string pool`):proc-macro dylib(`libsqlx_macros-*.dylib`)无法加载,错误链式传导成莫名 E0432(`pub use self::encode::Encode` 等未解析——真因是 derive 宏 dylib 崩了)。**终判(2026-11-13):与盘无关**——内置盘重链出完全相同的坏 dylib(同 hash 同 fileOffset);真因 = rustc 1.95.0 的 linker 在 macOS 27.2 新 dyld 下产出不合规 dylib。修法 = **rustup override set 1.100.0**(backend-rs 目录;1.100 链出的 dylib 合规,release 全量编译通过)。判别法:`python3 -c "import ctypes; ctypes.CDLL(dylib)"` 直接 dlopen 验证;先验盘、再验 dylib 内容、最后动工具链,别先入为主。
+- **`.cargo` registry 在外置盘会被误伤排查**:sqlx 报 E0432 时曾疑 Resilio 同步损坏,实测 `.crate` 缓存 shasum 与 crates.io index 一致、tarball 内也无该文件——损坏假设排除,别先入为主;先验 checksum 再动手删。

@@ -70,7 +70,7 @@
 
 ### 换机续接指引
 
-- **编译/测试环境**:backend-rs 需 `rustup override set 1.95.0`(仓库根 `backend-rs` 目录,toasty 要求 ≥1.95);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。
+- **编译/测试环境**:backend-rs 需 `rustup override set 1.100.0`(2026-11-13 起;原 1.95.0 在 macOS 27.2 下 proc-macro dylib dlopen 失败,详见 LESSONS;toasty 要求 ≥1.95,1.100 实测全绿);Go 侧拉依赖需 `GOPROXY=https://goproxy.cn,direct`;前端 `bun install --registry https://registry.npmmirror.com`(注意 bun 版本差异会重写 bun.lock,改完先 `git checkout -- bun.lock`)。**本地起前后端(连 NAS 基础设施,活测模式)**:backend env = `DATABASE_*`(host 换 `qnap.elf-balance.ts.net`)+ `S3_*`(QuObjects 8010)+ 随机 `JWT_SECRET` + `ALLOW_UNSECURE=true` + `TZ=Asia/Shanghai` + `ADMIN_ACCOUNTS=<laniakea id>`;启动前杀旧 8201 监听(`lsof -t -iTCP:8201`);frontend = `NUXT_PUBLIC_API_PROXY_TARGET=http://localhost:8201 NUXT_PUBLIC_CDN_PROXY_TARGET=http://qnap.elf-balance.ts.net:8010 bun run dev`。
 - **活环境**:NAS pg18(5432)+ QuObjects(8010),凭据在 Infisical DEVOPS 项目(`PG_HOST/PG_PORT/PG_USERNAME/PG_PASSWORD`, `QUOBJECT_ENDPOINT/ACCESS_KEY/SECRET_KEY`;QUOBJECT_ENDPOINT 值是容器内主机名,本机用需替换为 `qnap.elf-balance.ts.net`)。Keycloak(`KEYCLOAK_URL` :10002)可复用于 OIDC 测试。
 - **集成套件**:`cargo test --test integration -- --ignored --test-threads=1`(**必须串行**;10 用例)。需活后端 + `S3_ENDPOINT/S3_ACCESSKEY/S3_SECRETKEY/S3_BUCKET` + `DATABASE_*`(测试自清理与提权要用)+ `TARGET_TEST_BUCKET`(一个存在的空桶,fan-out 用例用)。
 - **验证门**:`cargo test`(**49 单测**)、`cargo clippy --all-targets`(0)、`bun run lint` + `bun run lint:css`(0)、`go vet ./...` + `go build ./...`。
