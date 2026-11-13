@@ -18,6 +18,12 @@ export default {
     promptPlural: 'Перетягніть файли сюди або {link}, щоб вибрати',
     removeFile: 'Видалити файл',
   },
+  cache: {
+    clear: "Очистити",
+    limitMb: "Ліміт (МБ)",
+    title: "Локальний кеш",
+    usage: "{used} у {count} записах на пристрої",
+  },
   dedupe: {
     done: "{migrated} перенесено, {saved} зекономлено",
     failed: "Помилка міграції",
@@ -26,6 +32,7 @@ export default {
     running: "Міграція…",
     title: "Дедуплікація",
   },
+
   diagram: 'Редактор діаграм',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: 'Поки що файли не завантажено.',
   },
-
   preview: {
     title: 'Попередній перегляд',
     unavailable: 'Попередній перегляд недоступний для цього типу файлу',

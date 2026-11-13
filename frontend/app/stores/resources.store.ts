@@ -1,3 +1,4 @@
+import { invalidateAttachmentCache, resourceFileUrl } from '~/helpers/attachment-cache';
 import type { Node } from './db_structures';
 
 export const useResourcesStore = defineStore('resources', {
@@ -18,6 +19,7 @@ export const useResourcesStore = defineStore('resources', {
     async update(id: string, resource: FormData): Promise<Node> {
       const request = await makeRequest(`resources/${id}`, 'PUT', resource);
       if (request.status == 'success') {
+        invalidateAttachmentCache(resourceFileUrl(id));
         return request.result as Node;
       } else throw request.message;
     },

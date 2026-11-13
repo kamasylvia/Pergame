@@ -240,6 +240,19 @@ impl S3Storage {
         }
     }
 
+    /// Byte length of a blob or user object (HEAD, no body). Used to decide
+    /// buffered vs streamed downloads. `None` on any failure (caller streams).
+    pub async fn object_len(&self, object_key: &str) -> Option<i64> {
+        self.client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(object_key)
+            .send()
+            .await
+            .ok()
+            .and_then(|o| o.content_length)
+    }
+
     /// PUT object under `{user_id}/{key}`.
     pub async fn put_user_object(
         &self,

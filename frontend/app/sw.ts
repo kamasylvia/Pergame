@@ -28,6 +28,249 @@ self.addEventListener('message', event => {
   }
 });
 
+// ─── Attachment cache (browser-local, user-capped) ──────────────────────────
+// /api/resources/* file bytes are slow from remote S3 (NAS/VPS over
+// Tailscale). Cache Range/full responses in Cache Storage keyed by
+// URL + Range header, LRU-evicted by bytes against the user's limit
+// (preference attachmentCacheMB; 0 = disabled). Must register BEFORE
+// the generic API cache below (workbox matches in registration order).
+const ATTACH_CACHE = 'pergame-attachments';
+const ATTACH_INDEX_DB = 'pergame-attachment-cache';
+const DEFAULT_CACHE_MB = 512;
+
+let attachmentCacheMB: number | null = null; // null = not yet synced
+
+function openAttachIndex(): Promise<IDBDatabase> {
+  const { promise, resolve, reject } = Promise.withResolvers<IDBDatabase>();
+  const req = indexedDB.open(ATTACH_INDEX_DB, 1);
+  req.onupgradeneeded = () => {
+    req.result.createObjectStore('entries', { keyPath: 'key' });
+  };
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+  return promise;
+}
+
+interface AttachEntry {
+  key: string;
+  size: number;
+  atime: number;
+}
+
+async function attachIndexAll(): Promise<AttachEntry[]> {
+  const db = await openAttachIndex();
+  const { promise, resolve } = Promise.withResolvers<AttachEntry[]>();
+  const out: AttachEntry[] = [];
+  const tx = db.transaction('entries', 'readonly');
+  const cursor = tx.objectStore('entries').openCursor();
+  cursor.onsuccess = () => {
+    const c = cursor.result;
+    if (c) {
+      out.push(c.value as AttachEntry);
+      c.continue();
+    } else {
+      db.close();
+      resolve(out);
+    }
+  };
+  cursor.onerror = () => {
+    db.close();
+    resolve(out);
+  };
+  return promise;
+}
+
+async function attachIndexPut(entry: AttachEntry): Promise<undefined> {
+  const db = await openAttachIndex();
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  const tx = db.transaction('entries', 'readwrite');
+  tx.objectStore('entries').put(entry);
+  const done = () => {
+    db.close();
+    resolve(undefined);
+  };
+  tx.oncomplete = done;
+  tx.onerror = done;
+  return promise;
+}
+
+async function attachIndexDelete(key: string): Promise<undefined> {
+  const db = await openAttachIndex();
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  const tx = db.transaction('entries', 'readwrite');
+  tx.objectStore('entries').delete(key);
+  const done = () => {
+    db.close();
+    resolve(undefined);
+  };
+  tx.oncomplete = done;
+  tx.onerror = done;
+  return promise;
+}
+
+async function attachmentLimitBytes(): Promise<number> {
+  if (attachmentCacheMB !== null) return attachmentCacheMB * 1024 * 1024;
+  // Fall back to the app preference store (same IndexedDB as localforage).
+  try {
+    const { promise, resolve } = Promise.withResolvers<Record<string, unknown> | null>();
+    const req = indexedDB.open('localforage');
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction('keyvaluepairs', 'readonly');
+        const get = tx.objectStore('keyvaluepairs').get('preferences');
+        get.onsuccess = () => {
+          db.close();
+          resolve((get.result as Record<string, unknown>) ?? null);
+        };
+        get.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch {
+        db.close();
+        resolve(null);
+      }
+    };
+    req.onerror = () => resolve(null);
+    const prefs = await promise;
+    const mb = prefs?.attachmentCacheMB;
+    if (typeof mb === 'number' && mb >= 0) return mb * 1024 * 1024;
+  } catch {
+    // Defaults below.
+  }
+  return DEFAULT_CACHE_MB * 1024 * 1024;
+}
+
+async function attachmentEnforceLimit(cache: Cache): Promise<undefined> {
+  const limit = await attachmentLimitBytes();
+  if (limit <= 0) {
+    await caches.delete(ATTACH_CACHE);
+    return;
+  }
+  const entries = await attachIndexAll();
+  let total = entries.reduce((s, e) => s + e.size, 0);
+  if (total <= limit) return;
+  entries.sort((a, b) => a.atime - b.atime);
+  for (const e of entries) {
+    if (total <= limit) break;
+    await cache.delete(e.key);
+    await attachIndexDelete(e.key);
+    total -= e.size;
+  }
+}
+
+self.addEventListener('message', (event) => {
+  const data = event.data as { type?: string; payload?: { cacheMB?: number } } | null;
+  if (data?.type === 'SET_ATTACHMENT_CACHE_MB' && typeof data.payload?.cacheMB === 'number') {
+    attachmentCacheMB = data.payload.cacheMB;
+  }
+  if (data?.type === 'ATTACHMENT_CACHE_CLEAR') {
+    caches.delete(ATTACH_CACHE);
+    openAttachIndex().then((db) => {
+      const tx = db.transaction('entries', 'readwrite');
+      tx.objectStore('entries').clear();
+      tx.oncomplete = () => db.close();
+    });
+    const port = (event as unknown as MessageEvent).ports?.[0];
+    port?.postMessage({ type: 'ATTACHMENT_CACHE_CLEARED' });
+  }
+  if (data?.type === 'ATTACHMENT_CACHE_STATS') {
+    attachIndexAll().then((entries) => {
+      const port = (event as unknown as MessageEvent).ports?.[0];
+      port?.postMessage({
+        type: 'ATTACHMENT_CACHE_STATS',
+        payload: {
+          entries: entries.length,
+          bytes: entries.reduce((s, e) => s + e.size, 0),
+        },
+      });
+    });
+  }
+  // Invalidate one resource's cached ranges (called after update/replace).
+  if (data?.type === 'ATTACHMENT_CACHE_INVALIDATE' && typeof (data as { url?: unknown }).url === 'string') {
+    const url = (data as { url: string }).url;
+    caches.open(ATTACH_CACHE).then(async (cache) => {
+      const keys = await cache.keys();
+      for (const req of keys) {
+        if (req.url.split('#sw-range=')[0] === url) {
+          await cache.delete(req);
+          await attachIndexDelete(req.url);
+        }
+      }
+    });
+  }
+});
+
+registerRoute(
+  ({ url, request }) =>
+    (request.method === 'GET' || request.method === 'HEAD')
+    && (url.pathname.startsWith('/api/resources/') || url.pathname.endsWith('/avatar')),
+  async ({ request }) => {
+    try {
+      return await attachmentHandler(request);
+    } catch (err) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      console.warn('[SW] attachment cache failed, falling through:', msg);
+      const clients = await self.clients.matchAll();
+      for (const c of clients) c.postMessage({ type: 'SW_ERROR', payload: { url: request.url, error: msg } });
+      return fetch(request);
+    }
+  },
+);
+
+async function attachmentHandler(request: Request): Promise<Response> {
+  // HEAD probes (pdf.js length checks) bypass the cache: no body to store,
+  // and the generic API route's 3s timeout would kill them on slow S3.
+  if (request.method === 'HEAD') return fetch(request);
+  const limit = await attachmentLimitBytes();
+  const range = request.headers.get('Range');
+    // Fragment never hits the network but keeps cache keys distinct per range.
+    const cacheKey = range ? `${request.url}#sw-range=${encodeURIComponent(range)}` : request.url;
+    const cache = await caches.open(ATTACH_CACHE);
+    const hit = await cache.match(cacheKey);
+    if (hit) {
+      attachIndexPut({ key: cacheKey, size: Number(hit.headers.get('Content-Length') ?? 0), atime: Date.now() });
+      // Ranges are stored as 200 (Cache API rejects 206 puts); rebuild the
+      // 206 shape the client (pdf.js) expects from the stored metadata.
+      const storedRange = hit.headers.get('X-SW-Range');
+      const storedTotal = hit.headers.get('X-SW-Total');
+      if (range && storedRange) {
+        const buf = await hit.arrayBuffer();
+        const outHeaders = new Headers(hit.headers);
+        const spec = storedRange.replace(/^bytes=/, '');
+        outHeaders.set('Content-Range', storedTotal ? `bytes ${spec}/${storedTotal}` : `bytes ${spec}/*`);
+        outHeaders.delete('X-SW-Range');
+        outHeaders.delete('X-SW-Total');
+        return new Response(buf, { status: 206, statusText: 'Partial Content', headers: outHeaders });
+      }
+      if (!range && storedTotal === null) return hit;
+      // Shape mismatch (full request hit a range entry or vice versa): refetch.
+      await cache.delete(cacheKey);
+    }
+    const resp = await fetch(request);
+    if (resp.ok || resp.status === 206) {
+      const copy = resp.clone();
+      const buf = await copy.arrayBuffer().catch(() => null);
+      if (buf && buf.byteLength > 0 && buf.byteLength <= limit) {
+        const headers = new Headers(resp.headers);
+        headers.set('Content-Length', String(buf.byteLength));
+        if (range) {
+          // 206 is not cache-puttable: persist as 200 + metadata, rebuild on hit.
+          headers.set('X-SW-Range', range);
+          const total = resp.headers.get('Content-Range')?.split('/')[1] ?? '';
+          if (total) headers.set('X-SW-Total', total);
+          headers.delete('Content-Range');
+        }
+        await cache.put(cacheKey, new Response(buf, { status: 200, statusText: 'OK', headers }));
+        await attachIndexPut({ key: cacheKey, size: buf.byteLength, atime: Date.now() });
+        await attachmentEnforceLimit(cache);
+      }
+    }
+    return resp;
+}
+
+
 // ─── Navigation (HTML pages) ─────────────────────────────────────────────────
 registerRoute(
   new NavigationRoute(

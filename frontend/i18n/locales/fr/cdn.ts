@@ -18,6 +18,12 @@ export default {
     promptPlural: 'Glissez-déposez vos fichiers ici ou {link} pour sélectionner',
     removeFile: 'Supprimer le fichier',
   },
+  cache: {
+    clear: 'Vider',
+    limitMb: 'Limite (Mo)',
+    title: 'Cache local',
+    usage: '{used} dans {count} entrées sur cet appareil',
+  },
   dedupe: {
     done: '{migrated} migrés, {saved} économisés',
     failed: 'Échec de la migration',
@@ -26,6 +32,7 @@ export default {
     running: 'Migration…',
     title: 'Déduplication',
   },
+
   diagram: 'Éditeur de diagramme',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: 'Aucun fichier téléversé pour le moment.',
   },
-
   preview: {
     title: 'Aperçu',
     unavailable: 'Aperçu non disponible pour ce type de fichier',

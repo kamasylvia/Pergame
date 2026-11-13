@@ -18,6 +18,12 @@ export default {
     promptPlural: 'Ziehe deine Dateien hierher oder klicke auf {link}, um sie auszuwählen',
     removeFile: 'Datei entfernen',
   },
+  cache: {
+    clear: 'Leeren',
+    limitMb: 'Limit (MB)',
+    title: 'Lokaler Cache',
+    usage: '{used} in {count} Einträgen auf diesem Gerät',
+  },
   dedupe: {
     done: '{migrated} migriert, {saved} gespart',
     failed: 'Migration fehlgeschlagen',
@@ -26,6 +32,7 @@ export default {
     running: 'Migriert …',
     title: 'Deduplizierung',
   },
+
   diagram: 'Diagrammeditor',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: 'Es wurden noch keine Dateien hochgeladen.',
   },
-
   preview: {
     title: 'Vorschau',
     unavailable: 'Für diesen Dateityp ist keine Vorschau verfügbar',

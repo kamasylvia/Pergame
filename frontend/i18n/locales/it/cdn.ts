@@ -18,6 +18,12 @@ export default {
     promptPlural: 'Trascina e rilascia i tuoi file qui o {link} per selezionarli',
     removeFile: 'Rimuovi file',
   },
+  cache: {
+    clear: 'Svuota',
+    limitMb: 'Limite (MB)',
+    title: 'Cache locale',
+    usage: '{used} in {count} voci su questo dispositivo',
+  },
   dedupe: {
     done: '{migrated} migrati, {saved} risparmiati',
     failed: 'Migrazione fallita',
@@ -26,6 +32,7 @@ export default {
     running: 'Migrazione…',
     title: 'Deduplicazione',
   },
+
   diagram: 'Editor di diagrammi',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: 'Nessun file ancora caricato.',
   },
-
   preview: {
     title: 'Anteprima',
     unavailable: 'Anteprima non disponibile per questo tipo di file',

@@ -213,12 +213,13 @@ async fn serve_object(
         .storage
         .clone()
         .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
-    // Small ranges (pdf.js page fetches, media seeks) are buffered, not
-    // streamed: the S3 byte stream intermittently aborts mid-body on the
-    // first request of a cold connection ("streaming error", QuObjects over
-    // Tailscale), truncating the response. Ranges ≤8MB are cheap to buffer
-    // and immune; larger ranges and full bodies keep streaming.
+    // Small responses are buffered, not streamed: the S3 byte stream
+    // intermittently aborts mid-body on the first request of a cold
+    // connection ("streaming error", QuObjects over Tailscale), truncating
+    // the response. Ranges ≤8MB and full bodies ≤32MB are cheap to buffer
+    // and immune (with retries); larger bodies keep streaming.
     const BUFFERED_RANGE_CAP: u64 = 8 * 1024 * 1024;
+    const BUFFERED_FULL_CAP: i64 = 32 * 1024 * 1024;
     let range = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
@@ -227,6 +228,17 @@ async fn serve_object(
         && range_len <= BUFFERED_RANGE_CAP
     {
         return serve_buffered(&storage, user_id, obj, range, download).await;
+    }
+    if range.is_none() {
+        let object_key = match &obj.sha {
+            Some(sha) => format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha),
+            None => format!("{user_id}/{}", obj.key),
+        };
+        if let Some(len) = storage.object_len(&object_key).await
+            && len <= BUFFERED_FULL_CAP
+        {
+            return serve_buffered(&storage, user_id, obj, None, download).await;
+        }
     }
     let (stream, len, content_range, etag) = match &obj.sha {
         Some(sha) => storage.get_blob_stream(sha, range).await?,

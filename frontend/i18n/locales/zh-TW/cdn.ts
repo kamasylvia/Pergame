@@ -18,6 +18,12 @@ export default {
     promptPlural: '將檔案拖曳至此，或{link}選擇檔案',
     removeFile: '移除檔案',
   },
+  cache: {
+    clear: '清空',
+    limitMb: '上限(MB)',
+    title: '本機快取',
+    usage: '本機 {count} 條，共 {used}',
+  },
   dedupe: {
     done: '已遷移 {migrated} 個，節省 {saved}',
     failed: '遷移失敗',
@@ -26,6 +32,7 @@ export default {
     running: '遷移中…',
     title: '去重遷移',
   },
+
   diagram: '圖表編輯器',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: '尚未上傳任何檔案。',
   },
-
   preview: {
     title: '預覽',
     unavailable: '此檔案類型無法預覽',

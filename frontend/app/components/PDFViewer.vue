@@ -223,8 +223,14 @@ const loadPdf = async () => {
 
     await nextTick();
     setupObserver();
-  } catch {
-    error.value = 'Could not load PDF.';
+  } catch (e) {
+    const chain: string[] = [];
+    let cur: unknown = e;
+    for (let i = 0; i < 4 && cur instanceof Error; i++) {
+      chain.push(`${cur.name}: ${cur.message}`);
+      cur = (cur as { cause?: unknown }).cause;
+    }
+    error.value = `Could not load PDF: ${chain.join(' <- ') || String(e)}`.slice(0, 300);
     loading.value = false;
   }
 };

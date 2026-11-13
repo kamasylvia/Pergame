@@ -18,6 +18,12 @@ export default {
     promptPlural: '将文件拖拽至此，或{link}选择文件',
     removeFile: '移除文件',
   },
+  cache: {
+    clear: '清空',
+    limitMb: '上限(MB)',
+    title: '本地缓存',
+    usage: '本机 {count} 条，共 {used}',
+  },
   dedupe: {
     done: '已迁移 {migrated} 个，节省 {saved}',
     failed: '迁移失败',
@@ -26,6 +32,7 @@ export default {
     running: '迁移中…',
     title: '去重迁移',
   },
+
   diagram: '图表编辑器',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: '尚未上传任何文件。',
   },
-
   preview: {
     title: '预览',
     unavailable: '此文件类型无法预览',

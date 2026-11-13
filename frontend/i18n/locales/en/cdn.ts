@@ -18,6 +18,12 @@ export default {
     promptPlural: 'Drag and drop your files here or {link} to select',
     removeFile: 'Remove file',
   },
+  cache: {
+    clear: 'Clear',
+    limitMb: 'Limit (MB)',
+    title: 'Local cache',
+    usage: '{used} in {count} entries on this device',
+  },
   dedupe: {
     done: '{migrated} migrated, {saved} saved',
     failed: 'Migration failed',
@@ -26,6 +32,7 @@ export default {
     running: 'Migrating…',
     title: 'Deduplication',
   },
+
   diagram: 'Diagram editor',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: 'No files uploaded yet.',
   },
-
   preview: {
     title: 'Preview',
     unavailable: 'Preview not available for this file type',

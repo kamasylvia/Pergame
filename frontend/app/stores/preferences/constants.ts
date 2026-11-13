@@ -32,6 +32,7 @@ export const DEFAULT_PREFERENCES = {
   markdownBreaks: true as boolean, // single \n renders <br> (Joplin parity)
   markdownTypographer: false as boolean, // smart quotes/dashes (Joplin parity)
   abcjsOptions: '' as string, // JSON render options for ABC blocks (Joplin parity)
+  attachmentCacheMB: 512 as number, // browser-local attachment cache cap (0 = disabled)
   documentDefaultThumbnail: false as boolean,
   documentUseParentThumbnail: false as boolean,
   sidebarItems: {
@@ -126,6 +127,7 @@ export const EDITOR_KEYS: PreferenceKey[] = [
   'markdownBreaks',
   'markdownTypographer',
   'abcjsOptions',
+  'attachmentCacheMB',
   'documentDefaultThumbnail',
   'documentUseParentThumbnail',
   'editorFontFamily',

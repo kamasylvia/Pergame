@@ -22,6 +22,27 @@
       </div>
       <span v-if="quota.max !== null" class="storage-percentage">{{ storagePercentage.toFixed(1) }}%</span>
     </div>
+    <!-- Browser-local attachment cache: file bytes served from this device
+         instead of refetching remote S3 on every view. -->
+    <div class="orphan-panel">
+      <div class="orphan-head">
+        <div class="orphan-info">
+          <span class="orphan-label">{{ t('cdn.cache.title') }}</span>
+          <span class="orphan-desc">
+            {{ t('cdn.cache.usage', { used: readableFileSize(attachCache.bytes), count: attachCache.entries }) }}
+          </span>
+        </div>
+        <div class="orphan-actions">
+          <label class="cache-limit">
+            {{ t('cdn.cache.limitMb') }}
+            <input v-model.number="cacheLimitMb" type="number" min="0" step="64" @change="saveCacheLimit" />
+          </label>
+          <AppButton type="secondary" small :disabled="attachCache.clearing" @click="clearAttachCache">
+            {{ t('cdn.cache.clear') }}
+          </AppButton>
+        </div>
+      </div>
+    </div>
     <!-- Orphan objects: stored bytes no node references (SiYuan's "unused
          assets"). Nothing is deleted until the user asks. -->
     <div class="orphan-panel">
@@ -157,6 +178,7 @@ const props = defineProps<{
 const nodesStore = useNodesStore();
 const userStore = useUserStore();
 const resourcesStore = useResourcesStore();
+const preferences = usePreferencesStore();
 
 const router = useRouter();
 const { t } = useI18nT();
@@ -187,6 +209,45 @@ const fetchQuota = async () => {
     quota.used = response.result.used_bytes;
     quota.max = response.result.max_total_size;
   }
+};
+
+const attachCache = reactive({ entries: 0, bytes: 0, clearing: false });
+const cacheLimitMb = ref(512);
+
+const swActive = () => ('serviceWorker' in navigator ? navigator.serviceWorker.controller : null);
+
+const fetchAttachStats = () => {
+  const sw = swActive();
+  if (!sw) return;
+  const channel = new MessageChannel();
+  channel.port1.onmessage = (event: MessageEvent) => {
+    const payload = (event.data as { payload?: { entries: number, bytes: number } }).payload;
+    if (payload) {
+      attachCache.entries = payload.entries;
+      attachCache.bytes = payload.bytes;
+    }
+  };
+  sw.postMessage({ type: 'ATTACHMENT_CACHE_STATS' }, [channel.port2]);
+};
+
+const saveCacheLimit = () => {
+  const mb = Math.max(0, Math.floor(cacheLimitMb.value || 0));
+  cacheLimitMb.value = mb;
+  preferences.set('attachmentCacheMB', mb);
+  swActive()?.postMessage({ type: 'SET_ATTACHMENT_CACHE_MB', payload: { cacheMB: mb } });
+};
+
+const clearAttachCache = () => {
+  const sw = swActive();
+  if (!sw) return;
+  attachCache.clearing = true;
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    attachCache.clearing = false;
+    attachCache.entries = 0;
+    attachCache.bytes = 0;
+  };
+  sw.postMessage({ type: 'ATTACHMENT_CACHE_CLEAR' }, [channel.port2]);
 };
 
 const migrating = ref(false);
@@ -374,6 +435,9 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   fetchQuota();
+  cacheLimitMb.value = preferences.get('attachmentCacheMB').value ?? 512;
+  fetchAttachStats();
+  swActive()?.postMessage({ type: 'SET_ATTACHMENT_CACHE_MB', payload: { cacheMB: cacheLimitMb.value } });
   document.addEventListener('keydown', handleKeydown);
 });
 

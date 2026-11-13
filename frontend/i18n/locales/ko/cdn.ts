@@ -18,6 +18,12 @@ export default {
     promptPlural: '파일을 여기로 드래그 앤 드롭하거나 {link}해서 선택하세요',
     removeFile: '파일 제거',
   },
+  cache: {
+    clear: '비우기',
+    limitMb: '제한(MB)',
+    title: '로컬 캐시',
+    usage: '이 기기에 {count}개 항목, {used}',
+  },
   dedupe: {
     done: '{migrated}개 마이그레이션, {saved} 절약',
     failed: '마이그레이션 실패',
@@ -26,6 +32,7 @@ export default {
     running: '마이그레이션 중…',
     title: '중복 제거',
   },
+
   diagram: '다이어그램 편집기',
 
   edit: {
@@ -66,7 +73,6 @@ export default {
   page: {
     empty: '아직 업로드된 파일이 없습니다.',
   },
-
   preview: {
     title: '미리보기',
     unavailable: '이 파일 형식은 미리보기를 지원하지 않습니다',
