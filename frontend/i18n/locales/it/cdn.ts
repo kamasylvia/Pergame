@@ -64,6 +64,7 @@ export default {
     found: '{count} inutilizzati · {size}',
     hint: 'Cerca oggetti memorizzati che nessun documento referenzia (residui di import falliti o caricamenti interrotti).',
     none: 'Niente di inutilizzato — lo spazio corrisponde ai documenti.',
+    preview: 'Anteprima',
     scan: 'Controlla',
     scanFailed: 'Controllo non riuscito',
     scanning: 'Controllo…',

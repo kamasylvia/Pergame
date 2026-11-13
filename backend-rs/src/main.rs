@@ -414,6 +414,10 @@ async fn main() {
             post(routes::resources::purge_orphans),
         )
         .route(
+            "/api/resources/orphans/preview",
+            get(routes::resources::preview_orphan),
+        )
+        .route(
             "/api/users/{id}/avatar",
             get(routes::resources::download_avatar),
         )

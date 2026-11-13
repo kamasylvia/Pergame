@@ -145,3 +145,68 @@ pub async fn purge_orphans(
     tracing::info!(%deleted, %bytes, "orphan resources purged");
     Ok(ApiOk::ok(json!({ "deleted": deleted, "bytes": bytes })))
 }
+
+#[derive(Debug, serde::Deserialize)]
+/// GET preview query (orphan key from the scan list).
+pub struct PreviewOrphanQuery {
+    #[serde(default)]
+    pub key: String,
+}
+
+/// GET /resources/orphans/preview?key= — stream one orphan's bytes inline
+/// for pre-delete inspection. The key must still be in the current scan
+/// (same rescan guard as purge); MIME is guessed from the extension.
+pub async fn preview_orphan(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Query(q): axum::extract::Query<PreviewOrphanQuery>,
+    headers: axum::http::HeaderMap,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::http::{StatusCode, header};
+    use axum::response::IntoResponse;
+    let storage = state
+        .storage
+        .clone()
+        .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
+    let (objects, _) = scan_orphans(&state, auth.user_id()).await?;
+    let found = objects
+        .iter()
+        .any(|o| o["key"].as_str() == Some(q.key.as_str()));
+    if !found || q.key.is_empty() {
+        return Err(ApiError::NotFound("not an orphan".into()));
+    }
+    let blob_prefix = format!("{}/", crate::blobs::BLOBS_PREFIX);
+    let bytes = match q.key.strip_prefix(&blob_prefix) {
+        Some(sha) => storage.get_blob(sha).await?,
+        None => storage.get_user_object(auth.user_id(), &q.key).await?,
+    };
+    let mime = match q.key.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()) {
+        Some(e)
+            if ["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]
+                .contains(&e.as_str()) =>
+        {
+            format!("image/{}", if e == "jpg" { "jpeg" } else { e.as_str() })
+        }
+        Some(e) if ["mp4", "webm", "ogv", "mov", "mkv"].contains(&e.as_str()) => {
+            format!("video/{e}")
+        }
+        Some(e) if ["mp3", "wav", "ogg", "flac", "m4a"].contains(&e.as_str()) => {
+            format!("audio/{e}")
+        }
+        Some(e) if e == "pdf" => "application/pdf".into(),
+        Some(e) if ["txt", "md", "json", "csv", "html", "css", "js"].contains(&e.as_str()) => {
+            format!("text/{}", if e == "txt" { "plain" } else { e.as_str() })
+        }
+        _ => "application/octet-stream".into(),
+    };
+    let _ = headers;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, mime),
+            (header::ACCEPT_RANGES, "bytes".into()),
+        ],
+        bytes,
+    )
+        .into_response())
+}

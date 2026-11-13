@@ -64,6 +64,7 @@ export default {
     found: '{count} unused · {size}',
     hint: 'Check for stored objects no document points at (leftovers from failed imports or interrupted uploads).',
     none: 'Nothing unused — storage matches your documents.',
+    preview: 'Preview',
     scan: 'Check',
     scanFailed: 'Scan failed',
     scanning: 'Checking…',

@@ -64,6 +64,7 @@ export default {
     found: '{count} 個未使用 · {size}',
     hint: '檢查沒有文件引用的儲存物件(失敗匯入或中斷上傳的殘留)。',
     none: '沒有殘留——儲存與文件一致。',
+    preview: '預覽',
     scan: '檢查',
     scanFailed: '檢查失敗',
     scanning: '檢查中…',

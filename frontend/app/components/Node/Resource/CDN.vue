@@ -69,7 +69,7 @@
       </div>
       <ul v-if="orphans.count" class="orphan-list">
         <li v-for="item in orphans.items" :key="item.key">
-          <span class="orphan-name">{{ item.key }}</span>
+          <span class="orphan-name orphan-preview" :title="t('cdn.orphans.preview')" @click="previewOrphan(item.key)">{{ item.key }}</span>
           <span class="orphan-size">{{ readableFileSize(item.size) }}</span>
           <span class="orphan-remove" @click="purgeOrphans([item.key])">
             <Icon name="delete" />
@@ -299,13 +299,27 @@ const purgeOrphans = async (keys: string[] | null = null) => {
         title: t('cdn.orphans.deleted'),
         message: t('cdn.orphans.deletedDetail', { count: response.result.deleted, size: readableFileSize(response.result.bytes) }),
       });
-      await scanOrphans();
+      // Drop any cached previews of the purged keys (same SW bucket).
+      if ('caches' in window) {
+        const cache = await caches.open('pergame-attachments').catch(() => null);
+        if (cache) {
+          const reqs = await cache.keys().catch(() => [] as Request[]);
+          for (const req of reqs) {
+            if (req.url.includes('/api/resources/orphans/preview')) await cache.delete(req);
+          }
+        }
+      }
     } else {
       notifications.add({ type: 'error', title: t('cdn.orphans.deleteFailed'), message: response.message });
     }
   } finally {
     orphans.purging = false;
   }
+};
+
+/** Open one orphan in a new tab (server streams the bytes inline). */
+const previewOrphan = (key: string) => {
+  window.open(`/api/resources/orphans/preview?key=${encodeURIComponent(key)}`, '_blank', 'noopener');
 };
 const parentNodes = tree.getTreeUpToRole(3);
 
@@ -509,6 +523,11 @@ onUnmounted(() => {
       text-overflow: ellipsis;
       white-space: nowrap;
       overflow: hidden;
+    }
+
+    .orphan-preview {
+      color: var(--accent);
+      cursor: pointer;
     }
 
     .orphan-size {
