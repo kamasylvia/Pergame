@@ -21,4 +21,8 @@ pub struct AppState {
     /// Workspace backup/restore locks (spec §14): a read-only window exists
     /// while any backup or restore is in flight.
     pub locks: std::sync::Arc<crate::locks::WorkspaceLocks>,
+    /// Local disk copy of immutable attachment blobs (None = disabled).
+    pub disk_cache: Option<std::sync::Arc<crate::disk_cache::DiskCache>>,
+    /// One in-flight S3 fetch per blob, so concurrent viewers coalesce.
+    pub download_flights: std::sync::Arc<crate::disk_cache::SingleFlight>,
 }

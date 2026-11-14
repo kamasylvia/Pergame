@@ -93,6 +93,11 @@ services:
       # Optional end-to-end encryption passphrase for snapshot blobs.
       PERGAME_SNAPSHOT_PASSPHRASE: "${PERGAME_SNAPSHOT_PASSPHRASE:-}"
 
+      # Local disk cache for attachment bytes (second view = file read).
+      # Unset/empty disables it; MB is the budget (0 = disabled).
+      ATTACHMENT_CACHE_DIR: "${ATTACHMENT_CACHE_DIR:-/var/cache/pergame}"
+      ATTACHMENT_CACHE_MB: "${ATTACHMENT_CACHE_MB:-2048}"
+
       # Trash retention (days; 0 = keep deleted nodes forever).
       TRASH_RETENTION_DAYS: "${TRASH_RETENTION_DAYS:-30}"
       # How often the retention sweeper runs (hours).
@@ -104,6 +109,9 @@ services:
       SMTP_MAIL: ${SMTP_MAIL:-}
       SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+
+    volumes:
+      - pergame_cache:/var/cache/pergame
 
     # No published port by default: browsers reach the API through the
     # frontend's same-origin proxy (NUXT_PUBLIC_API_PROXY_TARGET). Set
@@ -153,6 +161,7 @@ networks:
     name: pergame
 
 volumes:
+  pergame_cache:
   postgres_data:
   rustfs_data:
   rustfs_logs:

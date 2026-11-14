@@ -38,6 +38,7 @@ docker compose -f docker-compose.dev.yml up   # 前后端 dev 容器(带挂载)
 | 2026-11-07 | **对象存储环境变量 `MINIO_*` → `S3_*`**(存储中立命名);Go 读点与 compose/docs/workflow 同批改名 |
 | 2026-11-07 | **compose 的 backend 服务本地构建**(`build: ./backend`):上游预构建镜像 `ghcr.io/smaug6739/alexandrie-backend` 不认 `S3_*`、且后续不支持 pg |
 | 2026-11-07 | `.work/` 目录进 git(TODO/LESSONS/调研产物,公开仓,无敏感内容) |
+| 2026-11-14 | **附件读加速 = 服务端盘缓存 + HTTP 缓存语义**(不做客户端):内容寻址 blob 落后端本地盘(`ATTACHMENT_CACHE_DIR`,LRU 限额),命中直接流式(含 Range);响应带 `Cache-Control: private, max-age=31536000, immutable` + `ETag "sha256-<sha>"` + `If-None-Match` → 304。放弃图片直连 S3(presigned),与「私有桶、读走后端鉴权」冲突 |
 | 2026-11-12 | **附件读走后端代理,不再公开桶**(QuObjects 不支持 PutBucketPolicy/ACL,桶恒 Private):`GET /api/resources/:id/file`(owner/perm/公开门三层鉴权,Range 透传)+ `GET /api/users/:id/avatar`(公开)+ `/pergame/:uid/:file` 旧 embeds 兼容;前端直链 + `crossorigin="use-credentials"`,PDFViewer `withCredentials`;compose CDN 代理改指 backend。附带修 `public_descendants` 的 `ORDER BY "order"` 别名 bug |
 
 ## 环境变量命名约定

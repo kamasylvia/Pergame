@@ -218,3 +218,11 @@
 - **弹窗里别在打开前做重查询**:先列全库节点再弹窗 → 大库上要几十秒,用户以为没反应。做法 = 先弹窗,选项查询与 1.5s 超时赛跑,超时就用默认项。
 - **插件里的 ctx 与宿主 ctx 形状不同**:解析器层用 `ctx.proxy/upload/setting`,宿主是 `ctx.net.proxy/ctx.resources.upload/ctx.settings`;入口处集中适配一次,别让解析器知道宿主 API。
 - **打包脚本要区分「源插件」与「构建物插件」**:`plugins/official/*` 里有 `src/` 的先 `bun build`,否则会打包过期的 main.mjs。
+
+## 2026-11-14 附件缓存批次
+
+- **附件慢的真因不是网络带宽**:NAS 单请求 16-37ms,单文件 8MB 冷取 0.42s;慢在「每张图、每次查看都走完整链路且零复用」。修法不是换传输,是加服务端盘缓存 + HTTP 缓存语义。思源那层「本地缓存」在内核侧(`data/assets` + `http.ServeFile`),与客户端无关;Pergame 不需要客户端,后端盘缓存 + SW 缓存等价。
+- **二进制 crate 不共享 lib 模块路径**:`src/main.rs` 里 `disk_cache::…` 报 E0433,因为 bin 是独立 crate,必须从 `use pergame_rs::{…, disk_cache, …}` 引入(与 `backup`/`locks` 同)。
+- **tokio 的 FileTimes 不是 std 的**:`tokio::fs::File::set_times` 要 `tokio::fs::FileTimes`;且不能塞进 `Result::and_then(async move {…})` 链(闭包返回 Future ≠ Result),改 `if let Ok(file) = … { let _ = file.set_times(t).await; }`。
+- **别用 python heredoc 批量写含 `"` 的 Rust 源码**:转义被吃掉一次(`format!("\"sha256-{sha}\")` → 语法错),编译才发现。改代码用 edit 工具或 `write` 整文件,批量 sed 只用于纯 ASCII 模式。
+- **`cargo check --lib` 不覆盖 bin**:只 check lib 会漏掉 `main.rs` 的引用错误;改到 state/模块导出时同时 `cargo check --bin pergame-rs`。

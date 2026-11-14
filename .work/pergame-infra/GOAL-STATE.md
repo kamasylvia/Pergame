@@ -99,6 +99,8 @@
 
 ### 最近完成的批次(供考古)
 
+- **附件读延迟对位(2026-11-14,除发版外全做)**:`backend-rs/src/disk_cache.rs`(env `ATTACHMENT_CACHE_DIR`/`ATTACHMENT_CACHE_MB`,默认关/2048,`blobs/{sha}` 落盘 + LRU + 单飞)+ `download.rs` 盘命中直接流式(含 Range)+ `Cache-Control: private, max-age=31536000, immutable` + `ETag "sha256-<sha>"` + `If-None-Match` 304(legacy 对象 `max-age=300`);compose 两版 `pergame_cache` 卷;docs「Attachment cache」节。实测 300 KB 附件冷 0.316s → 热 0.013s,304/206 均验;单测 3/3 + 全套 143/143。**待办 = v0.0.12 发版**(用户暂缓)。
+
 - **插件系统 PS-D/PS-B 收尾/PS-C/PS-E(2026-11-14)**:`0011_plugins.sql`(plugins/grants/kv)+ 管理员 zip 安装(服务端 manifest 全校验、路径/大小/条目上限、S3 `plugins/<id>/<version>/`)+ 同源 entry/asset 服务 + 每用户能力同意 + 持久化 KV + 审计;`net.proxy` 后端代取(白名单 + 8 MiB + SSRF 守卫)替代剪藏对 camoufox 的依赖(DESIGN §11)。前端:设置页 Plugins、`ctx.markdown`(代码块/容器/post-processor)+ `ctx.editor`(CM6 扩展),注册表 globalThis 单例(修 bundler 双实例真 bug)。官方插件三件(recent-files/daily-note/web-clipper)+ 打包脚本 → `public/plugin-packs/`。验证:后端 140 单测(含 manifest/net/SSRF/zip 规则)+ 集成用例 `plugin_registry_lifecycle` 活环境通过 + API 全链活测(装/列/entry/grant/kv/proxy/SSRF/卸)+ 真浏览器(注册表加载、命令面板执行、设置页列表、markdown 三件套渲染)。测试数据已清(插件卸载、临时 admin 删除、检查文档 purge)。
 
 - **真浏览器验证 + 3 个真 bug(2026-11-13)**:本机装 Playwright Chromium(约 100MB,免 1.3GB camoufox)。①`AppPreferenceInputSection.vue` 缺 `</div>`(#4 批次引入,typecheck/eslint 都不编译模板 → 设置页 500):修 + 新增 `lint:sfc` 闸门(`@vue/compiler-sfc` 解析 219 组件)。②插件宿主在认证前启动 → 401 触发登出流程:改为等 `userStore.user`。③`localForage.setItem('isLoggedIn')` 未 await 输给路由中间件 → 登录后被弹回 login:改 await。UI 全链验证见 #4 条目。

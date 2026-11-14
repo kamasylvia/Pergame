@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use axum::Router;
 use axum::routing::{delete, get, patch, post, put};
 use pergame_rs::{
-    AppState, auth, backup, config, db, db_toasty, locks, logger, mcp, oidc, routes, storage,
-    target,
+    AppState, auth, backup, config, db, db_toasty, disk_cache, locks, logger, mcp, oidc, routes,
+    storage, target,
 };
 
 #[tokio::main]
@@ -67,7 +67,15 @@ async fn main() {
         oidc: oidc_manager,
         backups: std::sync::Arc::new(backup::BackupStore::default()),
         locks: locks::WorkspaceLocks::new(),
+        disk_cache: disk_cache::DiskCache::from_env().map(std::sync::Arc::new),
+        download_flights: std::sync::Arc::new(disk_cache::SingleFlight::default()),
     };
+    match &state.disk_cache {
+        Some(cache) => {
+            tracing::info!(root = %cache.root().display(), "attachment disk cache enabled")
+        }
+        None => tracing::info!("attachment disk cache disabled (ATTACHMENT_CACHE_DIR unset)"),
+    }
 
     // Middleware needs the lock registry; install it once at startup.
     locks::install(state.locks.clone());

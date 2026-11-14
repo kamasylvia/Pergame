@@ -54,6 +54,11 @@ services:
       S3_ACCESSKEY: "CHANGE-ME-s3-access-key"
       S3_SECRETKEY: "CHANGE-ME-s3-secret-key"
 
+      # 附件本地磁盘缓存:第二次查看 = 读盘,不再回源对象存储。
+      # 留空关闭;MB 是预算(0 也等于关闭)。
+      ATTACHMENT_CACHE_DIR: "/var/cache/pergame"
+      ATTACHMENT_CACHE_MB: "2048"
+
       # 时区:影响 target cron 调度与日志墙钟(镜像含 tzdata)。
       # 不设 = UTC;要按本地墙钟跑 `0 2 * * *` 这类调度就解开注释
       # TZ: "Asia/Shanghai"
@@ -65,6 +70,8 @@ services:
     # temporarily re-add: ports: ["8201:8201"]
     # S3 是宿主机原生服务:把 host.docker.internal 指到宿主机网关
     # (Linux 必需,不加此映射 host.docker.internal 无法解析)
+    volumes:
+      - pergame_cache:/var/cache/pergame
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -97,3 +104,6 @@ networks:
   # 已有的外部网络,pg 容器在其中;compose 不创建也不删除它
   postgres:
     external: true
+
+volumes:
+  pergame_cache:

@@ -134,6 +134,8 @@ async fn serve_buffered(
     obj: &ObjectRef,
     range: Option<&str>,
     download: bool,
+    cache_sha: Option<&str>,
+    state: &AppState,
 ) -> Result<Response, ApiError> {
     let object_key = match &obj.sha {
         Some(sha) => format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha),
@@ -159,14 +161,22 @@ async fn serve_buffered(
                 match resp.body.collect().await {
                     Ok(data) => {
                         let bytes = data.into_bytes();
+                        // Full bodies fill the disk cache; a partial range
+                        // must never be stored as the whole blob.
+                        if range.is_none()
+                            && let (Some(sha), Some(cache)) = (cache_sha, state.disk_cache.as_ref())
+                        {
+                            let _ = cache.put(sha, &bytes).await;
+                        }
                         let mut builder = Response::builder().status(status);
                         builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
                         builder = builder.header(header::ACCEPT_RANGES, "bytes");
+                        builder = builder.header(header::CACHE_CONTROL, cache_control_for(obj));
                         builder = builder.header(header::CONTENT_LENGTH, bytes.len().to_string());
                         if let Some(cr) = resp.content_range {
                             builder = builder.header(header::CONTENT_RANGE, cr);
                         }
-                        if let Some(tag) = resp.e_tag {
+                        if let Some(tag) = etag_for(obj).or(resp.e_tag) {
                             builder = builder.header(header::ETAG, tag);
                         }
                         if download {
@@ -199,9 +209,134 @@ async fn serve_buffered(
     )))
 }
 
-/// Builds the file response: streams S3 bytes (Range passthrough for
-/// audio/video seeks), sets content-type/length, and forces a download
-/// filename only when `?download=true`.
+/// Cache header for an attachment: content-addressed blobs never change, so
+/// the browser may keep them forever; legacy keys are mutable-ish.
+fn cache_control_for(obj: &ObjectRef) -> &'static str {
+    if obj.sha.is_some() {
+        "private, max-age=31536000, immutable"
+    } else {
+        "private, max-age=300"
+    }
+}
+
+/// ETag for a blob: the sha is the content identity.
+fn etag_for(obj: &ObjectRef) -> Option<String> {
+    obj.sha.as_ref().map(|sha| format!("\"sha256-{sha}\""))
+}
+
+/// True when the client's `If-None-Match` already names this ETag.
+fn if_none_match_hit(headers: &HeaderMap, etag: &str) -> bool {
+    headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .any(|candidate| candidate == etag || candidate == "*")
+        })
+}
+
+/// `bytes=a-b` / `a-` / `-n` resolved against the file length.
+fn parse_range_bounds(range: &str, total: u64) -> Option<(u64, u64)> {
+    let spec = range.strip_prefix("bytes=")?;
+    let (a, b) = spec.split_once('-')?;
+    if a.is_empty() {
+        let suffix: u64 = b.parse().ok()?;
+        if suffix == 0 {
+            return None;
+        }
+        let start = total.saturating_sub(suffix);
+        return Some((start, total));
+    }
+    let start: u64 = a.parse().ok()?;
+    if start >= total {
+        return None;
+    }
+    let end = if b.is_empty() {
+        total
+    } else {
+        b.parse::<u64>().ok()?.min(total.saturating_sub(1)) + 1
+    };
+    Some((start, end.max(start + 1)))
+}
+
+/// Serve one blob from the local disk cache (Range supported via seek).
+async fn serve_disk_file(
+    path: &std::path::Path,
+    obj: &ObjectRef,
+    headers: &HeaderMap,
+    download: bool,
+) -> Result<Response, ApiError> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+    let mut file = tokio::fs::File::open(path).await.map_err(|e| {
+        ApiError::Internal(Box::new(std::io::Error::other(format!(
+            "cache read failed: {e}"
+        ))))
+    })?;
+    let total = file
+        .metadata()
+        .await
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?
+        .len();
+    let range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| v.starts_with("bytes="));
+
+    let mut builder = Response::builder();
+    builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
+    builder = builder.header(header::ACCEPT_RANGES, "bytes");
+    builder = builder.header(header::CACHE_CONTROL, cache_control_for(obj));
+    if let Some(etag) = etag_for(obj) {
+        builder = builder.header(header::ETAG, etag);
+    }
+    if download {
+        builder = builder.header(
+            header::CONTENT_DISPOSITION,
+            format!(
+                "attachment; filename=\"{}\"",
+                obj.filename.replace('"', "_")
+            ),
+        );
+    }
+
+    match range.and_then(|r| parse_range_bounds(r, total)) {
+        Some((start, end)) => {
+            file.seek(std::io::SeekFrom::Start(start))
+                .await
+                .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
+            let limited = file.take(end - start);
+            let reader = tokio_util::io::ReaderStream::new(limited);
+            builder = builder.status(StatusCode::PARTIAL_CONTENT);
+            builder = builder.header(header::CONTENT_LENGTH, (end - start).to_string());
+            builder = builder.header(
+                header::CONTENT_RANGE,
+                format!("bytes {}-{}/{}", start, end - 1, total),
+            );
+            builder
+                .body(Body::from_stream(reader))
+                .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+        }
+        None => {
+            let reader = tokio_util::io::ReaderStream::new(file);
+            builder = builder.header(header::CONTENT_LENGTH, total.to_string());
+            builder
+                .body(Body::from_stream(reader))
+                .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+        }
+    }
+}
+
+/// Builds the file response: disk cache first (immutable blobs), then S3.
+///
+/// Small responses are buffered, not streamed, because the S3 byte stream
+/// intermittently aborts mid-body on the first request of a cold connection
+/// ("streaming error", QuObjects over Tailscale), truncating the response.
+/// Ranges ≤8MB and full bodies ≤32MB are cheap to buffer and immune (with
+/// retries); larger bodies keep streaming. A buffered body is written to the
+/// disk cache, so the next viewer never touches S3.
 async fn serve_object(
     state: &AppState,
     user_id: Uuid,
@@ -209,15 +344,48 @@ async fn serve_object(
     headers: &HeaderMap,
     download: bool,
 ) -> Result<Response, ApiError> {
+    // Content-addressed blobs are immutable: an ETag match is a free 304.
+    if let Some(etag) = etag_for(obj)
+        && if_none_match_hit(headers, &etag)
+    {
+        let mut builder = Response::builder().status(StatusCode::NOT_MODIFIED);
+        builder = builder.header(header::ETAG, etag);
+        builder = builder.header(header::CACHE_CONTROL, cache_control_for(obj));
+        return builder
+            .body(Body::empty())
+            .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))));
+    }
+
+    if let (Some(sha), Some(cache)) = (obj.sha.as_deref(), state.disk_cache.as_ref()) {
+        let flight = state.download_flights.lock(sha).await;
+        let cached = cache.get(sha).await;
+        if let Some(path) = cached {
+            drop(flight);
+            state.download_flights.release(sha).await;
+            return serve_disk_file(&path, obj, headers, download).await;
+        }
+        let result = serve_blob_via_s3(state, user_id, obj, headers, download, Some(sha)).await;
+        drop(flight);
+        state.download_flights.release(sha).await;
+        return result;
+    }
+
+    serve_blob_via_s3(state, user_id, obj, headers, download, None).await
+}
+
+/// Fetch from S3 (buffered when small), optionally filling the disk cache.
+async fn serve_blob_via_s3(
+    state: &AppState,
+    user_id: Uuid,
+    obj: &ObjectRef,
+    headers: &HeaderMap,
+    download: bool,
+    cache_sha: Option<&str>,
+) -> Result<Response, ApiError> {
     let storage = state
         .storage
         .clone()
         .ok_or(ApiError::BadRequest("minio client not initialized".into()))?;
-    // Small responses are buffered, not streamed: the S3 byte stream
-    // intermittently aborts mid-body on the first request of a cold
-    // connection ("streaming error", QuObjects over Tailscale), truncating
-    // the response. Ranges ≤8MB and full bodies ≤32MB are cheap to buffer
-    // and immune (with retries); larger bodies keep streaming.
     const BUFFERED_RANGE_CAP: u64 = 8 * 1024 * 1024;
     const BUFFERED_FULL_CAP: i64 = 32 * 1024 * 1024;
     let range = headers
@@ -227,7 +395,7 @@ async fn serve_object(
     if let Some(range_len) = range.and_then(parse_range_len)
         && range_len <= BUFFERED_RANGE_CAP
     {
-        return serve_buffered(&storage, user_id, obj, range, download).await;
+        return serve_buffered(&storage, user_id, obj, range, download, cache_sha, state).await;
     }
     if range.is_none() {
         let object_key = match &obj.sha {
@@ -237,7 +405,7 @@ async fn serve_object(
         if let Some(len) = storage.object_len(&object_key).await
             && len <= BUFFERED_FULL_CAP
         {
-            return serve_buffered(&storage, user_id, obj, None, download).await;
+            return serve_buffered(&storage, user_id, obj, None, download, cache_sha, state).await;
         }
     }
     let (stream, len, content_range, etag) = match &obj.sha {
@@ -261,13 +429,14 @@ async fn serve_object(
     }
     builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
     builder = builder.header(header::ACCEPT_RANGES, "bytes");
+    builder = builder.header(header::CACHE_CONTROL, cache_control_for(obj));
     if let Some(n) = len {
         builder = builder.header(header::CONTENT_LENGTH, n.to_string());
     }
     if let Some(cr) = content_range {
         builder = builder.header(header::CONTENT_RANGE, cr);
     }
-    if let Some(tag) = etag {
+    if let Some(tag) = etag_for(obj).or(etag) {
         builder = builder.header(header::ETAG, tag);
     }
     if download {

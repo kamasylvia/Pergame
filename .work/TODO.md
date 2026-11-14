@@ -85,6 +85,8 @@
 
 ## 备份子系统(2026-11-10 三批全落地)
 
+- [x] **附件读延迟对位(2026-11-14,除发版外全做)**:①后端磁盘缓存 `src/disk_cache.rs`(`ATTACHMENT_CACHE_DIR` 默认关、`ATTACHMENT_CACHE_MB` 默认 2048,`blobs/{sha}` 一一对应落盘,LRU 按 atime 淘汰,单飞合并并发回源;只缓存内容寻址的不可变 blob,Range 部分响应不回填);②HTTP 缓存语义:`Cache-Control: private, max-age=31536000, immutable` + `ETag: "sha256-<sha>"` + `If-None-Match` → 304,legacy 非 sha 对象退 `max-age=300`;③compose 两版挂 `pergame_cache:/var/cache/pergame` + docs 新增「Attachment cache」节。实测(本机活后端,300 KB 附件):冷取 TTFB 0.316s → 热取 0.013s(24×),字节一致;`If-None-Match` → 304;`Range: bytes=100-199` 从盘上 206 + 字节一致;单测 3/3(存读/超额不缓存/LRU),全套 143/143。
+- [ ] **v0.0.12 发版 + stack 42 更新**(用户明确暂缓):线上 `GET /api/resources/:id/file` 仍 404,本轮缓存改动也需随此版上线才生效。
 - [ ] **实机验证**:有 docker 的机器上跑 `docker compose up` → Instance DR 配 conf → 立即备份 / `-l` / `-R`;前端异地方向(settings → Offsite snapshot targets)建 target 跑一次真实异地复制。
 
 ## 换机续接(2026-11-09)
