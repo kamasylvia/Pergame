@@ -184,12 +184,12 @@ export interface PluginContext {
 
 ### PS-E 官方插件(2026-11-14 ✅ 首批)
 
-- `plugins/official/`:recent-files(命令+ribbon)、daily-note(按天建/开 + 设置存父目录)、**read-it-later**(ReadItLater 功能对位,见下)。
+- `plugins/official/`:recent-files(命令+ribbon)、daily-note(按天建/开 + 设置存父目录)、**web-clipper**(ReadItLater 功能对位,见下;命名按功能,2026-11-14 裁决)。
 - `scripts/build-plugin-packs.sh` 产出 `frontend/public/plugin-packs/*.zip`;有 `src/` 的插件先 `bun build src/main.ts --target browser --format esm` 再打包(主产物是构建物)。
 
 ### ReadItLater 对位(2026-11-14,用户裁决)
 
-原 `web-clipper` 直接演进为 `read-it-later`,不再单列 ReadItLater 移植批次:
+插件定名 `web-clipper`(按功能命名,不沿用竞品名),功能面即 ReadItLater 对位,不再单列移植批次:
 
 - **宿主新增**:`ctx.ui.modal(spec)`(声明式表单:text/textarea/select/checkbox,宿主渲染,取消返回 null)、`ctx.net.proxyBinary(url)`(后端取字节 → base64,SSRF/大小同 proxy)、proxy 的 header 白名单(cookie/user-agent/accept/accept-language/referer)、默认 UA、`HTTPS_PROXY` 出站(受限网络里仍能剪藏)。
 - **插件能力**:剪贴板单条/批量/对话框(URL/标题/标签/目录);文章 = Readability + Turndown,相对链接绝对化,图片经 `proxyBinary` → `resources.upload` 落附件;知乎(用户 cookie,挑战页明确报错并提示粘贴);YouTube/Bilibili/Vimeo/TikTok(oEmbed + 嵌入);Stack Exchange(问题+最佳回答)、Bluesky、Mastodon、GitHub(issue/repo)、Wikipedia(REST summary)、纯文本兜底;每类型模板(`{{var|filter}}`、`{% for %}`)。

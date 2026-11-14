@@ -208,7 +208,7 @@
 - **QNAP 测试账号是普通用户(role 1)**:要验管理员安装路径得临时建号 + DB 提权,验完删号;别把用户本人账号提权。
 - **插件安装后的「授权」是每用户的**:管理员装完,普通用户列表里 `granted: []`,loader 直接跳过——这不是 bug,是设计;验证时要显式 PUT grants。
 
-## 2026-11-14 Read it later(clipper)批次
+## 2026-11-14 web-clipper(ReadItLater 对位)批次
 
 - **`shallowReactive` 包一层再改原对象 = Vue 看不见**:模态队列把裸对象存进 globalThis、导出 `shallowReactive(state)`,插件改裸对象 → 状态确实变了,组件永远不更新(表现为「命令执行了,弹窗不出现」,且 `run()` 永不 resolve)。修法 = **把 reactive 对象本身存进 globalThis**。同类注册表(ui/markdown/editor)本来就改 reactive 代理,所以没暴露。
 - **`SELECT 1` 是 INT4**:`query_scalar::<_, i64>` 运行期报 `mismatched types i64 vs INT4`(编译期不报)。存在性探测一律 `i32`。

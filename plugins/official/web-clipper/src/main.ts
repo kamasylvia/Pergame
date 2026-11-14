@@ -1,5 +1,5 @@
 /**
- * Read it later — clip pages, posts and videos into Pergame notes.
+ * Web clipper — clip pages, posts and videos into Pergame notes.
  *
  * Replaces the SiYuan ReadItLater plugin's job (this plugin started as
  * `web-clipper`): clipboard/batch clipping, per-type parsing, templates and
@@ -16,7 +16,7 @@ interface FolderOption {
   label: string;
 }
 
-export default class ReadItLater {
+export default class WebClipper {
   private host!: ClipHost;
   private ctxRef!: unknown;
 
@@ -85,12 +85,12 @@ export default class ReadItLater {
       }
     };
 
-    ctx.ui.command('clip', 'Read it later: clip a URL', async () => {
+    ctx.ui.command('clip', 'Web clipper: clip a URL', async () => {
       const clipboard = await navigator.clipboard.readText().catch(() => '');
       await askAndClip(clipboard.trim());
     });
 
-    ctx.ui.command('clip-clipboard', 'Read it later: clip from clipboard', async () => {
+    ctx.ui.command('clip-clipboard', 'Web clipper: clip from clipboard', async () => {
       const text = await navigator.clipboard.readText().catch(() => '');
       if (!text.trim()) {
         ctx.ui.notice('Clipboard is empty', { type: 'warning' });
@@ -103,12 +103,12 @@ export default class ReadItLater {
       }
     });
 
-    ctx.ui.command('clip-batch', 'Read it later: clip every URL in the clipboard', async () => {
+    ctx.ui.command('clip-batch', 'Web clipper: clip every URL in the clipboard', async () => {
       const text = await navigator.clipboard.readText().catch(() => '');
       await clipBatch(host, text);
     });
 
-    ctx.ui.ribbon('🗞️', 'Read it later', async () => {
+    ctx.ui.ribbon('🗞️', 'Web clipper', async () => {
       const text = await navigator.clipboard.readText().catch(() => '');
       if (text.trim()) await askAndClip(text.trim());
       else await askAndClip('');

@@ -3105,7 +3105,7 @@ async function clipBatch(host, text, overrides = {}) {
 }
 
 // src/main.ts
-class ReadItLater {
+class WebClipper {
   host;
   ctxRef;
   async onload(ctx) {
@@ -3160,11 +3160,11 @@ class ReadItLater {
         ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
       }
     };
-    ctx.ui.command("clip", "Read it later: clip a URL", async () => {
+    ctx.ui.command("clip", "Web clipper: clip a URL", async () => {
       const clipboard = await navigator.clipboard.readText().catch(() => "");
       await askAndClip(clipboard.trim());
     });
-    ctx.ui.command("clip-clipboard", "Read it later: clip from clipboard", async () => {
+    ctx.ui.command("clip-clipboard", "Web clipper: clip from clipboard", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       if (!text.trim()) {
         ctx.ui.notice("Clipboard is empty", { type: "warning" });
@@ -3176,11 +3176,11 @@ class ReadItLater {
         ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
       }
     });
-    ctx.ui.command("clip-batch", "Read it later: clip every URL in the clipboard", async () => {
+    ctx.ui.command("clip-batch", "Web clipper: clip every URL in the clipboard", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       await clipBatch(host, text);
     });
-    ctx.ui.ribbon("\uD83D\uDDDE️", "Read it later", async () => {
+    ctx.ui.ribbon("\uD83D\uDDDE️", "Web clipper", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       if (text.trim())
         await askAndClip(text.trim());
@@ -3194,5 +3194,5 @@ class ReadItLater {
   }
 }
 export {
-  ReadItLater as default
+  WebClipper as default
 };
