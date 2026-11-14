@@ -1,4 +1,5 @@
 import localForage from 'localforage';
+import { clearAttachmentCache } from '~/helpers/attachment-cache';
 import type { User, PublicUser, UserToCreate, Session, UserToCreateBulk } from './db_structures';
 import type { ImportJob } from '~/helpers/backups/Importer';
 
@@ -227,7 +228,12 @@ export const useUserStore = defineStore('user', {
       this.user = undefined;
       useNodesStore().clear();
       useUserStore().clear();
-      if (import.meta.client) localForage.removeItem('isLoggedIn');
+      if (import.meta.client) {
+        localForage.removeItem('isLoggedIn');
+        // Attachments are cached per URL, not per account: a second user on
+        // the same browser must not be served the previous session's bytes.
+        clearAttachmentCache();
+      }
     },
 
     clear() {
