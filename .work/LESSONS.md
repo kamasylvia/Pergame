@@ -226,3 +226,5 @@
 - **tokio 的 FileTimes 不是 std 的**:`tokio::fs::File::set_times` 要 `tokio::fs::FileTimes`;且不能塞进 `Result::and_then(async move {…})` 链(闭包返回 Future ≠ Result),改 `if let Ok(file) = … { let _ = file.set_times(t).await; }`。
 - **别用 python heredoc 批量写含 `"` 的 Rust 源码**:转义被吃掉一次(`format!("\"sha256-{sha}\")` → 语法错),编译才发现。改代码用 edit 工具或 `write` 整文件,批量 sed 只用于纯 ASCII 模式。
 - **`cargo check --lib` 不覆盖 bin**:只 check lib 会漏掉 `main.rs` 的引用错误;改到 state/模块导出时同时 `cargo check --bin pergame-rs`。
+- **`immutable`/长 `max-age` 只对「URL 随内容变」的资源安全**:Pergame 附件 URL 稳定(`/api/resources/:id/file`,重传后 id 不变),`max-age=31536000, immutable` 让浏览器 HTTP cache 在新鲜期内直接回旧字节、连条件请求都不发;前端 SW 失效只清 Cache Storage,救不了底下 `fetch()` 继续命中 HTTP cache,旧字节还会被重新写回 SW 缓存。判据:URL 含内容指纹(sha/版本参数)→ 可 `immutable`;URL 稳定 → `no-cache` + ETag,把省请求的职责交给 SW 缓存层(Cache API 不看 Cache-Control)。思源侧 `immutable` 安全正是因为资产 URL 即文件名,内容变名字变。
+- **拼文件路径前校验字符集,长度检查挡不住穿越**:`blobs/{sha}` 只查 `len()==64`,`../`×21+1 字符恰好 64 长即可构造 `root/blobs/../../…`;DB sourced 字段也不免检(插件/hook 生态在扩写入面)。`bytes().all(is_ascii_hexdigit)` 一行封死。

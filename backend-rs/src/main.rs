@@ -72,6 +72,9 @@ async fn main() {
     };
     match &state.disk_cache {
         Some(cache) => {
+            // No write can be in flight yet: sweep tmp files a crashed
+            // process left behind.
+            cache.cleanup_tmp().await;
             tracing::info!(root = %cache.root().display(), "attachment disk cache enabled")
         }
         None => tracing::info!("attachment disk cache disabled (ATTACHMENT_CACHE_DIR unset)"),

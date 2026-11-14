@@ -91,6 +91,23 @@ impl DiskCache {
         Ok(())
     }
 
+    /// Delete leftover tmp files from writes interrupted by a crash or a
+    /// failed `fs::write`. Only safe when no `put` can be in flight, so it is
+    /// called once at startup.
+    pub async fn cleanup_tmp(&self) {
+        let Ok(mut dir) = tokio::fs::read_dir(self.root.join("blobs")).await else {
+            return;
+        };
+        while let Ok(Some(entry)) = dir.next_entry().await {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with('.')
+                && name.to_string_lossy().ends_with(".tmp")
+            {
+                let _ = tokio::fs::remove_file(entry.path()).await;
+            }
+        }
+    }
+
     /// Delete least-recently-used entries until the total fits the budget.
     pub async fn enforce_limit(&self) -> std::io::Result<u64> {
         let mut entries: Vec<(PathBuf, u64, std::time::SystemTime)> = Vec::new();
@@ -225,6 +242,24 @@ mod tests {
             .await
             .expect("put");
         assert!(cache.get("big").await.is_none());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn cleanup_removes_only_tmp_files() {
+        let dir = std::env::temp_dir().join(format!("pergame-cache-{}", Uuid::now_v7()));
+        let cache = cache_in(&dir, 4);
+        cache.put("abc", b"hello").await.expect("put");
+        let blobs = cache.root.join("blobs");
+        tokio::fs::write(blobs.join(".abc.deadbeef.tmp"), b"partial")
+            .await
+            .unwrap();
+        cache.cleanup_tmp().await;
+        assert!(cache.get("abc").await.is_some(), "blob survives");
+        assert!(
+            !blobs.join(".abc.deadbeef.tmp").exists(),
+            "leftover tmp removed"
+        );
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 }

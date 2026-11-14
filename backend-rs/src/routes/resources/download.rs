@@ -67,7 +67,10 @@ fn object_ref(node: &NodeRow) -> Option<ObjectRef> {
     let sha = meta
         .get("content_sha256")
         .and_then(|v| v.as_str())
-        .filter(|s| s.len() == 64)
+        // Hex-only keeps the sha from smuggling path separators into the
+        // cache layout (`blobs/{sha}`) — metadata is DB-sourced, not free
+        // user input, but the grant surface grows with the plugin system.
+        .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
         .map(|s| s.to_string());
     Some(ObjectRef {
         key: key.to_string(),
@@ -209,11 +212,18 @@ async fn serve_buffered(
     )))
 }
 
-/// Cache header for an attachment: content-addressed blobs never change, so
-/// the browser may keep them forever; legacy keys are mutable-ish.
+/// Cache header for an attachment. Blobs are served at a stable URL
+/// (`/resources/:id/file` — the id survives a re-upload), so a long
+/// `max-age`/`immutable` would pin stale bytes in the browser HTTP cache for
+/// the whole freshness window: the SW-side invalidation on re-upload clears
+/// Cache Storage, but the plain `fetch` underneath still hits HTTP cache.
+/// `no-cache` keeps revalidation mandatory and cheap: the ETag short-circuits
+/// to 304 in ~13ms warm, and the service-worker cache (which does not
+/// revalidate) is the layer that saves the network round trip.
+/// Legacy keys are mutable and rare; short max-age is enough.
 fn cache_control_for(obj: &ObjectRef) -> &'static str {
     if obj.sha.is_some() {
-        "private, max-age=31536000, immutable"
+        "private, no-cache"
     } else {
         "private, max-age=300"
     }
@@ -283,7 +293,9 @@ async fn serve_disk_file(
     let range = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
-        .filter(|v| v.starts_with("bytes="));
+        // Multi-range specs would parse as garbage (and S3 would answer
+        // multipart/byteranges): serve the full body instead (allowed).
+        .filter(|v| v.starts_with("bytes=") && !v.contains(','));
 
     let mut builder = Response::builder();
     builder = builder.header(header::CONTENT_TYPE, obj.mime.clone());
@@ -391,7 +403,10 @@ async fn serve_blob_via_s3(
     let range = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
-        .filter(|v| v.starts_with("bytes="));
+        // Multi-range specs would make S3 answer multipart/byteranges, which
+        // this handler would then frame as a single-range body: ignore them
+        // (a server may) and serve the full body.
+        .filter(|v| v.starts_with("bytes=") && !v.contains(','));
     if let Some(range_len) = range.and_then(parse_range_len)
         && range_len <= BUFFERED_RANGE_CAP
     {
@@ -595,5 +610,48 @@ mod tests {
         let bare = object_ref(&node(Some(serde_json::json!({"transformed_path": "u/x"})))).unwrap();
         assert_eq!(bare.mime, "application/octet-stream");
         assert_eq!(bare.filename, "fallback.txt");
+    }
+
+    #[test]
+    fn object_ref_rejects_non_hex_sha() {
+        // 64 chars of traversal, exactly the length a plain len check accepts.
+        let traversal: String = "../".repeat(21) + "a";
+        assert_eq!(traversal.len(), 64);
+        let meta = serde_json::json!({
+            "transformed_path": "u/abc.txt",
+            "content_sha256": traversal,
+        });
+        let obj = object_ref(&node(Some(meta))).unwrap();
+        assert!(obj.sha.is_none(), "non-hex sha must not reach the cache path");
+        // A real sha survives.
+        let good = serde_json::json!({
+            "transformed_path": "u/abc.txt",
+            "content_sha256": "a".repeat(64),
+        });
+        assert!(object_ref(&node(Some(good))).unwrap().sha.is_some());
+    }
+
+    #[test]
+    fn cache_control_forces_revalidation_for_stable_urls() {
+        // Blob URLs are stable across re-uploads (`/resources/:id/file`), so
+        // the browser must revalidate; the SW cache saves the round trip.
+        let blob = ObjectRef {
+            key: "u/abc.txt".into(),
+            mime: "text/plain".into(),
+            filename: "abc.txt".into(),
+            sha: Some("a".repeat(64)),
+        };
+        assert_eq!(cache_control_for(&blob), "private, no-cache");
+        assert_eq!(
+            etag_for(&blob),
+            Some(format!("\"sha256-{}\"", "a".repeat(64)))
+        );
+        let legacy = ObjectRef {
+            key: "u/abc.txt".into(),
+            mime: "text/plain".into(),
+            filename: "abc.txt".into(),
+            sha: None,
+        };
+        assert_eq!(cache_control_for(&legacy), "private, max-age=300");
     }
 }

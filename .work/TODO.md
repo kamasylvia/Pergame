@@ -86,7 +86,8 @@
 ## 备份子系统(2026-11-10 三批全落地)
 
 - [x] **附件读延迟对位(2026-11-14,除发版外全做)**:①后端磁盘缓存 `src/disk_cache.rs`(`ATTACHMENT_CACHE_DIR` 默认关、`ATTACHMENT_CACHE_MB` 默认 2048,`blobs/{sha}` 一一对应落盘,LRU 按 atime 淘汰,单飞合并并发回源;只缓存内容寻址的不可变 blob,Range 部分响应不回填);②HTTP 缓存语义:`Cache-Control: private, max-age=31536000, immutable` + `ETag: "sha256-<sha>"` + `If-None-Match` → 304,legacy 非 sha 对象退 `max-age=300`;③compose 两版挂 `pergame_cache:/var/cache/pergame` + docs 新增「Attachment cache」节。实测(本机活后端,300 KB 附件):冷取 TTFB 0.316s → 热取 0.013s(24×),字节一致;`If-None-Match` → 304;`Range: bytes=100-199` 从盘上 206 + 字节一致;单测 3/3(存读/超额不缓存/LRU),全套 143/143。
-- [ ] **v0.0.12 发版 + stack 42 更新**(用户明确暂缓):线上 `GET /api/resources/:id/file` 仍 404,本轮缓存改动也需随此版上线才生效。
+- [x] **附件缓存审阅修复(2026-11-14)**:上条的 `immutable` 头审阅后发现 P1 bug——附件 URL 稳定(`/api/resources/:id/file`,重传后 id 不变),浏览器 HTTP cache 在新鲜期内直接回旧字节不发请求,前端 SW 失效也救不了;修复 = sha 分支 `Cache-Control` 改 `private, no-cache` 保留 ETag(SW 命中 0 网络,SW miss 一次 304)。同批:`object_ref` sha 加 hex 字符集校验(防 `../` 穿越 64 长构造)、多 range(`bytes=0-1,5-6`)不再原样透传 S3(忽略退全量,合规)、启动时清扫 crash 残留 tmp 文件(`DiskCache::cleanup_tmp`)。avatar 不进盘缓存维持现状(URL 带 `?v=` busting + SW 层,可变对象不适用 immutable 盘缓存)。docs「Attachment cache」节同批改口径。单测 +3(no-cache 头/非 hex 拒绝/tmp 清扫),全套 146/146。
+- [ ] **v0.0.12 发版 + stack 42 更新**(用户明确暂缓):线上 `GET /api/resources/:id/file` 仍 404,本轮缓存改动与 immutable 修复也需随此版上线才生效。
 - [ ] **实机验证**:有 docker 的机器上跑 `docker compose up` → Instance DR 配 conf → 立即备份 / `-l` / `-R`;前端异地方向(settings → Offsite snapshot targets)建 target 跑一次真实异地复制。
 
 ## 换机续接(2026-11-09)
