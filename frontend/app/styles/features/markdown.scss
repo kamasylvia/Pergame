@@ -171,6 +171,85 @@
 	margin: 1em 0;
 }
 
+// Header row: expand/collapse toggle (long blocks only) + copy button.
+.code-block-header {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 5;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+// The copy button used to be absolutely positioned on its own; inside the
+// header it flows normally.
+.code-block-header .code-copy-btn {
+	position: static;
+}
+
+.code-toggle-btn {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--grey-dark);
+	border-radius: 6px;
+	font-size: 0.75rem;
+	color: #a0a0a0;
+	background: rgb(30 30 30 / 70%);
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+	backdrop-filter: blur(4px);
+
+	&:hover {
+		border-color: var(--grey);
+		color: #fff;
+		background: rgb(45 45 45 / 90%);
+	}
+}
+
+// Label swap without JS string building: each state shows its own span.
+.code-toggle-btn .toggle-label-collapse {
+	display: none;
+}
+
+.code-block-wrapper:not(.collapsed) .code-toggle-btn .toggle-label-expand {
+	display: none;
+}
+
+.code-block-wrapper:not(.collapsed) .code-toggle-btn .toggle-label-collapse {
+	display: inline;
+}
+
+.toggle-label-expand::after {
+	margin-left: 4px;
+	content: '▾';
+}
+
+.toggle-label-collapse::after {
+	margin-left: 4px;
+	content: '▴';
+}
+
+// Collapsed long block: clamp the code area and fade the cut edge.
+.code-block-wrapper.collapsed pre {
+	max-height: 22rem;
+	margin-bottom: 0;
+	overflow: hidden;
+}
+
+.code-block-wrapper.collapsed::after {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: 3rem;
+	background: linear-gradient(to bottom, transparent, var(--background-code, rgb(22 22 22 / 90%)));
+	content: '';
+	pointer-events: none;
+}
+
 .code-copy-btn {
 	position: absolute;
 	top: 20px;

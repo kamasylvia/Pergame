@@ -108,6 +108,18 @@ const handleCodeCopyClick = async (e: MouseEvent) => {
   }
 };
 
+// Expand/collapse a long code block (rendered by the code-block plugin for
+// blocks over the threshold). Toggling the wrapper class is all it takes —
+// max-height and the label swap live in CSS.
+const handleCodeToggleClick = (e: MouseEvent) => {
+  const btn = (e.target as HTMLElement)?.closest('.code-toggle-btn') as HTMLButtonElement | null;
+  if (!btn) return;
+  const wrapper = btn.closest('.code-block-wrapper');
+  if (!wrapper) return;
+  const collapsed = wrapper.classList.toggle('collapsed');
+  btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+};
+
 // Navigate internal document links (#<id>) through the router, without a full page reload
 const handleInternalLinkClick = async (event: MouseEvent) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -137,6 +149,7 @@ const handleInternalLinkClick = async (event: MouseEvent) => {
 
 const handleClick = (event: MouseEvent) => {
   handleCodeCopyClick(event);
+  handleCodeToggleClick(event);
   handleInternalLinkClick(event);
 };
 
