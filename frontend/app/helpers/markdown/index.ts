@@ -98,16 +98,19 @@ export default function compile(str: string = '', resolveNode?: (id: string) => 
   str = str.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   let breaks = true;
   let typographer = false;
+  let collapseThreshold = 16;
   try {
     const prefs = usePreferencesStore();
     breaks = prefs.preferences.markdownBreaks ?? true;
     typographer = prefs.preferences.markdownTypographer ?? false;
+    collapseThreshold = prefs.preferences.codeBlockCollapseThreshold ?? 16;
   } catch {
     // Store unavailable (SSR/tests): fall back to defaults.
   }
   const html = getCompiler(breaks, typographer).render(str, {
     html: true,
     resolveNode,
+    codeCollapseThreshold: collapseThreshold,
   });
   return markdownHooks.postProcessors.size ? runPostProcessors(html) : html;
 }

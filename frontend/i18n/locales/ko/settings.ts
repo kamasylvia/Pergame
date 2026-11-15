@@ -144,6 +144,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: '코드 블록이 접히는 기준 줄 수',
+    codeCollapseThresholdDesc: '긴 코드 블록은 펼치기 버튼 뒤로 접힙니다. 0이면 절대 접지 않습니다.',
     defaultFontFamily: '기본 글꼴',
     defaultFontFamilyDesc: '모든 문서에 사용할 기본 글꼴을 설정합니다.',
     defaultFontSize: '기본 글꼴 크기',

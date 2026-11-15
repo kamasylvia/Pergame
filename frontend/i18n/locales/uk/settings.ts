@@ -144,6 +144,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: 'Рядків до згортання блоку коду',
+    codeCollapseThresholdDesc: 'Довгі блоки коду згортаються за кнопкою розгортання; 0 — ніколи не згортати.',
     defaultFontFamily: 'Шрифт за замовчуванням',
     defaultFontFamilyDesc: 'Встановити шрифт за замовчуванням для всіх документів.',
     defaultFontSize: 'Розмір шрифту за замовчуванням',

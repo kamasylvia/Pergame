@@ -144,6 +144,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: 'Lines before a code block collapses',
+    codeCollapseThresholdDesc: 'Long code blocks render collapsed behind an expand button; 0 never collapses.',
     defaultFontFamily: 'Default font family',
     defaultFontFamilyDesc: 'Set the default font for all your documents.',
     defaultFontSize: 'Default font size',

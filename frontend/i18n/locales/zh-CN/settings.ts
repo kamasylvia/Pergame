@@ -144,6 +144,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: '代码块折叠行数阈值',
+    codeCollapseThresholdDesc: '超过该行数的代码块渲染为折叠态（点按钮展开）；0 = 从不折叠。',
     defaultFontFamily: '默认字体',
     defaultFontFamilyDesc: '设置所有文档的默认字体。',
     defaultFontSize: '默认字体大小',

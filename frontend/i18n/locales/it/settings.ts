@@ -146,6 +146,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: 'Righe prima che un blocco di codice si comprima',
+    codeCollapseThresholdDesc: 'I blocchi di codice lunghi si comprimono dietro un pulsante di espansione; 0 non comprime mai.',
     defaultFontFamily: 'Famiglia di caratteri predefinita',
     defaultFontFamilyDesc: 'Imposta il carattere predefinito per tutti i tuoi documenti.',
     defaultFontSize: 'Dimensione carattere predefinita',

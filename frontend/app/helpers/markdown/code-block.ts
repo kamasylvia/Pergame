@@ -10,8 +10,8 @@ import type { MarkdownIt } from 'markdown-it';
 const ICON_COPY = `<svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
 const ICON_CHECK = `<svg class="check-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
-/** Blocks with more lines than this start collapsed. */
-const COLLAPSE_THRESHOLD = 16;
+/** Blocks with more lines than this start collapsed (0 = never). */
+const DEFAULT_THRESHOLD = 16;
 
 const lineCount = (src: string): number => src.replace(/\n$/, '').split('\n').length;
 
@@ -20,9 +20,17 @@ export const copyCodePlugin = (md: MarkdownIt) => {
 
   md.renderer.rules.fence = function (tokens, idx, options, env, self) {
     const original = defaultFence ? defaultFence(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
-    const token = tokens[idx];
+    const token = tokens[idx]!;
     const lines = lineCount(token.content || '');
-    const collapsible = lines > COLLAPSE_THRESHOLD;
+    // The threshold rides in the render env (set by compile() from the
+    // codeBlockCollapseThreshold preference); absent env keeps the default.
+    // 0 is a meaningful value ("never collapse"), so guard explicitly rather
+    // than relying on truthiness.
+    const rawThreshold = (env as Record<string, unknown> | undefined)?.codeCollapseThreshold;
+    const threshold = rawThreshold === undefined || rawThreshold === null || Number.isNaN(Number(rawThreshold))
+      ? DEFAULT_THRESHOLD
+      : Number(rawThreshold);
+    const collapsible = threshold > 0 && lines > threshold;
 
     // The toggle lives in the header row next to the copy button. It only
     // exists for long blocks; the click handler (ContentCompiled.vue) flips

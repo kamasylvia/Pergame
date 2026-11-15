@@ -145,6 +145,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: 'Lignes avant repli d’un bloc de code',
+    codeCollapseThresholdDesc: 'Les blocs de code longs se replient derrière un bouton d’extension ; 0 ne replie jamais.',
     defaultFontFamily: 'Police par défaut',
     defaultFontFamilyDesc: 'Définir la police par défaut pour tous vos documents.',
     defaultFontSize: 'Taille de police par défaut',

@@ -92,6 +92,12 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         key: 'documentLineHeight',
       },
       {
+        label: t('settings.documents.codeCollapseThreshold'),
+        description: t('settings.documents.codeCollapseThresholdDesc'),
+        type: 'number',
+        key: 'codeBlockCollapseThreshold',
+      },
+      {
         label: t('settings.documents.indexFileName'),
         description: t('settings.documents.indexFileNameDesc'),
         type: 'text',

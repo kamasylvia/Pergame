@@ -33,6 +33,7 @@ export const DEFAULT_PREFERENCES = {
   documentShowAttachments: false as boolean,
   markdownBreaks: true as boolean, // single \n renders <br> (Joplin parity)
   markdownTypographer: false as boolean, // smart quotes/dashes (Joplin parity)
+  codeBlockCollapseThreshold: 16 as number, // lines before a code block renders collapsed (0 = never)
   abcjsOptions: '' as string, // JSON render options for ABC blocks (Joplin parity)
   attachmentCacheMB: 512 as number, // browser-local attachment cache cap (0 = disabled)
   documentDefaultThumbnail: false as boolean,
@@ -128,6 +129,7 @@ export const EDITOR_KEYS: PreferenceKey[] = [
   'documentShowAttachments',
   'markdownBreaks',
   'markdownTypographer',
+  'codeBlockCollapseThreshold',
   'abcjsOptions',
   'attachmentCacheMB',
   'documentDefaultThumbnail',

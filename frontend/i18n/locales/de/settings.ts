@@ -145,6 +145,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: 'Zeilen bis ein Codeblock einklappt',
+    codeCollapseThresholdDesc: 'Lange Codeblöcke werden hinter einem Ausklappen-Button eingeklappt; 0 klappt nie ein.',
     defaultFontFamily: 'Standardschriftfamilie',
     defaultFontFamilyDesc: 'Lege die Standardschrift für alle deine Dokumente fest.',
     defaultFontSize: 'Standardschriftgröße',

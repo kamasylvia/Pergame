@@ -144,6 +144,8 @@ export default {
   },
 
   documents: {
+    codeCollapseThreshold: '程式碼區塊摺疊行數閾值',
+    codeCollapseThresholdDesc: '超過該行數的程式碼區塊轉為摺疊態（點按鈕展開）；0 = 從不摺疊。',
     defaultFontFamily: '預設字型',
     defaultFontFamilyDesc: '設定所有文件的預設字型。',
     defaultFontSize: '預設字型大小',
