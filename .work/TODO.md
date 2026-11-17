@@ -2,6 +2,13 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 思源 → Pergame 全量搬迁(2026-11-17 用户指令)
+
+- [x] **全量搬迁到 pergame_dev(本地 dev 库)** ✅ 2026-11-17:872/872 文档(168 纯父目录 → category folder,704 → 笔记)+ 5 笔记本 → 5 workspace + 210 思源 `assets/` 随迁为 resource(外部 http 直链保留原样)。引擎 = /tmp/mig.py(JWT 自签 + REST + siyuan MCP 直连;断点映射 /tmp/mig-map.json)。**验证**:树结构三方对齐(role/parent/name 全 0 错,workspace 5/5 OK)+ 抽样内容比对(KDL 药品文档字节级 MATCH;图库笔记差异仅为预期资源 URL 改写)+ :3000 health OK。资源 URL 与前端原生一致(`/api/resources/:id/file`)。
+  - 残留 1 处:`Obsidian 同步运维` 笔记里的 `` `[xxx](assets/y.pdf)` `` 是反引号代码示例(非真链接),不迁。
+  - 生产库(stack 42 共享库)仍留 87 个旧测试节点,等用户拍板是否清。
+- [ ] 网关遗留:NocoDB MCP 端点挂死(服务活着但 /mcp/* 不回包)→ Portainer 重启 NocoDB 后把 mcp.json 两个 disabled 改回;obsidian(:9100)/mailspring 同理;网关 siyuan 挂载 tools/call 挂起(fastmcp 2.14.7 proxy 怪癖)待查。
+
 ## 批次 A — 前端批次(纯前端,独立于重写;**待开工令**)
 
 - [x] **媒体播放器内置化**(video-md → 内置,2026-11-12 完成):issue #6;`html5MediaPlugin` 补 `preload`/`#t=`/`ogv` + PDF 占位符,`ContentCompiled` 后挂载 `PDFViewer`(mermaid 同款);附带修复 Rust `sanitize_html` 对齐 Go bluemonday 策略(audio/video/object/data-*/checkbox/form/SVG/MathML)。
