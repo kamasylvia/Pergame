@@ -91,12 +91,6 @@ const options = computed(
             key: 'normalizeFileIcons' as const,
           },
           {
-            label: t('settings.appearance.displayUncategorizedResources'),
-            description: t('settings.appearance.displayUncategorizedResourcesDesc'),
-            type: 'toggle' as const,
-            key: 'displayUncategorizedResources' as const,
-          },
-          {
             label: t('settings.appearance.showItemsInSidebar'),
             type: 'groupCheckbox' as const,
             key: 'sidebarItems' as const,

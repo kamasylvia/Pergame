@@ -33,8 +33,6 @@ export default {
     displayFeatureTagsDesc: 'Mostra i badge "New" e "Beta" che indicano le funzionalità recenti o sperimentali.',
     displayTabs: 'Mostra schede',
     displayTabsDesc: 'Abilita o disabilita la barra delle schede nella parte superiore della dashboard.',
-    displayUncategorizedResources: 'Mostra risorse senza categoria',
-    displayUncategorizedResourcesDesc: 'Mostra le risorse senza categoria (caricamenti CDN) nella parte superiore della barra laterale.',
     enableCompactMode: 'Abilita modalità compatta',
     enableCompactModeDesc: 'Riduci la dimensione degli elementi della barra laterale per mostrare più contenuti.',
     enableDarkMode: 'Abilita modalità scura',

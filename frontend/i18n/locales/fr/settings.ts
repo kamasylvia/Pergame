@@ -32,8 +32,6 @@ export default {
     displayFeatureTagsDesc: 'Afficher les badges « New » et « Beta » qui signalent les fonctionnalités récentes ou expérimentales.',
     displayTabs: 'Afficher les onglets',
     displayTabsDesc: "Activer ou désactiver la barre d'onglets en haut du tableau de bord.",
-    displayUncategorizedResources: 'Afficher les ressources non catégorisées',
-    displayUncategorizedResourcesDesc: 'Afficher les ressources (téléchargements du CDN) non catégorisées en haut de la barre latérale.',
     enableCompactMode: 'Activer le mode compact',
     enableCompactModeDesc: 'Réduire la taille des éléments de la barre latérale pour afficher plus de contenu.',
     enableDarkMode: 'Activer le mode sombre',

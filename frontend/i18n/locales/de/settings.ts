@@ -32,8 +32,6 @@ export default {
     displayFeatureTagsDesc: 'Zeige die Badges "New" und "Beta", die neue oder experimentelle Funktionen kennzeichnen.',
     displayTabs: 'Registerkarten anzeigen',
     displayTabsDesc: 'Aktiviere oder deaktiviere die Registerkartenleiste am oberen Rand des Dashboards.',
-    displayUncategorizedResources: 'Nicht kategorisierte Ressourcen anzeigen',
-    displayUncategorizedResourcesDesc: 'Nicht kategorisierte Ressourcen (CDN-Uploads) oben in der Seitenleiste anzeigen.',
     enableCompactMode: 'Kompaktmodus aktivieren',
     enableCompactModeDesc: 'Reduziere die Größe der Seitenleistenelemente, um mehr Inhalt anzuzeigen.',
     enableDarkMode: 'Dunkelmodus aktivieren',

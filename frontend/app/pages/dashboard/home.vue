@@ -186,6 +186,7 @@ const searchResults = computed(() => {
   return nodesStore.nodes
     .toSortedArray()
     .filter((node: Node) => {
+      if (node.role === 4) return false; // resources live on the CDN page
       const name = (node.name || '').toLowerCase();
       const description = (node.description || '').toLowerCase();
       const tags = (node.tags || '').toLowerCase();

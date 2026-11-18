@@ -31,8 +31,6 @@ export default {
     displayFeatureTagsDesc: '顯示用來標示新功能與實驗性功能的「New」與「Beta」徽章。',
     displayTabs: '顯示分頁列',
     displayTabsDesc: '啟用或停用儀表板頂端的分頁列。',
-    displayUncategorizedResources: '顯示未分類的資源',
-    displayUncategorizedResourcesDesc: '在側邊欄頂端顯示未分類的資源（CDN 上傳檔案）。',
     enableCompactMode: '啟用精簡模式',
     enableCompactModeDesc: '縮小側邊欄項目尺寸，以顯示更多內容。',
     enableDarkMode: '啟用深色模式',

@@ -84,9 +84,10 @@ function fullRowPath(row: Node, getById?: (id: string) => Partial<Node> | undefi
   return segs.join(' / ');
 }
 
-/** Preset DQL for the folder/workspace overview: direct children table. */
+/** Preset DQL for the folder/workspace overview: direct children table.
+ * Resources (role 4) are excluded — they live on the CDN page, not the doc tree. */
 export function childrenSource(containerId: string): string {
-  return `TABLE name, created_timestamp, updated_timestamp FROM "id:${containerId}" DIRECT`;
+  return `TABLE name, created_timestamp, updated_timestamp FROM "id:${containerId}" DIRECT WHERE role <= 3`;
 }
 
 /** Preset DQL for the folder/workspace overview: top 10 recently viewed docs. */

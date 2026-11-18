@@ -3,12 +3,12 @@
  * Controls visibility, width, and active selection
  */
 import type { TreeItem } from '../helpers/TreeBuilder';
+import { filterTree } from '~/helpers/TreeBuilder';
 import type { Node } from '~/stores';
 
 export function useSidebar() {
   const { isMobile } = useDevice();
   const nodesTree = useNodesTree();
-  const preferences = usePreferencesStore();
 
   // UI State - using useState for SSR safety
   const isOpen = useState('sidebar-open', () => false);
@@ -18,14 +18,12 @@ export function useSidebar() {
   const activeNodeId = useState<string | null>('sidebar-active', () => null);
   const workspaceId = useState<string | undefined>('sidebar-workspace', () => undefined);
 
-  // Filtered tree based on current workspace and preferences
+  // Filtered tree based on current workspace: teams (role 0) live on their
+  // own page and resources (role 4) belong to the CDN page, never the doc
+  // tree — pruned recursively so nested attachments don't resurface.
   const filtered = computed((): TreeItem<Node>[] => {
     const items = nodesTree.getWorkspaceTree(workspaceId.value);
-    if (!preferences.get('displayUncategorizedResources').value) {
-      return items.filter(item => item.data.role !== 4);
-    }
-
-    return items.filter(item => item.data.role !== 0); // Exclude teams (role 0) from the sidebar
+    return filterTree(items, item => item.data.role !== 0 && item.data.role !== 4);
   });
 
   const toggle = () => (isOpen.value = !isOpen.value);

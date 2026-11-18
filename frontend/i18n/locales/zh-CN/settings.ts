@@ -31,8 +31,6 @@ export default {
     displayFeatureTagsDesc: '显示用来标示新功能与实验性功能的“New”与“Beta”徽章。',
     displayTabs: '显示标签栏',
     displayTabsDesc: '启用或禁用仪表板顶部的标签栏。',
-    displayUncategorizedResources: '显示未分类的资源',
-    displayUncategorizedResourcesDesc: '在侧边栏顶部显示未分类的资源（CDN 上传文件）。',
     enableCompactMode: '启用紧凑模式',
     enableCompactModeDesc: '缩小侧边栏项目尺寸，以显示更多内容。',
     enableDarkMode: '启用深色模式',

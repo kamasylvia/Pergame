@@ -111,10 +111,14 @@ const drop = async (event: DragEvent) => {
   // Handle file drop
   if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
     const files = Array.from(event.dataTransfer.files);
+    // Dropping on a document row uploads into that document's folder: resources
+    // never enter the doc tree, so parenting to the doc itself would hide the file.
+    const dropTarget = props.item.data as Node;
+    const dropParentId = dropTarget.role === 3 ? dropTarget.parent_id || dropTarget.id : props.item.data.id;
     for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('parent_id', props.item.data.id);
+      formData.append('parent_id', dropParentId);
       await resourcesStore.post(formData);
     }
     return;
