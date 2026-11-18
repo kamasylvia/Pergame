@@ -43,6 +43,30 @@
         </div>
       </div>
     </div>
+    <!-- Optional image-host adapter: new media can go there, and existing
+         local/external media can be copied over on demand. -->
+    <div v-if="imgbed.enabled" class="orphan-panel">
+      <div class="orphan-head">
+        <div class="orphan-info">
+          <span class="orphan-label">{{ t('cdn.imgbed.title') }}</span>
+          <span class="orphan-desc">{{ imgbed.result || t('cdn.imgbed.hint') }}</span>
+        </div>
+        <div class="orphan-actions">
+          <label class="imgbed-check">
+            <input v-model="imgbed.privateNotes" type="checkbox" @change="saveImgbedPrivate" />
+            {{ t('cdn.imgbed.private') }}
+          </label>
+          <label class="imgbed-check"><input v-model="imgbed.image" type="checkbox" /> {{ t('cdn.imgbed.images') }}</label>
+          <label class="imgbed-check"><input v-model="imgbed.video" type="checkbox" /> {{ t('cdn.imgbed.videos') }}</label>
+          <AppButton type="secondary" small :disabled="imgbed.busy || !imgbed.image && !imgbed.video" @click="transferImgbed('migrate')">
+            {{ imgbed.busy ? t('cdn.imgbed.running') : t('cdn.imgbed.migrate') }}
+          </AppButton>
+          <AppButton type="secondary" small :disabled="imgbed.busy || !imgbed.image && !imgbed.video" @click="transferImgbed('import')">
+            {{ imgbed.busy ? t('cdn.imgbed.running') : t('cdn.imgbed.import') }}
+          </AppButton>
+        </div>
+      </div>
+    </div>
     <!-- Orphan objects: stored bytes no node references (SiYuan's "unused
          assets"). Nothing is deleted until the user asks. -->
     <div class="orphan-panel">
@@ -254,9 +278,55 @@ const clearAttachCache = () => {
   sw.postMessage({ type: 'ATTACHMENT_CACHE_CLEAR' }, [channel.port2]);
 };
 
+const imgbed = reactive({
+  enabled: false,
+  privateNotes: false,
+  image: true,
+  video: false,
+  busy: false,
+  result: '',
+});
+
+const fetchImgbed = async () => {
+  const response = await makeRequest<{ enabled: boolean, private_notes: boolean }>('resources/imgbed', 'GET');
+  if (response.status === 'success' && response.result) {
+    imgbed.enabled = response.result.enabled;
+    imgbed.privateNotes = response.result.private_notes;
+  }
+};
+
+const saveImgbedPrivate = () => preferences.set('imgbedPrivate', imgbed.privateNotes);
+
+const transferImgbed = async (kind: 'migrate' | 'import') => {
+  const types = [imgbed.image && 'image', imgbed.video && 'video'].filter(Boolean) as string[];
+  if (!types.length) return;
+  imgbed.busy = true;
+  imgbed.result = '';
+  try {
+    const response = await makeRequest<{ migrated?: number, imported?: number, documents?: number, failed?: unknown[] }>(
+      `resources/imgbed/${kind}`,
+      'POST',
+      { types },
+    );
+    if (response.status === 'success' && response.result) {
+      const result = response.result;
+      const failed = result.failed?.length ?? 0;
+      imgbed.result =
+        kind === 'migrate'
+          ? t('cdn.imgbed.migrated', { n: result.migrated ?? 0, failed })
+          : t('cdn.imgbed.imported', { n: result.imported ?? 0, docs: result.documents ?? 0, failed });
+      await fetchQuota();
+      await nodesStore.fetch();
+    } else {
+      notifications.add({ type: 'error', title: t('cdn.imgbed.failed'), message: response.message });
+    }
+  } finally {
+    imgbed.busy = false;
+  }
+};
+
 const migrating = ref(false);
 const migrateResult = ref<{ migrated: number, skipped: number, bytes_saved: number } | null>(null);
-
 const migrateBlobs = async () => {
   migrating.value = true;
   migrateResult.value = null;
@@ -453,6 +523,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   fetchQuota();
+  fetchImgbed();
   cacheLimitMb.value = preferences.get('attachmentCacheMB').value ?? 512;
   fetchAttachStats();
   swActive()?.postMessage({ type: 'SET_ATTACHMENT_CACHE_MB', payload: { cacheMB: cacheLimitMb.value } });
@@ -500,7 +571,16 @@ onUnmounted(() => {
 
   .orphan-actions {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
+  }
+
+  .imgbed-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
   }
 
   .orphan-list {

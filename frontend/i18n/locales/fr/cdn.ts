@@ -40,6 +40,20 @@ export default {
     title: 'Mettre à jour le fichier',
   },
 
+  imgbed: {
+    failed: 'Échec du transfert vers l’hébergement d’images',
+    hint: 'Hébergement d’images optionnel pour les nouveaux médias ; copiez les médias locaux ou externes existants à la demande.',
+    images: 'Images',
+    import: 'Importer l’externe',
+    imported: '{n} lien(s) importé(s), {docs} document(s) mis à jour ({failed} échec(s))',
+    migrate: 'Copier le local',
+    migrated: '{n} fichier(s) copié(s) ({failed} échec(s))',
+    private: 'Notes privées',
+    running: 'Traitement…',
+    title: 'Hébergement d’images',
+    videos: 'Vidéos',
+  },
+
   labels: {
     originalPath: "Chemin d'origine",
     path: 'Chemin',
@@ -64,6 +78,7 @@ export default {
     found: '{count} inutilisé(s) · {size}',
     hint: 'Recherche les objets stockés qu’aucun document ne référence (restes d’imports échoués ou d’envois interrompus).',
     loading: 'Chargement…',
+    missing: 'Les octets du fichier manquent dans le stockage ; supprimez cet orphelin.',
     none: 'Rien d’inutilisé — le stockage correspond aux documents.',
     preview: 'Aperçu',
     scan: 'Vérifier',

@@ -40,6 +40,20 @@ export default {
     title: '更新檔案',
   },
 
+  imgbed: {
+    failed: '圖床轉存失敗',
+    hint: '新上傳的圖片/影片可直送圖床；既有本機媒體與外鏈可視需要轉存。',
+    images: '圖片',
+    import: '轉存外鏈',
+    imported: '已轉存 {n} 個外鏈，更新 {docs} 篇文件（{failed} 個失敗）',
+    migrate: '轉存本機',
+    migrated: '已轉存 {n} 個檔案（{failed} 個失敗）',
+    private: '套用於私人筆記',
+    running: '處理中…',
+    title: '圖床',
+    videos: '影片',
+  },
+
   labels: {
     originalPath: '原始路徑',
     path: '路徑',
@@ -64,6 +78,7 @@ export default {
     found: '{count} 個未使用 · {size}',
     hint: '檢查沒有文件引用的儲存物件(失敗匯入或中斷上傳的殘留)。',
     loading: '載入中…',
+    missing: '檔案內容已不在儲存中，可直接刪除該孤兒檔案。',
     none: '沒有殘留——儲存與文件一致。',
     preview: '預覽',
     scan: '檢查',

@@ -1,31 +1,117 @@
 @use "../abstract/static.scss" as *;
 
+/* Selectable code palettes. `data-code-theme` is set on <html> from the
+ * `codeTheme` preference (see App.vue); default = palenight. */
+html {
+	--code-bg: #292d3e;
+	--code-fg: #abb2bf;
+	--code-comment: #8a93b5;
+	--code-keyword: #89ddff;
+	--code-type: #56b6c2;
+	--code-literal: #56b6c2;
+	--code-attr: #f07178;
+	--code-number: #d19a66;
+	--code-string: #c3e88d;
+	--code-function: #61afef;
+	--code-class: #82aaff;
+	--code-variable: #e06c75;
+	--code-operator: #d19a66;
+	--code-section: #61afef;
+	--code-addition: #98c379;
+	--code-deletion: #e06c75;
+	--code-meta: #61afef;
+	--code-tag: #abb2bf;
+}
+
+html[data-code-theme='dracula'] {
+	--code-bg: #282a36;
+	--code-fg: #f8f8f2;
+	--code-comment: #8b9bd6;
+	--code-keyword: #ff79c6;
+	--code-type: #8be9fd;
+	--code-literal: #bd93f9;
+	--code-attr: #50fa7b;
+	--code-number: #bd93f9;
+	--code-string: #f1fa8c;
+	--code-function: #50fa7b;
+	--code-class: #8be9fd;
+	--code-variable: #ffb86c;
+	--code-operator: #ff79c6;
+	--code-section: #bd93f9;
+	--code-addition: #50fa7b;
+	--code-deletion: #f55;
+	--code-meta: #ff79c6;
+	--code-tag: #ff79c6;
+}
+
+html[data-code-theme='github-light'] {
+	--code-bg: #f6f8fa;
+	--code-fg: #24292f;
+	--code-comment: #6e7781;
+	--code-keyword: #cf222e;
+	--code-type: #0550ae;
+	--code-literal: #0550ae;
+	--code-attr: #116329;
+	--code-number: #0550ae;
+	--code-string: #0a3069;
+	--code-function: #8250df;
+	--code-class: #8250df;
+	--code-variable: #953800;
+	--code-operator: #cf222e;
+	--code-section: #0550ae;
+	--code-addition: #116329;
+	--code-deletion: #82071e;
+	--code-meta: #0550ae;
+	--code-tag: #116329;
+}
+
+html[data-code-theme='solarized-light'] {
+	--code-bg: #fdf6e3;
+	--code-fg: #586e75;
+	--code-comment: #7d8c8c;
+	--code-keyword: #859900;
+	--code-type: #b58900;
+	--code-literal: #2aa198;
+	--code-attr: #b58900;
+	--code-number: #d33682;
+	--code-string: #2aa198;
+	--code-function: #268bd2;
+	--code-class: #268bd2;
+	--code-variable: #cb4b16;
+	--code-operator: #859900;
+	--code-section: #268bd2;
+	--code-addition: #859900;
+	--code-deletion: #dc322f;
+	--code-meta: #268bd2;
+	--code-tag: #268bd2;
+}
+
 /* Block code */
 pre code.hljs {
 	display: block;
 	padding: 1em;
 	font-family: $font-mono;
 	font-size: 14px;
-	color: #abb2bf;
-	background: #292d3e;
+	color: var(--code-fg);
+	background: var(--code-bg);
 	overflow-x: auto;
 }
 
 /* Base */
 .hljs {
-	color: #abb2bf;
+	color: var(--code-fg);
 }
 
 /* Comments / punctuation */
 .hljs-comment,
 .hljs-quote {
 	font-style: italic;
-	color: #676e95;
+	color: var(--code-comment);
 }
 
 .hljs-tag,
 .hljs-punctuation {
-	color: #abb2bf;
+	color: var(--code-tag);
 }
 
 /* Keywords & core language */
@@ -34,52 +120,52 @@ pre code.hljs {
 .hljs-selector-tag,
 .hljs-doctag,
 .hljs-name {
-	color: #89ddff;
+	color: var(--code-keyword);
 }
 
 /* Class / ID selectors */
 .hljs-selector-class,
 .hljs-selector-id,
 .hljs-type {
-	color: #56b6c2;
+	color: var(--code-type);
 }
 
 /* Literals & builtins */
 .hljs-literal,
 .hljs-built_in {
-	color: #56b6c2;
+	color: var(--code-literal);
 }
 
 /* Attributes */
 .hljs-attribute,
 .hljs-attr {
-	color: #f07178;
+	color: var(--code-attr);
 }
 
 /* Numbers */
 .hljs-number {
-	color: #d19a66;
+	color: var(--code-number);
 }
 
 /* Strings */
 .hljs-string,
 .hljs-meta .hljs-string {
-	color: #c3e88d;
+	color: var(--code-string);
 }
 
 /* Functions */
 .hljs-title.function_ {
-	color: #61afef;
+	color: var(--code-function);
 }
 
 /* Classes */
 .hljs-title.class_ {
-	color: #82aaff;
+	color: var(--code-class);
 }
 
 /* Variables */
 .hljs-variable {
-	color: #e06c75;
+	color: var(--code-variable);
 }
 
 /* RegExp / operators / misc */
@@ -89,33 +175,33 @@ pre code.hljs {
 .hljs-selector-attr,
 .hljs-selector-pseudo,
 .hljs-link {
-	color: #d19a66;
+	color: var(--code-operator);
 }
 
 /* Sections / Titles */
 .hljs-section,
 .hljs-title {
 	font-weight: 600;
-	color: #61afef;
+	color: var(--code-section);
 }
 
 /* Diff additions/deletions */
 .hljs-addition {
-	color: #98c379;
+	color: var(--code-addition);
 }
 
 .hljs-deletion {
-	color: #e06c75;
+	color: var(--code-deletion);
 }
 
 .hljs-bullet,
 .hljs-code {
-	color: #98c379;
+	color: var(--code-addition);
 }
 
 /* Meta */
 .hljs-meta {
-	color: #61afef;
+	color: var(--code-meta);
 }
 
 /* Emphasis / Strong */

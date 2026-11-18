@@ -28,6 +28,8 @@ export default {
 
   appearance: {
     chooseAccentColor: "Choisir la couleur d'accent",
+    codeTheme: 'Thème des blocs de code',
+    codeThemeDesc: "Palette de coloration syntaxique utilisée dans les blocs de code et les aperçus.",
     displayFeatureTags: 'Afficher les badges de fonctionnalité',
     displayFeatureTagsDesc: 'Afficher les badges « New » et « Beta » qui signalent les fonctionnalités récentes ou expérimentales.',
     displayTabs: 'Afficher les onglets',

@@ -28,6 +28,8 @@ export default {
 
   appearance: {
     chooseAccentColor: 'Akzentfarbe wählen',
+    codeTheme: 'Codeblock-Design',
+    codeThemeDesc: 'Syntax-Hervorhebung für Codeblöcke und Vorschauen.',
     displayFeatureTags: 'Funktions-Badges anzeigen',
     displayFeatureTagsDesc: 'Zeige die Badges "New" und "Beta", die neue oder experimentelle Funktionen kennzeichnen.',
     displayTabs: 'Registerkarten anzeigen',

@@ -40,6 +40,20 @@ export default {
     title: 'Datei aktualisieren',
   },
 
+  imgbed: {
+    failed: 'Bildhost-Übertragung fehlgeschlagen',
+    hint: 'Optionaler Bildhost für neue Medien; vorhandene lokale oder externe Medien bei Bedarf kopieren.',
+    images: 'Bilder',
+    import: 'Extern importieren',
+    imported: '{n} Link(s) importiert, {docs} Dokument(e) aktualisiert ({failed} fehlgeschlagen)',
+    migrate: 'Lokal kopieren',
+    migrated: '{n} Datei(en) kopiert ({failed} fehlgeschlagen)',
+    private: 'Private Notizen',
+    running: 'Wird verarbeitet…',
+    title: 'Bildhosting',
+    videos: 'Videos',
+  },
+
   labels: {
     originalPath: 'Ursprünglicher Pfad',
     path: 'Pfad',
@@ -64,6 +78,7 @@ export default {
     found: '{count} ungenutzt · {size}',
     hint: 'Prüft gespeicherte Objekte, auf die kein Dokument verweist (Reste fehlgeschlagener Importe oder abgebrochener Uploads).',
     loading: 'Wird geladen…',
+    missing: 'Die Dateidaten fehlen im Speicher; diesen Waisen löschen.',
     none: 'Nichts Unbenutztes — der Speicher passt zu den Dokumenten.',
     preview: 'Vorschau',
     scan: 'Prüfen',

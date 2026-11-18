@@ -30,7 +30,7 @@ const textContent = ref('');
 onMounted(async () => {
   try {
     const resp = await fetch(`/api/resources/orphans/preview?key=${encodeURIComponent(props.fileKey)}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) throw new Error(resp.status === 404 ? t('cdn.orphans.missing') : `HTTP ${resp.status}`);
     const mime = resp.headers.get('Content-Type') ?? '';
     const blob = await resp.blob();
     if (isImageFile(mime)) kind.value = 'image';

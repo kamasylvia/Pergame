@@ -29,6 +29,8 @@ export default {
 
   appearance: {
     chooseAccentColor: "Scegli il colore d'accento",
+    codeTheme: 'Tema dei blocchi di codice',
+    codeThemeDesc: 'Palette di evidenziazione della sintassi per blocchi di codice e anteprime.',
     displayFeatureTags: 'Mostra badge delle funzionalità',
     displayFeatureTagsDesc: 'Mostra i badge "New" e "Beta" che indicano le funzionalità recenti o sperimentali.',
     displayTabs: 'Mostra schede',

@@ -27,6 +27,8 @@ export default {
 
   appearance: {
     chooseAccentColor: 'Вибрати акцентний колір',
+    codeTheme: 'Тема блоків коду',
+    codeThemeDesc: 'Палітра підсвічування синтаксису для блоків коду та попереднього перегляду.',
     displayFeatureTags: 'Показувати позначки функцій',
     displayFeatureTagsDesc: 'Показувати позначки "New" та "Beta", які вказують на нові або експериментальні функції.',
     displayTabs: 'Показувати вкладки',

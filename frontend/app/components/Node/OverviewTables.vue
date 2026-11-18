@@ -18,7 +18,7 @@
           </tr>
         </tbody>
       </table>
-      <span v-else class="dataview-empty">No results</span>
+      <span v-else class="dataview-empty">{{ loading ? t('common.status.loading') : 'No results' }}</span>
     </section>
     <section>
       <h2>最近浏览</h2>
@@ -38,7 +38,7 @@
           </tr>
         </tbody>
       </table>
-      <span v-else class="dataview-empty">No results</span>
+      <span v-else class="dataview-empty">{{ loading ? t('common.status.loading') : 'No results' }}</span>
     </section>
   </div>
 </template>
@@ -55,9 +55,11 @@ const props = defineProps<{ containerId: string }>();
 
 const router = useRouter();
 const config = useRuntimeConfig();
+const { t } = useI18nT();
 
 const children = ref<Node[]>([]);
 const recent = ref<Node[]>([]);
+const loading = ref(true);
 
 // `viewed_timestamp` is merged into DQL result rows at query time, so it is
 // not part of the Node type.
@@ -77,6 +79,7 @@ onMounted(async () => {
   ]);
   if (results[0].status === 'fulfilled') children.value = sortFoldersFirst(results[0].value.rows);
   if (results[1].status === 'fulfilled') recent.value = onlyViewed(results[1].value.rows);
+  loading.value = false;
   // Failed queries render as their empty state; a broken query must not
   // break the whole container page.
 });

@@ -30,6 +30,18 @@ const options = computed(
             },
           },
           {
+            label: t('settings.appearance.codeTheme'),
+            description: t('settings.appearance.codeThemeDesc'),
+            type: 'select' as const,
+            key: 'codeTheme' as const,
+            choices: [
+              { label: 'Palenight', id: 'palenight' },
+              { label: 'Dracula', id: 'dracula' },
+              { label: 'GitHub Light', id: 'github-light' },
+              { label: 'Solarized Light', id: 'solarized-light' },
+            ],
+          },
+          {
             label: t('settings.appearance.setLanguage'),
             description: t('settings.appearance.setLanguageDesc'),
             type: 'select' as const,

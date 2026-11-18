@@ -27,6 +27,8 @@ export default {
 
   appearance: {
     chooseAccentColor: '강조 색상 선택',
+    codeTheme: '코드 블록 테마',
+    codeThemeDesc: '코드 블록과 미리보기에 사용할 구문 강조 팔레트입니다.',
     displayFeatureTags: '기능 배지 표시',
     displayFeatureTagsDesc: '최근 기능이나 실험적 기능을 표시하는 "New" 및 "Beta" 배지를 표시합니다.',
     displayTabs: '탭 표시',

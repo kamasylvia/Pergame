@@ -40,6 +40,20 @@ export default {
     title: '更新文件',
   },
 
+  imgbed: {
+    failed: '图床转存失败',
+    hint: '新上传的图片/视频可直落图床；存量本地媒体与外链可按需转存。',
+    images: '图片',
+    import: '转存外链',
+    imported: '已转存 {n} 个外链，更新 {docs} 篇文档（{failed} 个失败）',
+    migrate: '转存本地',
+    migrated: '已转存 {n} 个文件（{failed} 个失败）',
+    private: '应用于私有笔记',
+    running: '处理中…',
+    title: '图床',
+    videos: '视频',
+  },
+
   labels: {
     originalPath: '原始路径',
     path: '路径',
@@ -64,6 +78,7 @@ export default {
     found: '{count} 个未使用 · {size}',
     hint: '检查没有文档引用的存储对象(失败导入或中断上传的残留)。',
     loading: '加载中…',
+    missing: '文件内容已不在存储中，可直接删除该孤儿文件。',
     none: '没有残留——存储与文档一致。',
     preview: '预览',
     scan: '检查',

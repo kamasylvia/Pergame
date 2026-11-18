@@ -90,6 +90,22 @@ pub async fn create_user(
     Ok(ApiOk::with_status(StatusCode::CREATED, user))
 }
 
+/// GET /users — admin-only account list (admin dashboard).
+pub async fn list_users(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<ApiOk<Vec<crate::models::User>>, ApiError> {
+    if !crate::auth::guard::is_app_admin(auth.role) {
+        return Err(ApiError::Forbidden("forbidden".into()));
+    }
+    let mut db = state.toasty.clone();
+    let users = crate::models::User::all()
+        .exec(&mut db)
+        .await
+        .map_err(|e| ApiError::Internal(Box::new(e)))?;
+    Ok(ApiOk::ok(users))
+}
+
 /// GET /users/@me
 pub async fn get_me(
     State(state): State<AppState>,

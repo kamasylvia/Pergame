@@ -29,6 +29,8 @@ struct ObjectRef {
     mime: String,
     filename: String,
     sha: Option<String>,
+    /// Image-host URL; when set the bytes are proxied from there.
+    remote: Option<String>,
 }
 
 /// Pass-through stream that logs S3 mid-body failures (otherwise axum just
@@ -60,6 +62,29 @@ where
 
 fn object_ref(node: &NodeRow) -> Option<ObjectRef> {
     let meta = node.metadata.as_ref()?;
+    let mime = meta
+        .get("filetype")
+        .and_then(|v| v.as_str())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let filename = meta
+        .get("original_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&node.name)
+        .to_string();
+    if let Some(url) = meta
+        .get("imgbed_url")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return Some(ObjectRef {
+            key: String::new(),
+            mime,
+            filename,
+            sha: None,
+            remote: Some(url.to_string()),
+        });
+    }
     let key = meta.get("transformed_path")?.as_str()?;
     if key.is_empty() {
         return None;
@@ -74,17 +99,10 @@ fn object_ref(node: &NodeRow) -> Option<ObjectRef> {
         .map(|s| s.to_string());
     Some(ObjectRef {
         key: key.to_string(),
-        mime: meta
-            .get("filetype")
-            .and_then(|v| v.as_str())
-            .unwrap_or("application/octet-stream")
-            .to_string(),
-        filename: meta
-            .get("original_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&node.name)
-            .to_string(),
+        mime,
+        filename,
         sha,
+        remote: None,
     })
 }
 
@@ -341,6 +359,59 @@ async fn serve_disk_file(
     }
 }
 
+/// Proxy an image-host object. Authorization already happened in
+/// `download_file`; the host URL stays private to the backend.
+async fn serve_remote(
+    obj: &ObjectRef,
+    headers: &HeaderMap,
+    download: bool,
+) -> Result<Response, ApiError> {
+    let bed = crate::imgbed::Imgbed::from_config()
+        .ok_or(ApiError::BadRequest("image host not configured".into()))?;
+    let url = obj
+        .remote
+        .as_deref()
+        .ok_or(ApiError::NotFound("object not found".into()))?;
+    let range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| v.starts_with("bytes=") && !v.contains(','));
+    let resp = bed.fetch(url, range).await?;
+    let status = StatusCode::from_u16(resp.status().as_u16())
+        .map_err(|e| ApiError::BadRequest(format!("image-host bad status: {e}")))?;
+    if !status.is_success() {
+        return Err(ApiError::NotFound(format!(
+            "image-host object unavailable: HTTP {status}"
+        )));
+    }
+    let mut builder = Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, obj.mime.clone())
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CACHE_CONTROL, "private, no-cache");
+    for name in [
+        header::CONTENT_LENGTH,
+        header::CONTENT_RANGE,
+        header::ETAG,
+    ] {
+        if let Some(v) = resp.headers().get(&name) {
+            builder = builder.header(name, v);
+        }
+    }
+    if download {
+        builder = builder.header(
+            header::CONTENT_DISPOSITION,
+            format!(
+                "attachment; filename=\"{}\"",
+                obj.filename.replace('"', "_")
+            ),
+        );
+    }
+    builder
+        .body(Body::from_stream(resp.bytes_stream()))
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))
+}
+
 /// Builds the file response: disk cache first (immutable blobs), then S3.
 ///
 /// Small responses are buffered, not streamed, because the S3 byte stream
@@ -485,6 +556,9 @@ pub async fn download_file(
         return Err(ApiError::BadRequest("not a resource".into()));
     }
     let obj = object_ref(&node).ok_or(ApiError::NotFound("object not found".into()))?;
+    if obj.remote.is_some() {
+        return serve_remote(&obj, &headers, q.download).await;
+    }
     serve_object(&state, node.user_id, &obj, &headers, q.download).await
 }
 
@@ -529,6 +603,7 @@ pub async fn download_avatar(
         mime: "image/*".to_string(),
         filename: "avatar".to_string(),
         sha: None,
+        remote: None,
     };
     serve_object(&state, uid, &obj, &headers, false).await
 }
@@ -640,6 +715,7 @@ mod tests {
             mime: "text/plain".into(),
             filename: "abc.txt".into(),
             sha: Some("a".repeat(64)),
+            remote: None,
         };
         assert_eq!(cache_control_for(&blob), "private, no-cache");
         assert_eq!(
@@ -651,6 +727,7 @@ mod tests {
             mime: "text/plain".into(),
             filename: "abc.txt".into(),
             sha: None,
+            remote: None,
         };
         assert_eq!(cache_control_for(&legacy), "private, max-age=300");
     }

@@ -18,6 +18,7 @@ pub mod db_toasty;
 pub mod disk_cache;
 pub mod dql;
 pub mod error;
+pub mod imgbed;
 pub mod extract;
 pub mod locks;
 pub mod logger;

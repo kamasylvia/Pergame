@@ -24,6 +24,11 @@ const requestUrl = useRequestURL();
 const { t, locale } = useI18n();
 const i18nHead = useLocaleHead();
 const config = useRuntimeConfig();
+const preferences = usePreferencesStore();
+
+watchEffect(() => {
+  if (import.meta.client) document.documentElement.dataset.codeTheme = preferences.get('codeTheme').value;
+});
 
 router.beforeEach((to, from) => {
   if (to.path.startsWith('/dashboard') && (from.path === '/login' || from.path === '/')) {
@@ -60,6 +65,7 @@ useHead({
   ],
   htmlAttrs: {
     lang: i18nHead.value.htmlAttrs?.lang,
+    'data-code-theme': preferences.preferences.codeTheme,
   },
   script: [
     {

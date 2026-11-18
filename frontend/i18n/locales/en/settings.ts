@@ -27,6 +27,8 @@ export default {
 
   appearance: {
     chooseAccentColor: 'Choose accent color',
+    codeTheme: 'Code block theme',
+    codeThemeDesc: 'Syntax highlighting palette used in code blocks and previews.',
     displayFeatureTags: 'Show feature tags',
     displayFeatureTagsDesc: 'Show the "New" and "Beta" badges that mark recent or experimental features.',
     displayTabs: 'Show tabs',

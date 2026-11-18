@@ -592,7 +592,7 @@ const PROXY_HEADER_ALLOWLIST: [&str; 5] = [
 /// A plugin may only proxy hosts its manifest names, and even then the host
 /// must resolve to a public address: `net:*` is not a licence to probe
 /// `localhost`, RFC1918 ranges or the link-local metadata service.
-async fn ensure_public_target(url: &url::Url) -> Result<(), ApiError> {
+pub(crate) async fn ensure_public_target(url: &url::Url) -> Result<(), ApiError> {
     if url.scheme() != "http" && url.scheme() != "https" {
         return Err(ApiError::BadRequest("proxy supports http(s) only".into()));
     }
@@ -636,7 +636,7 @@ async fn ensure_public_target(url: &url::Url) -> Result<(), ApiError> {
 }
 
 /// Loopback, private, link-local and unique-local ranges.
-fn is_private_ip(ip: std::net::IpAddr) -> bool {
+pub(crate) fn is_private_ip(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {
             v4.is_loopback()

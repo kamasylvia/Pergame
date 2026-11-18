@@ -6,6 +6,7 @@
 ## 状态
 
 - **2026-11-09**:upstream remote 重建。⚠️ 上游仓已改回 **`Smaug6739/Alexandrie`**(原 `Smaug6739/Collectanea` 404,2026-11-09 实测)。merge-base = `429e2b9b`(fix(errors): new errors handling with correct 404 page),落后 5 commits。
+- **2026-11-18**:复查无新 main 提交——`upstream/main` 仍 `33e4bb2d`(2026-11-08),最新 tag 仍 `v8.14.4`。新增 3 个 dependabot PR 分支(`gin-contrib/cors 1.7.11` / `go-mail 0.8.2` / `x/crypto 0.59.0`),均 Go deps,按规则不搬运。
 
 ## 待处置
 

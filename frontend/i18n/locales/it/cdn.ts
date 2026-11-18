@@ -40,6 +40,20 @@ export default {
     title: 'Aggiorna file',
   },
 
+  imgbed: {
+    failed: 'Trasferimento verso l’hosting immagini non riuscito',
+    hint: 'Hosting immagini opzionale per i nuovi media; copia i media locali o esterni esistenti su richiesta.',
+    images: 'Immagini',
+    import: 'Importa esterni',
+    imported: '{n} link importati, {docs} documenti aggiornati ({failed} non riusciti)',
+    migrate: 'Copia locale',
+    migrated: '{n} file copiati ({failed} non riusciti)',
+    private: 'Note private',
+    running: 'Elaborazione…',
+    title: 'Hosting immagini',
+    videos: 'Video',
+  },
+
   labels: {
     originalPath: 'Percorso originale',
     path: 'Percorso',
@@ -64,6 +78,7 @@ export default {
     found: '{count} inutilizzati · {size}',
     hint: 'Cerca oggetti memorizzati che nessun documento referenzia (residui di import falliti o caricamenti interrotti).',
     loading: 'Caricamento…',
+    missing: 'I byte del file mancano dallo storage; elimina questo orfano.',
     none: 'Niente di inutilizzato — lo spazio corrisponde ai documenti.',
     preview: 'Anteprima',
     scan: 'Controlla',

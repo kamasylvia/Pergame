@@ -145,6 +145,28 @@ fn mime_allowed(list: &[String], mime: &str) -> bool {
     list.iter().any(|t| t == mime)
 }
 
+/// Image-host scope: images and videos only (PDFs/docs stay on S3).
+fn is_media_mime(mime: &str) -> bool {
+    mime.starts_with("image/") || mime.starts_with("video/")
+}
+
+/// Public parents are already public; private ones require the user's
+/// `imgbedPrivate` opt-in.
+async fn imgbed_private_ok(state: &AppState, user_id: Uuid, parent_id: Option<Uuid>) -> bool {
+    if let Some(pid) = parent_id
+        && let Ok(Some(parent)) = node_repo::get_by_id(&state.db, pid).await
+        && parent.accessibility.is_some_and(|a| a == 3)
+    {
+        return true;
+    }
+    crate::repo::settings_stats::get_settings(&state.db, user_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| s.general.get("imgbedPrivate").and_then(|v| v.as_bool()))
+        .unwrap_or(false)
+}
+
 fn build_metadata(
     filetype: &str,
     original_path: &str,
@@ -231,21 +253,6 @@ pub async fn upload_file(
         .map(|(_, e)| format!(".{}", e))
         .unwrap_or_default();
     let transformed_path = format!("{}{}", id, ext);
-    let sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
-    let mut metadata_json =
-        build_metadata(&mime, &file.filename, &transformed_path, metadata.as_ref());
-    // Content address: reads prefer blobs/{sha}; transformed_path stays as
-    // the legacy fallback until the blob migration moves old objects.
-    if let Some(obj) = metadata_json.as_object_mut() {
-        obj.insert("content_sha256".into(), serde_json::Value::String(sha));
-    }
-
-    let mut name = file.filename.clone();
-    if name.len() > 50 {
-        // Go slices bytes; keep byte-boundary parity then trim to a char edge.
-        name = name.chars().take(50).collect();
-    }
-    let accessibility = Some(1);
 
     // Parent permission check mirrors nodes create: disallowed parent → null.
     let mut safe_parent = parent_id;
@@ -263,6 +270,48 @@ pub async fn upload_file(
         }
     }
 
+    // Image host: images/videos only. Private parents need the per-user
+    // opt-in (`imgbedPrivate`); public parents are already public.
+    let mut metadata_json =
+        build_metadata(&mime, &file.filename, &transformed_path, metadata.as_ref());
+    let mut remote_url: Option<String> = None;
+    if let Some(bed) = crate::imgbed::Imgbed::from_config()
+        && is_media_mime(&mime)
+        && imgbed_private_ok(&state, actor.user_id, safe_parent).await
+    {
+        match bed.upload(&file.bytes, &file.filename, &mime).await {
+            Ok(url) => {
+                if let Some(obj) = metadata_json.as_object_mut() {
+                    obj.insert("imgbed_url".into(), serde_json::Value::String(url.clone()));
+                    obj.insert(
+                        "transformed_path".into(),
+                        serde_json::Value::String(url.clone()),
+                    );
+                }
+                remote_url = Some(url);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "image-host upload failed; falling back to S3");
+            }
+        }
+    }
+
+    if remote_url.is_none() {
+        let sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
+        // Content address: reads prefer blobs/{sha}; transformed_path stays as
+        // the legacy fallback until the blob migration moves old objects.
+        if let Some(obj) = metadata_json.as_object_mut() {
+            obj.insert("content_sha256".into(), serde_json::Value::String(sha));
+        }
+    }
+
+    let mut name = file.filename.clone();
+    if name.len() > 50 {
+        // Go slices bytes; keep byte-boundary parity then trim to a char edge.
+        name = name.chars().take(50).collect();
+    }
+    let accessibility = Some(1);
+
     let write = node_repo::NodeWrite {
         parent_id: safe_parent,
         name,
@@ -278,7 +327,7 @@ pub async fn upload_file(
         display: None,
         node_order: None,
         content: Some(file.filename.clone()),
-        content_compiled: Some(transformed_path.clone()),
+        content_compiled: Some(remote_url.clone().unwrap_or_else(|| transformed_path.clone())),
         size: Some(file.bytes.len() as i64),
         metadata: Some(metadata_json.clone()),
     };
@@ -450,19 +499,48 @@ pub async fn update_file(
             .unwrap_or("")
             .to_string();
         let file_len = file.bytes.len();
-        let new_sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
+        let mut metadata = db_node.metadata.clone().unwrap_or(json!({}));
+        let mut remote_url: Option<String> = None;
+        if let Some(bed) = crate::imgbed::Imgbed::from_config()
+            && is_media_mime(&mime)
+            && imgbed_private_ok(&state, actor.user_id, db_node.parent_id).await
+        {
+            match bed.upload(&file.bytes, &file.filename, &mime).await {
+                Ok(url) => {
+                    if let Some(obj) = metadata.as_object_mut() {
+                        obj.remove("content_sha256");
+                        obj.insert("imgbed_url".into(), json!(url));
+                        obj.insert("transformed_path".into(), json!(url));
+                    }
+                    remote_url = Some(url);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "image-host update failed; falling back to S3");
+                }
+            }
+        }
+        if remote_url.is_none() {
+            let ext: String = file
+                .filename
+                .rsplit_once('.')
+                .map(|(_, e)| format!(".{}", e))
+                .unwrap_or_default();
+            let new_path = format!("{resource_id}{ext}");
+            let new_sha = crate::blobs::acquire(&state.db, &storage, &file.bytes).await?;
+            if let Some(obj) = metadata.as_object_mut() {
+                obj.insert("filetype".into(), json!(mime));
+                obj.insert("content_sha256".into(), json!(new_sha));
+                obj.insert("transformed_path".into(), json!(new_path));
+                obj.remove("imgbed_url");
+            }
+        }
+        // The old S3 object is no longer referenced in either branch.
         match old_sha {
-            Some(sha) if sha != new_sha => crate::blobs::release(&state.db, &storage, &sha).await,
-            None if !old_path.is_empty() => {
+            Some(sha) => crate::blobs::release(&state.db, &storage, &sha).await,
+            None if !old_path.is_empty() && !old_path.starts_with("http") => {
                 storage.delete_user_object(actor.user_id, &old_path).await
             }
             _ => {}
-        }
-
-        let mut metadata = db_node.metadata.clone().unwrap_or(json!({}));
-        if let Some(obj) = metadata.as_object_mut() {
-            obj.insert("filetype".into(), json!(mime));
-            obj.insert("content_sha256".into(), json!(new_sha));
         }
 
         let size = Some(file_len as i64);

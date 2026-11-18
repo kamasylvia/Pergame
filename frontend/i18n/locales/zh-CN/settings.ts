@@ -27,6 +27,8 @@ export default {
 
   appearance: {
     chooseAccentColor: '选择强调色',
+    codeTheme: '代码块配色',
+    codeThemeDesc: '代码块与代码预览使用的语法高亮配色。',
     displayFeatureTags: '显示功能标记',
     displayFeatureTagsDesc: '显示用来标示新功能与实验性功能的“New”与“Beta”徽章。',
     displayTabs: '显示标签栏',

@@ -17,6 +17,8 @@ pub struct Config {
     pub cdn: CdnConfig,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub imgbed: ImgbedConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +95,55 @@ impl Default for AuthConfig {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+/// Generic image-host adapter (`[Imgbed]`). Empty endpoint/token = disabled.
+pub struct ImgbedConfig {
+    #[serde(default, rename = "Enabled")]
+    pub enabled: bool,
+    #[serde(default, rename = "Endpoint")]
+    pub endpoint: String,
+    #[serde(default, rename = "Token")]
+    pub token: String,
+    #[serde(default = "default_imgbed_field", rename = "Field")]
+    pub field: String,
+    #[serde(default = "default_imgbed_auth_header", rename = "AuthHeader")]
+    pub auth_header: String,
+    #[serde(default = "default_imgbed_auth_prefix", rename = "AuthPrefix")]
+    pub auth_prefix: String,
+    #[serde(default, rename = "ResponsePath")]
+    pub response_path: String,
+    #[serde(default, rename = "UrlTemplate")]
+    pub url_template: String,
+    #[serde(default, rename = "DeleteTemplate")]
+    pub delete_template: String,
+}
+
+impl Default for ImgbedConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: String::new(),
+            token: String::new(),
+            field: default_imgbed_field(),
+            auth_header: default_imgbed_auth_header(),
+            auth_prefix: default_imgbed_auth_prefix(),
+            response_path: String::new(),
+            url_template: String::new(),
+            delete_template: String::new(),
+        }
+    }
+}
+
+fn default_imgbed_field() -> String {
+    "file".into()
+}
+fn default_imgbed_auth_header() -> String {
+    "Authorization".into()
+}
+fn default_imgbed_auth_prefix() -> String {
+    "Bearer ".into()
+}
+
 fn default_driver() -> String {
     "pgx".into()
 }
@@ -166,6 +217,42 @@ impl Config {
             } else {
                 tracing::warn!("config: [Auth] section failed to deserialize; using defaults");
             }
+        }
+        if let Some(table) = value.get("Imgbed") {
+            if let Ok(imgbed) = ImgbedConfig::deserialize(table.clone()) {
+                cfg.imgbed = imgbed;
+            } else {
+                tracing::warn!("config: [Imgbed] section failed to deserialize; using defaults");
+            }
+        }
+
+        // Image-host env overrides.
+        if let Ok(v) = std::env::var("IMGBED_ENABLED") {
+            cfg.imgbed.enabled = matches!(v.as_str(), "1" | "true" | "TRUE" | "yes");
+        }
+        if let Ok(v) = std::env::var("IMGBED_ENDPOINT") {
+            cfg.imgbed.endpoint = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_TOKEN") {
+            cfg.imgbed.token = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_FIELD") {
+            cfg.imgbed.field = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_AUTH_HEADER") {
+            cfg.imgbed.auth_header = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_AUTH_PREFIX") {
+            cfg.imgbed.auth_prefix = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_RESPONSE_PATH") {
+            cfg.imgbed.response_path = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_URL_TEMPLATE") {
+            cfg.imgbed.url_template = v;
+        }
+        if let Ok(v) = std::env::var("IMGBED_DELETE_TEMPLATE") {
+            cfg.imgbed.delete_template = v;
         }
 
         // Environment overrides (Go parity: DATABASE_* etc.)

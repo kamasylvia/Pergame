@@ -27,6 +27,8 @@ export default {
 
   appearance: {
     chooseAccentColor: '選擇強調色',
+    codeTheme: '程式碼區塊配色',
+    codeThemeDesc: '程式碼區塊與預覽使用的語法高亮配色。',
     displayFeatureTags: '顯示功能標記',
     displayFeatureTagsDesc: '顯示用來標示新功能與實驗性功能的「New」與「Beta」徽章。',
     displayTabs: '顯示分頁列',

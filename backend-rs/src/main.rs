@@ -399,7 +399,10 @@ async fn main() {
             post(routes::trash::restore_node),
         )
         .route("/api/trash/{nodeId}", delete(routes::trash::purge_node))
-        .route("/api/users", post(routes::users::create_user))
+        .route(
+            "/api/users",
+            get(routes::users::list_users).post(routes::users::create_user),
+        )
         .route("/api/users/@me", get(routes::users::get_me))
         .route("/api/users/@me/quota", get(routes::users::get_my_quota))
         // MCP API tokens (spec features/mcp-server.md): session-authenticated
@@ -458,6 +461,18 @@ async fn main() {
         .route(
             "/api/resources/orphans/preview",
             get(routes::resources::preview_orphan),
+        )
+        .route(
+            "/api/resources/imgbed",
+            get(routes::resources::imgbed_status),
+        )
+        .route(
+            "/api/resources/imgbed/migrate",
+            post(routes::resources::migrate_local),
+        )
+        .route(
+            "/api/resources/imgbed/import",
+            post(routes::resources::import_external),
         )
         .route(
             "/api/users/{id}/avatar",

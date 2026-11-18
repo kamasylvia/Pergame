@@ -40,6 +40,20 @@ export default {
     title: '파일 업데이트',
   },
 
+  imgbed: {
+    failed: '이미지 호스트 전송 실패',
+    hint: '새 미디어를 이미지 호스트로 보낼 수 있습니다. 기존 로컬/외부 미디어는 필요할 때 복사하세요.',
+    images: '이미지',
+    import: '외부 가져오기',
+    imported: '{n}개 링크 가져옴, {docs}개 문서 갱신됨 ({failed}개 실패)',
+    migrate: '로컬 복사',
+    migrated: '{n}개 파일 복사됨 ({failed}개 실패)',
+    private: '비공개 노트',
+    running: '처리 중…',
+    title: '이미지 호스트',
+    videos: '동영상',
+  },
+
   labels: {
     originalPath: '원본 경로',
     path: '경로',
@@ -64,6 +78,7 @@ export default {
     found: '{count}개 미사용 · {size}',
     hint: '문서가 참조하지 않는 저장 객체를 찾습니다(실패한 가져오기나 중단된 업로드의 잔여물).',
     loading: '불러오는 중…',
+    missing: '파일 바이트가 스토리지에 없습니다. 이 고아 파일을 삭제하세요.',
     none: '남은 파일이 없습니다 — 저장소와 문서가 일치합니다.',
     preview: '미리 보기',
     scan: '확인',

@@ -214,12 +214,12 @@ async function action(name: string) {
   }
 
   .submenu {
-    display: none;
     position: absolute;
     top: -6px;
     // Flush with the parent edge: a gap here breaks the :hover chain and
     // collapses the submenu before the pointer reaches it.
     left: 100%;
+    display: none;
     min-width: 200px;
     padding: 6px;
     border: 1px solid var(--border);
@@ -229,8 +229,8 @@ async function action(name: string) {
     box-shadow: var(--shadow-md);
 
     &.submenu-left {
-      left: auto;
       right: 100%;
+      left: auto;
     }
   }
 

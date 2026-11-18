@@ -17,3 +17,17 @@ SupportedTypes = ["image/png","image/jpeg","image/gif","image/bmp","image/webp",
 [Auth]
 AccessTokenExpiry = 1800      # 30 minutes
 RefreshTokenExpiry = 604800   # 7 days
+
+# Generic image-host adapter (CloudFlare-ImgBed / Lsky Pro / Chevereto …).
+# Disabled unless Enabled=true and Endpoint/Token are set. IMGBED_* env vars
+# override these values. Endpoint is the full upload URL.
+[Imgbed]
+Enabled = false
+Endpoint = ""
+Token = ""
+Field = "file"
+AuthHeader = "Authorization"
+AuthPrefix = "Bearer "
+ResponsePath = ""
+UrlTemplate = ""
+DeleteTemplate = ""

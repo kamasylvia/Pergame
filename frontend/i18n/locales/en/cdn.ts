@@ -40,6 +40,20 @@ export default {
     title: 'Update file',
   },
 
+  imgbed: {
+    failed: 'Image-host transfer failed',
+    hint: 'Optional image host for new media; copy existing local or external media on demand.',
+    images: 'Images',
+    import: 'Import external',
+    imported: '{n} link(s) imported, {docs} document(s) updated ({failed} failed)',
+    migrate: 'Copy local',
+    migrated: '{n} file(s) copied ({failed} failed)',
+    private: 'Private notes',
+    running: 'Working…',
+    title: 'Image host',
+    videos: 'Videos',
+  },
+
   labels: {
     originalPath: 'Original path',
     path: 'Path',
@@ -64,6 +78,7 @@ export default {
     found: '{count} unused · {size}',
     hint: 'Check for stored objects no document points at (leftovers from failed imports or interrupted uploads).',
     loading: 'Loading…',
+    missing: 'File bytes are missing from storage; delete this orphan.',
     none: 'Nothing unused — storage matches your documents.',
     preview: 'Preview',
     scan: 'Check',

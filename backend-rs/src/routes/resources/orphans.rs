@@ -177,7 +177,17 @@ pub async fn preview_orphan(
     }
     let blob_prefix = format!("{}/", crate::blobs::BLOBS_PREFIX);
     let bytes = match q.key.strip_prefix(&blob_prefix) {
-        Some(sha) => storage.get_blob(sha).await?,
+        Some(sha) => match storage.get_blob(sha).await {
+            Ok(bytes) => bytes,
+            // Stray object_blobs rows can outlive their S3 object; the row is
+            // still purgeable, but there is nothing to preview.
+            Err(ApiError::BadRequest(_)) => {
+                return Err(ApiError::NotFound(
+                    "object bytes are missing; delete this orphan".into(),
+                ));
+            }
+            Err(e) => return Err(e),
+        },
         None => storage.get_user_object(auth.user_id(), &q.key).await?,
     };
     let mime = match q.key.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()) {

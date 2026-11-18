@@ -15,7 +15,7 @@ pre {
 	margin: 12px 0;
 	border-radius: var(--radius-md);
 	word-break: break-all;
-	background: #292d3e;
+	background: var(--code-bg, #292d3e);
 }
 
 /* Inline code */

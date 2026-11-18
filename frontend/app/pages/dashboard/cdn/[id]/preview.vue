@@ -18,7 +18,18 @@
         <LazyPDFViewer v-else-if="isPdfFile(mimeType)" :src="resourceURL(resource)" :zoom="zoom" />
         <video v-else-if="isVideoFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
         <audio v-else-if="isAudioFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
-        <pre v-else-if="isCodeFile(resource.name || '')" class="code-preview"><code v-html="codeHtml"></code></pre>
+        <div v-else-if="isCodeFile(resource.name || '')" class="code-preview">
+          <button type="button" class="code-copy-btn" :class="{ copied }" aria-label="Copy code" title="Copy code" @click="copyCode">
+            <span class="btn-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+            </span>
+            <span class="btn-icon-success">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+            </span>
+          </button>
+          <pre class="code-gutter" aria-hidden="true">{{ lineNumbers }}</pre>
+          <pre class="code-body"><code v-html="codeHtml"></code></pre>
+        </div>
         <div v-else class="no-preview">
           <p>{{ t('cdn.preview.unavailable') }}</p>
           <p>
@@ -57,8 +68,28 @@ const mimeType = computed(() => resource.value?.metadata?.filetype || '');
 
 // Code/text files render inline (256 KiB cap mirrors code-embed.ts).
 const codeHtml = ref('');
+const codeText = ref('');
+const lineNumbers = ref('');
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function copyCode() {
+  if (!codeText.value) return;
+  try {
+    await navigator.clipboard.writeText(codeText.value);
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied.value = false), 1500);
+  } catch (err) {
+    console.warn('Cannot copy text to clipboard', err);
+  }
+}
+
 watchEffect(async () => {
   codeHtml.value = '';
+  codeText.value = '';
+  lineNumbers.value = '';
+  copied.value = false;
   const node = resource.value;
   if (!node || !isCodeFile(node.name || '')) return;
   try {
@@ -66,10 +97,15 @@ watchEffect(async () => {
     if (!resp.ok) return;
     const text = await resp.text();
     if (text.length > 256 * 1024 || (text.length > 0 && text.includes('\uFFFD'))) return;
+    codeText.value = text;
+    const lines = text.replace(/\n$/, '').split('\n').length;
+    lineNumbers.value = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
     const lang = codeLanguage(node.name || '');
     codeHtml.value = lang && hljs.getLanguage(lang) ? hljs.highlight(text, { language: lang }).value : text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   } catch {
     codeHtml.value = '';
+    codeText.value = '';
+    lineNumbers.value = '';
   }
 });
 
@@ -107,6 +143,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);
+  clearTimeout(copiedTimer);
 });
 </script>
 <style scoped lang="scss">
@@ -131,11 +168,55 @@ header {
 }
 
 .code-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
   width: 100%;
   margin: 0;
-  padding: 16px;
-  overflow: auto;
+  border-radius: var(--radius-md);
   text-align: left;
+  background: var(--code-bg, #292d3e);
+  overflow: hidden;
+  // Plain (unwrapped) code text inherits this; token spans keep their own colors.
+  --text-body: var(--code-fg, #abb2bf);
+}
+
+.code-gutter {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 16px 12px 16px 16px;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--code-comment, #8a93b5);
+  text-align: right;
+  background: transparent;
+  user-select: none;
+}
+
+.code-body {
+  display: block;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  background: transparent;
+  overflow-x: auto;
+}
+
+.code-body code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  background: transparent;
 }
 
 .no-preview {
