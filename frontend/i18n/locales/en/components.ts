@@ -141,6 +141,7 @@ export default {
   viewSelection: {
     kanban: 'Kanban',
     list: 'List',
+    overview: "Overview",
     table: 'Table',
   },
 };

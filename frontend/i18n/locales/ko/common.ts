@@ -8,6 +8,7 @@ export default {
     confirm: '확인',
     copy: '복사',
     copyLink: '링크 복사',
+    copyPath: "파일 경로 복사",
     create: '생성',
     delete: '삭제',
     download: '다운로드',

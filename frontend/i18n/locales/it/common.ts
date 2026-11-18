@@ -8,6 +8,7 @@ export default {
     confirm: 'Conferma',
     copy: 'Copia',
     copyLink: 'Copia link',
+    copyPath: "Copia percorso file",
     create: 'Crea',
     delete: 'Elimina',
     download: 'Scarica',

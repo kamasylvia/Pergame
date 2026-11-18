@@ -8,6 +8,7 @@ export default {
     confirm: 'Bestätigen',
     copy: 'Kopieren',
     copyLink: 'Link kopieren',
+    copyPath: "Dateipfad kopieren",
     create: 'Erstellen',
     delete: 'Löschen',
     download: 'Herunterladen',

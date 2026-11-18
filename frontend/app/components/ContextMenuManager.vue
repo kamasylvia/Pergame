@@ -152,7 +152,10 @@ const pos = computed(() => {
   border-radius: var(--radius-lg);
   background: var(--surface-base);
   box-shadow: var(--shadow-lg);
-  overflow: hidden;
+  // visible: the Copy row's hover submenu is anchored outside this box;
+  // clipping it here would hide the submenu entirely. Nothing else can
+  // overflow the rounded box (content is transparent and width-driven).
+  overflow: visible;
 }
 
 .context-menu-content {

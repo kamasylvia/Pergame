@@ -2,6 +2,7 @@
   <span
     class="item"
     :draggable="true"
+    :title="fullPath || undefined"
     :class="{ dragging: isDragOver }"
     @click="onClick"
     @dragstart="dragStart"
@@ -11,7 +12,7 @@
     @contextmenu.prevent="openContextMenu"
   >
     <!-- Left icon -->
-    <Icon :fill="item.data.role == 3 ? 'var(--pink) !important' : undefined" :name="icon" :class="customClass" />&nbsp;
+    <Icon :name="icon" :class="customClass" />&nbsp;
 
     <!-- Label -->
     <NuxtLink v-if="item.onClick" class="close content" @click="item.onClick">{{ item.data.role == -1 ? t(item.label) : item.label }}</NuxtLink>
@@ -42,13 +43,13 @@ import type { Node } from '~/stores';
 
 import NodeContextMenu from '~/components/Node/Action/ContextMenu.vue';
 
-import { type SidebarItem, getItemChildren } from './helpers';
+import type { SidebarItem } from './helpers';
 import type { TreeItem } from '~/helpers/TreeBuilder';
+import { nodeFullPath } from '~/helpers/node';
 
 const nodesStore = useNodesStore();
 const nodesPermissionsStore = useNodesPermissionsStore();
 const resourcesStore = useResourcesStore();
-const preferencesStore = usePreferencesStore();
 
 const { t } = useI18n();
 const { isOpened, workspaceId } = useSidebar();
@@ -65,18 +66,19 @@ const customClass = computed(() => {
     return `item-icon ${getAppAccent(props.item.data.color as number)}`;
   return 'default-icon';
 });
-const iconsNormalized = preferencesStore.get('normalizeFileIcons');
-
-const icon = computed(() => {
-  const children = getItemChildren(props.item);
-  if (!iconsNormalized.value && props.item.icon === 'sidebar/file' && children?.some(child => child.data?.role != 4)) return 'file_parent';
-  return props.item.icon || '';
-});
+const icon = computed(() => props.item.icon || '');
 
 const canEdit = computed(() => nodesPermissionsStore.hasPermissions(props.item.data as Node, 2));
 
 /** Trilium parity: every position of a multi-location note shows the marker. */
 const isClone = computed(() => nodesStore.links.some(l => l.node_id === props.item.id));
+
+/** Full path from the top-level folder ("A / B / C"), shown as hover tooltip. Non-node rows (role -1) get none. */
+const fullPath = computed(() => {
+  const data = props.item.data as Node | undefined;
+  if (!data || Number(data.role) === -1) return null;
+  return nodeFullPath(data, id => nodesStore.getById(id));
+});
 
 const onClick = (m: MouseEvent) => {
   // if element does not have the "close" class, don't close the sidebar
@@ -171,6 +173,7 @@ const drop = async (event: DragEvent) => {
 
   .default-icon,
   .item-icon {
+    flex-shrink: 0;
     width: 20px;
     height: 20px;
     color: var(--primary) !important;
@@ -185,11 +188,14 @@ const drop = async (event: DragEvent) => {
 .content {
   position: relative;
   flex: 1;
+  min-width: 0;
   font-weight: 470;
   color: var(--text-primary-light);
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow: hidden;
 }
+
 
 .dragging {
   border-bottom: 2px solid var(--primary);

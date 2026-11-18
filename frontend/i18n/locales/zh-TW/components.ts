@@ -141,6 +141,7 @@ export default {
   viewSelection: {
     kanban: '看板',
     list: '清單',
+    overview: "概覽",
     table: '表格',
   },
 };

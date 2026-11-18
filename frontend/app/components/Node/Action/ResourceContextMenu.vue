@@ -36,6 +36,7 @@
 import NodePermissions from '../Modals/Permissions.vue';
 import NodeDeleteModal from '../Modals/Delete.vue';
 import type { Node } from '~/stores';
+import { resourceEmbedUrl } from '~/helpers/resources';
 
 const props = defineProps<{ node: Node }>();
 const emit = defineEmits(['close']);
@@ -47,6 +48,7 @@ const preferences = usePreferencesStore();
 const { t } = useI18nT();
 const { shortDate } = useDateFormatters();
 const { resourceURL } = useApi();
+
 const modal = useModal();
 const notifications = useNotifications();
 const router = useRouter();
@@ -71,7 +73,7 @@ async function action(name: string) {
       notifications.add({ type: 'success', title: 'Link copied to clipboard' });
       break;
     case 'copyMd':
-      navigator.clipboard.writeText(`![${props.node.name}](${resourceURL(props.node)})`);
+      navigator.clipboard.writeText(`![${props.node.name}](${resourceEmbedUrl(props.node, props.node.name || '')})`);
       notifications.add({ type: 'success', title: 'Markdown link copied to clipboard' });
       break;
     case 'manageAccess':

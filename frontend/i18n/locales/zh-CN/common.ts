@@ -8,6 +8,7 @@ export default {
     confirm: '确认',
     copy: '复制',
     copyLink: '复制链接',
+    copyPath: "复制文件路径",
     create: '创建',
     delete: '删除',
     download: '下载',

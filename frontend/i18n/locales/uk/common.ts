@@ -8,6 +8,7 @@ export default {
     confirm: 'Підтвердити',
     copy: 'Копіювати',
     copyLink: 'Копіювати',
+    copyPath: "Копіювати шлях до файлу",
     create: 'Створити',
     delete: 'Видалити',
     download: 'Скачати',

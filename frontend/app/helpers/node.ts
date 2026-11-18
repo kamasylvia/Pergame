@@ -10,8 +10,11 @@ export const resolveIcon = (item: Node | DB_Node | NodeSearchResult): string => 
   if (item.icon) return item.icon;
   if (item.role === 0) return 'organization';
   if (item.role === 1) return 'workspace';
-  if (item.role === 2 && 'shared' in item) return item.shared ? 'shared_folder' : 'folder';
-  if (item.role === 3) return item.accessibility == 1 ? 'sidebar/file' : item.accessibility == 2 ? 'draft' : 'shared_doc';
+  // `shared` is absent on DQL/search rows (no permission blob there);
+  // undefined still resolves to the plain folder icon.
+  if (item.role === 2) return (item as { shared?: boolean }).shared ? 'shared_folder' : 'folder';
+  // Documents share one icon: no per-state variants (draft/shared/has-children).
+  if (item.role === 3) return 'sidebar/file';
   if (item.role === 4) {
     if (item.metadata?.drawio) return 'sidebar/diagram';
     if (item.metadata?.filetype == 'application/pdf') return 'sidebar/pdf';
@@ -43,6 +46,20 @@ export const resolveNodeType = (node: Node): string => {
   const types: Record<number, string> = { 0: 'Team', 1: 'Workspace', 2: 'Category', 3: 'Document', 4: 'Resource' };
   return types[node.role] || '';
 };
+
+/** Full path from the top-level folder ("A / B / C"), walked through the
+ * store; used by the sidebar tooltip and the copy-file-path menu action. */
+export function nodeFullPath(node: Pick<Node, 'name' | 'parent_id'>, getById: (id: string) => Partial<Node> | undefined): string {
+  const segs: string[] = [node.name || '(untitled)'];
+  let cur = node.parent_id ? getById(node.parent_id) : undefined;
+  let guard = 0;
+  while (cur && guard++ < 32) {
+    if (cur.name) segs.unshift(cur.name);
+    if (!cur.parent_id) break;
+    cur = getById(cur.parent_id);
+  }
+  return segs.join(' / ');
+}
 
 /** Get the name of the permission level */
 const permissions: Record<number, string> = { 1: 'Viewer', 2: 'Editor', 3: 'Admin' };
@@ -122,17 +139,3 @@ export function mergeNode(node: Node, full_node: Node): Node {
   return result;
 }
 
-/** Directory index file (issue #4): auto-created per folder, settings-driven name. */
-export function isIndexFile(node: unknown): boolean {
-  if (typeof node !== 'object' || node === null) return false;
-  if (!('metadata' in node)) return false;
-  const metadata: unknown = node.metadata;
-  if (typeof metadata !== 'object' || metadata === null) return false;
-  if (!('index' in metadata)) return false;
-  return metadata.index === true;
-}
-
-/** Find the index child of a folder among store nodes (issue #4). */
-export function findIndexChild(nodes: ReadonlyArray<Pick<DB_Node, 'id' | 'parent_id' | 'role' | 'metadata'>>, folderId: string): string | undefined {
-  return nodes.find(n => n.parent_id === folderId && n.role === 3 && isIndexFile(n))?.id;
-}

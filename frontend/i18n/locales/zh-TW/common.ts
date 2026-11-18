@@ -8,6 +8,7 @@ export default {
     confirm: '確認',
     copy: '複製',
     copyLink: '複製連結',
+    copyPath: "複製檔案路徑",
     create: '建立',
     delete: '刪除',
     download: '下載',

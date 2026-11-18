@@ -141,6 +141,7 @@ export default {
   viewSelection: {
     kanban: '칸반',
     list: '목록',
+    overview: "개요",
     table: '테이블',
   },
 };
