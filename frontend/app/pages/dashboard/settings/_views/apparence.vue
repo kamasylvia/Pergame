@@ -97,12 +97,6 @@ const options = computed(
             key: 'displayUncategorizedResources' as const,
           },
           {
-            label: t('settings.appearance.displayIndexFiles'),
-            description: t('settings.appearance.displayIndexFilesDesc'),
-            type: 'toggle' as const,
-            key: 'displayIndexFiles' as const,
-          },
-          {
             label: t('settings.appearance.showItemsInSidebar'),
             type: 'groupCheckbox' as const,
             key: 'sidebarItems' as const,

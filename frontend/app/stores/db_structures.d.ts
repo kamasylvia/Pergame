@@ -22,8 +22,6 @@ export interface DB_Node {
     original_path?: string;
     transformed_path?: string;
     drawio?: boolean;
-    /** Directory index file (issue #4): name/parent/pin locked, settings-driven. */
-    index?: boolean;
   };
   created_timestamp: number;
   updated_timestamp: number;

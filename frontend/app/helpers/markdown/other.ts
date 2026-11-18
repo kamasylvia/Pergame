@@ -129,6 +129,11 @@ function footNotePlugin(md: MarkdownIt) {
 const VIDEO_REGEX = /\.(mp4|webm|ogg|ogv|mov|avi|mkv|flv|wmv)([?#].*)?$/i;
 const AUDIO_REGEX = /\.(mp3|wav|ogg|m4a|flac|aac)([?#].*)?$/i;
 const PDF_REGEX = /\.pdf([?#].*)?$/i;
+// Keep in sync with backend-rs/src/utils.rs (CODE_EXTS). Named resource URLs
+// (/api/resources/{id}/file/{name}) carry the extension; bare URLs fall
+// through to the image renderer as before.
+const CODE_REGEX
+  = /\.(py|rs|go|js|mjs|cjs|ts|tsx|jsx|java|c|h|cpp|hpp|cs|rb|php|sh|bash|zsh|fish|sql|r|swift|kt|scala|pl|lua|toml|yaml|yml|json|xml|ini|md|markdown|txt|csv|diff|log|dockerfile|makefile|bat|ps1|vim|el)([?#].*)?$/i;
 
 function html5MediaPlugin(md: MarkdownIt) {
   const defaultImageRenderer =
@@ -178,6 +183,12 @@ function html5MediaPlugin(md: MarkdownIt) {
       // Placeholder: ContentCompiled mounts PDFViewer here after render
       // (same post-mount pattern as mermaid diagrams).
       return `<div class="pdf-embed" data-src="${escSrc}" data-alt="${escAlt}"></div>`;
+    }
+
+    if (src.match(CODE_REGEX)) {
+      // Placeholder: ContentCompiled hydrates the fetched text into a
+      // highlighted code block (code-embed.ts), falling back to a link.
+      return `<div class="code-embed" data-src="${escSrc}" data-name="${escAlt}"></div>`;
     }
 
     return defaultImageRenderer(tokens, idx, options, env, self);

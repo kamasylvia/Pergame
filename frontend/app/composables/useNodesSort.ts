@@ -1,7 +1,5 @@
 import type { TreeItem } from '~/helpers/TreeBuilder';
 import type { Node } from '~/stores';
-import { isIndexFile } from '~/helpers/node';
-
 export function useNodesSort() {
   const preferences = usePreferencesStore();
   const sortKey = preferences.get('sortKey');
@@ -9,11 +7,6 @@ export function useNodesSort() {
   function sortItems<
     T extends { id: string; parent_id?: string | null; role?: number; order?: number; created_timestamp?: number; updated_timestamp?: number },
   >(a: TreeItem<T>, b: TreeItem<T>) {
-    // Directory index (issue #4): index ahead of everything in its folder;
-    // the role/order/name cascade below handles the rest.
-    const aIndex = isIndexFile(a.data);
-    const bIndex = isIndexFile(b.data);
-    if (aIndex !== bIndex) return aIndex ? -1 : 1;
     if (a.data.role !== b.data.role) {
       return (b.data.role ?? 0) - (a.data.role ?? 0);
     }
@@ -35,10 +28,6 @@ export function useNodesSort() {
   }
 
   function sortNodes(a: Node, b: Node) {
-    // Directory index (issue #4): index ahead of everything in its folder.
-    const aIndex = isIndexFile(a);
-    const bIndex = isIndexFile(b);
-    if (aIndex !== bIndex) return aIndex ? -1 : 1;
     if (a.role !== b.role) {
       return (b.role ?? 0) - (a.role ?? 0);
     }

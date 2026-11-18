@@ -20,7 +20,6 @@
     <Teleport to="#navbar-actions">
       <AppBtnIcon v-if="view == 'kanban'" nav icon="reset" :tooltip="t('nodes.actions.resetBoard')" @click="resetKanban" />
       <NodeFilter :nodes="nodes" :board-id="view === 'kanban' ? parent?.id : undefined" @update:nodes="filteredNodes = $event" />
-      <AppBtnIcon v-if="isFolder" nav icon="description" :tooltip="t('nodes.index.open')" @click="openIndex" />
       <AppBtnIcon
         v-if="parent?.shared && parent.user_id != connectedId"
         nav
@@ -53,13 +52,16 @@
     <Teleport to="#navbar-infos">
       <header>
         <span class="doc-count no-mobile">{{ filteredNodes.length != nodes.length ? `${filteredNodes.length} /` : '' }} {{ nodes.length }}</span>
-        <ViewSelection v-model="view" :show-kanban="!!parent" />
+        <ViewSelection v-model="view" :show-kanban="!!parent" :show-overview="!!parent" />
       </header>
     </Teleport>
     <!-- Content based on view mode -->
     <div v-if="filteredNodes.length" class="node-content">
+      <!-- Overview (index template v2 inlined): children + recently viewed -->
+      <NodeOverviewTables v-if="view === 'overview' && parent" :container-id="parent.id" />
+
       <!-- Advanced DataTable View -->
-      <NodeAdvancedView v-if="view === 'advanced'" :nodes="filteredNodes" />
+      <NodeAdvancedView v-else-if="view === 'advanced'" :nodes="filteredNodes" />
 
       <!-- Table/List View -->
       <div v-else-if="view === 'table'" class="line-container">
@@ -100,9 +102,9 @@ import NodePermissions from '~/components/Node/Modals/Permissions.vue';
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
 import RemoveSharedNode from '~/components/Node/Modals/RemoveShared.vue';
 import NodeMetadataModal from '~/components/Node/Modals/Metadata.vue';
+import NodeOverviewTables from '~/components/Node/OverviewTables.vue';
 import KanbanBoard, { type KanbanMetadata } from '~/components/Kanban/Board.vue';
 import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
-import { findIndexChild } from '~/helpers/node';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
 
@@ -120,27 +122,10 @@ const slots = useSlots();
 
 const connectedId = userStore.user?.id;
 
-const view = ref<ViewMode>('table');
+const view = ref<ViewMode>(props.parent ? 'overview' : 'table');
 const filteredNodes = ref<Node[]>(props.nodes);
 const kanbanBoard = ref<InstanceType<typeof KanbanBoard> | null>(null);
 
-// Directory index (issue #4): open the folder's index file, lazily
-// rebuilding it through the folder read when missing.
-const isFolder = computed(() => props.parent?.role === 1 || props.parent?.role === 2);
-const openIndex = async () => {
-  if (!props.parent) return;
-  const storeNodes = nodesStore.getAll.toSortedArray();
-  let indexId = findIndexChild(storeNodes, props.parent.id);
-  if (!indexId) {
-    try {
-      await nodesStore.fetch({ id: props.parent.id });
-      indexId = findIndexChild(nodesStore.getAll.toSortedArray(), props.parent.id);
-    } catch {
-      return;
-    }
-  }
-  if (indexId) router.push(`/dashboard/docs/${indexId}`);
-};
 // Watch for nodes changes to update filtered nodes
 watch(
   () => props.nodes,

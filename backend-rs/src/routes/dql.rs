@@ -54,9 +54,30 @@ pub async fn query(
         dql::Output::List => None,
         dql::Output::Table(cols) => Some(cols.clone()),
     };
+    // `viewed_timestamp` lives in node_views, not in the row shape: merge it
+    // in so TABLE projections (and any consumer) can display it.
+    let mut out_rows: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null))
+        .collect();
+    if !out_rows.is_empty() {
+        let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+        if let Ok(views) = node_repo::viewed_map(&state.db, auth.user_id(), &ids).await {
+            for v in &mut out_rows {
+                if let Some(id) = v
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .and_then(|id| views.get(&id).copied())
+                {
+                    v["viewed_timestamp"] = json!(id);
+                }
+            }
+        }
+    }
     Ok(ApiOk::ok(json!({
         "columns": columns,
-        "rows": rows,
+        "rows": out_rows,
     })))
 }
 
@@ -67,6 +88,11 @@ async fn resolve_folders(
 ) -> Result<HashMap<String, Option<Uuid>>, ApiError> {
     let mut out = HashMap::new();
     for src in &q.sources {
+        // Stable `id:` sources skip path resolution entirely (rename/move
+        // proof); the planner binds them directly.
+        if matches!(src, dql::Source::FolderId(_)) {
+            continue;
+        }
         if let dql::Source::Folder(path) = src
             && !out.contains_key(path) {
                 let id = node_repo::resolve_folder_path(&state.db, user_id, path).await?;

@@ -51,10 +51,6 @@ export default {
     toClose: '닫으려면',
   },
 
-  index: {
-    nameLocked: '인덱스 파일 이름은 설정 → 문서에서 관리합니다.',
-    open: '인덱스 파일 열기',
-  },
 
   modals: {
     delete: {

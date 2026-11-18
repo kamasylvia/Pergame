@@ -51,10 +51,6 @@ export default {
     toClose: 'to close',
   },
 
-  index: {
-    nameLocked: 'The index file name is managed in Settings → Documents.',
-    open: 'Open index file',
-  },
 
   modals: {
     delete: {

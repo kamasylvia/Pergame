@@ -12,9 +12,9 @@
         <Icon :name="node.icon || resolveIcon(props.node)" display="md" />
       </span>
 
-      <!-- Node content -->
-      <NuxtLink :to="`/doc/${node.id}`" class="node-link" @click.stop>
-        <span class="node-name">{{ node.name }}</span>
+    <!-- Node content (title = full path from the top-level folder) -->
+    <NuxtLink :to="`/doc/${node.id}`" class="node-link" :title="fullPath" @click.stop>
+      <span class="node-name">{{ node.name }}</span>
         <span v-if="node.description" class="node-description">{{ node.description }}</span>
       </NuxtLink>
 
@@ -56,10 +56,6 @@ const children = computed(() => {
     }
   });
   return result.sort((a, b) => {
-    // Directory index (issue #4): index first.
-    const aIndex = a.metadata?.index === true;
-    const bIndex = b.metadata?.index === true;
-    if (aIndex !== bIndex) return aIndex ? -1 : 1;
     if (a.role !== b.role) return a.role - b.role;
     const orderA = a.order ?? 0;
     const orderB = b.order ?? 0;
@@ -70,6 +66,19 @@ const children = computed(() => {
 
 const hasChildren = computed(() => children.value.length > 0);
 const childrenCount = computed(() => children.value.length);
+
+// Full path from the top-level folder ("A / B / C"), shown as hover tooltip.
+const fullPath = computed(() => {
+  const segs: string[] = [props.node.name || '(untitled)'];
+  let cur = props.node.parent_id ? props.allNodes.get(props.node.parent_id) : undefined;
+  let guard = 0;
+  while (cur && guard++ < 32) {
+    if (cur.name) segs.unshift(cur.name);
+    if (!cur.parent_id) break;
+    cur = props.allNodes.get(cur.parent_id);
+  }
+  return segs.join(' / ');
+});
 
 const getAccentClass = computed(() => {
   return getAppAccent(props.node.color as number, true);

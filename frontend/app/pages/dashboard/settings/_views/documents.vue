@@ -97,14 +97,6 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         type: 'number',
         key: 'codeBlockCollapseThreshold',
       },
-      {
-        label: t('settings.documents.indexFileName'),
-        description: t('settings.documents.indexFileNameDesc'),
-        type: 'text',
-        key: 'indexFileName',
-        placeholder: 'index',
-        maxlength: 50,
-      },
     ],
   },
 ]);

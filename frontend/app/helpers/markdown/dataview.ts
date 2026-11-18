@@ -1,6 +1,6 @@
 import type { MarkdownIt } from 'markdown-it';
 
-export const DATAVIEW_OPEN_RE = /^(:{3,}|`{3,})(dataview|index)\s*$/;
+export const DATAVIEW_OPEN_RE = /^(:{3,}|`{3,})(dataview|children|recent)\s*$/;
 
 // Raw-capture block rule (mermaid.ts pattern): DQL source must not pass the
 // nested block/inline parser ("#tag" would become a heading, etc.).

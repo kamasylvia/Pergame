@@ -42,8 +42,7 @@ pub struct SaveSettingsBody {
     pub advanced: serde_json::Value,
 }
 
-/// PUT /user/settings — upsert, returns the stored settings plus the count
-/// of index files batch-renamed by an `index_file_name` change (issue #4).
+/// PUT /user/settings — upsert, returns the stored settings.
 pub async fn save_settings(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -65,26 +64,6 @@ pub async fn save_settings(
         body.advanced.clone()
     };
 
-    // Directory index (issue #4): a changed `general.index_file_name`
-    // renames every live index file of the user in the same request.
-    let old_name = repo::get_settings(&state.db, auth.user_id())
-        .await
-        .map_err(ApiError::from)?
-        .map(|row| crate::routes::nodes::index_name_from_general(&row.general))
-        .unwrap_or_else(|| crate::routes::nodes::DEFAULT_INDEX_NAME.to_string());
-    let new_name = crate::routes::nodes::index_name_from_general(&general);
-    let mut renamed: u64 = 0;
-    if new_name != old_name {
-        renamed = crate::repo::nodes::rename_index_files(
-            &state.db,
-            auth.user_id(),
-            &new_name,
-            crate::repo::nodes::now_ms(),
-        )
-        .await
-        .map_err(ApiError::from)?;
-    }
-
     repo::upsert_settings(&state.db, auth.user_id(), &general, &editor, &advanced)
         .await
         .map_err(ApiError::from)?;
@@ -100,7 +79,6 @@ pub async fn save_settings(
         "general": row.general,
         "editor": row.editor,
         "advanced": row.advanced,
-        "index_renamed": renamed,
     })))
 }
 // --------------------------------------------------------------------- stats

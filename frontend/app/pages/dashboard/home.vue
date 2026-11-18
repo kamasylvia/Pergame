@@ -154,9 +154,9 @@ const recentlyEdited = computed(() => {
     .slice(0, 5);
 });
 
-// Pinned documents (order === -1), excluding folder index files (issue #4).
+// Pinned documents (order === -1).
 const pinnedDocuments = computed(() => {
-  return nodesStore.getAll.toSortedArray().filter(node => node.role === 3 && node.order === -1 && node.metadata?.index !== true);
+  return nodesStore.getAll.toSortedArray().filter(node => node.role === 3 && node.order === -1);
 });
 
 // Workspaces

@@ -10,8 +10,8 @@
 
 | 项 | 决策 |
 |---|---|
-| 查询语言 | **DQL 子集**:`LIST` / `TABLE [col,...]` + `FROM <folder|"path"|#tag...>` + `WHERE <expr>` + `SORT <field> [ASC\|DESC]` + `LIMIT n`;块语法 ` ```dataview ` |
-| 字段面 | 内置字段:`name`/`tags`/`description`/`role`/`created_timestamp`/`updated_timestamp`/`folder(path)` + `metadata.*`(JSONB 自定义键) |
+| 查询语言 | **DQL 子集**:`LIST` / `TABLE [col,...]` + `FROM <folder|"path"\|"id:uuid"\|#tag...>` + `[DIRECT]` + `WHERE <expr>` + `SORT <field> [ASC\|DESC]` + `LIMIT n`;块语法 ` ```dataview ` |
+| 字段面 | 内置字段:`name`/`tags`/`description`/`role`/`created_timestamp`/`updated_timestamp`/`viewed_timestamp`(本人阅读时间,未看过=NULL) + `metadata.*`(JSONB 自定义键) |
 | 执行位置 | **后端**:新端点 `POST /api/nodes/query`(DQL 文本 → 手写递归下降 parser → 参数化 SQL);权限 = actor 体系,只返回有权限的节点;**只读**,无任何写语义 |
 | 渲染 | 前端注册 dataview 容器块:编辑态 CodeMirror 高亮(复用 `customBlocks.ts` 模式),阅读态渲染 LIST(行 = 可点击链接)与 TABLE(行首链接列) |
 | 与 #4 index 块 | **index 块 = dataview 预设语法糖**(自动生成 `LIST FROM <本目录>` 块);引擎单点维护,#4 不再单独实现渲染 |
@@ -28,7 +28,8 @@ LIMIT 20
 ```
 ````
 
-- `FROM`:双引号目录路径(含子树)与 `#tag`,逗号 = AND;不支持嵌套表达式(v1)
+- `FROM`:双引号目录路径(含子树)与 `#tag`,逗号 = AND;不支持嵌套表达式(v1);`"id:<uuid>"` 直接绑定目录(重命名/移动不失效,模板用);`DIRECT`(FROM 之后) 把目录源收敛为直接子级(`parent_id` 相等),无目录源时报错;tag 不受 DIRECT 影响
+- `viewed_timestamp`:每用户每节点最后查看时间(`GET /nodes/:id` 成功读取时 upsert,`node_views` 表,migration 0012;MCP 读取不记);SORT 恒 `NULLS LAST`(没看过的沉底);TABLE 可投影(响应行内回填)
 - `WHERE`:字段比较(`=`/`!=`/`>`/`<`/`contains()`/`startswith()`)与 AND/OR 组合
 - `SORT`/`LIMIT`:直译 ORDER BY/LIMIT;LIMIT 硬顶 100
 - 安全:parser 白名单字段与函数;参数化绑定;查询复杂度/深度上限;执行超时

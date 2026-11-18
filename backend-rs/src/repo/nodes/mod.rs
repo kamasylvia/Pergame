@@ -529,51 +529,44 @@ pub async fn dql_query(
     q.fetch_all(pool).await
 }
 
-/// Directory index marker: `nodes.metadata.index = true` (issue #4). The name
-/// is user-configurable (`general.index_file_name`), so identity never keys
-/// off the filename.
-pub fn is_index(metadata: &Option<serde_json::Value>) -> bool {
-    metadata
-        .as_ref()
-        .and_then(|m| m.get("index"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-}
-
-/// Live index child of a folder, if any (`metadata.index = true`, role 3).
-pub async fn get_index_child(
-    pool: &PgPool,
-    folder_id: Uuid,
-) -> Result<Option<NodeRow>, sqlx::Error> {
-    sqlx::query_as::<_, NodeRow>(
-        "SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color,
-                  n.icon, n.theme, n.accessibility, n.access, n.display, n.\"order\" AS node_order, n.size,
-                  n.metadata, n.created_timestamp, n.updated_timestamp,
-                  CASE WHEN n.role IN (1, 2) THEN n.thumbnail ELSE NULL END AS thumbnail
-           FROM nodes n WHERE n.parent_id = $1 AND n.role = 3 AND n.metadata->>'index' = 'true' AND n.deleted_at IS NULL LIMIT 1",
-    )
-    .bind(folder_id)
-    .fetch_optional(pool)
-    .await
-}
-
-/// Rename every index node of a user (settings-driven batch rename).
-/// Trashed rows are included: they carry the name they will show when
-/// restored, and leaving them behind would resurrect a stale filename.
-/// Returns the renamed count.
-pub async fn rename_index_files(
+/// Recently-viewed history for `SORT viewed_timestamp` (dataview "最近查看"
+/// tables): upsert the caller's last-viewed time for a node they can read.
+/// Callers must never fail a read over this write.
+pub async fn record_view(
     pool: &PgPool,
     user_id: Uuid,
-    name: &str,
-    now: i64,
-) -> Result<u64, sqlx::Error> {
+    node_id: Uuid,
+    now_ms: i64,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE nodes SET name = $1, updated_timestamp = $2 WHERE user_id = $3 AND metadata->>'index' = 'true'",
+        r#"INSERT INTO node_views (user_id, node_id, viewed_at) VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, node_id) DO UPDATE SET viewed_at = EXCLUDED.viewed_at"#,
     )
-    .bind(name)
-    .bind(now)
     .bind(user_id)
+    .bind(node_id)
+    .bind(now_ms)
     .execute(pool)
-    .await
-    .map(|r| r.rows_affected())
+    .await?;
+    Ok(())
+}
+
+/// Last-viewed timestamps for a batch of nodes, keyed by node id.
+/// Missing entries simply mean "never viewed".
+pub async fn viewed_map(
+    pool: &PgPool,
+    user_id: Uuid,
+    node_ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, i64>, sqlx::Error> {
+    use std::collections::HashMap;
+    if node_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT node_id, viewed_at FROM node_views WHERE user_id = $1 AND node_id = ANY($2)",
+    )
+    .bind(user_id)
+    .bind(node_ids)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
 }

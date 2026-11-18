@@ -21,10 +21,11 @@ pub enum Output {
     Table(Vec<String>),
 }
 
-/// One FROM source: folder subtree or tag.
+/// One FROM source: folder subtree (by path or stable `id:`) or tag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     Folder(String),
+    FolderId(uuid::Uuid),
     Tag(String),
 }
 
@@ -52,11 +53,13 @@ pub enum Value {
     DurationMs(i64),
 }
 
-/// Parsed query: output + sources + optional filter/sort/limit.
+/// Parsed query: output + sources + optional filter/sort/limit. `direct`
+/// restricts folder sources to direct children instead of the subtree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query {
     pub output: Output,
     pub sources: Vec<Source>,
+    pub direct: bool,
     pub filter: Option<Expr>,
     pub sort: Option<(String, bool)>,
     pub limit: i64,
@@ -78,6 +81,11 @@ pub fn builtin_column(field: &str) -> Option<&'static str> {
 
 /// TABLE column projection (LIST uses the fixed row shape).
 pub fn table_column(field: &str) -> Option<String> {
+    if field == "viewed_timestamp" {
+        // Joined per-user history (values merged into the response rows by
+        // the route handler); validated here so TABLE can project it.
+        return Some("v.viewed_at".to_string());
+    }
     if let Some(col) = builtin_column(field) {
         return Some(col.to_string());
     }
@@ -96,7 +104,7 @@ fn is_ident(s: &str) -> bool {
 }
 
 fn check_field(field: &str) -> Result<(), String> {
-    if builtin_column(field).is_some() {
+    if builtin_column(field).is_some() || field == "viewed_timestamp" {
         return Ok(());
     }
     if let Some(key) = field.strip_prefix("metadata.")
@@ -449,14 +457,22 @@ pub fn parse(src: &str) -> Result<Query, String> {
         loop {
             match toks.get(i) {
                 Some(Tok::Str(p)) => {
-                    sources.push(Source::Folder(p.clone()));
+                    // Stable folder reference that survives renames/moves.
+                    if let Some(rest) = p.strip_prefix("id:") {
+                        match uuid::Uuid::parse_str(rest) {
+                            Ok(id) => sources.push(Source::FolderId(id)),
+                            Err(_) => return Err(format!("invalid folder id: {p}")),
+                        }
+                    } else {
+                        sources.push(Source::Folder(p.clone()));
+                    }
                     i += 1;
                 }
                 Some(Tok::Tag(t)) => {
                     sources.push(Source::Tag(t.clone()));
                     i += 1;
                 }
-                _ => return Err("expected \"folder\" or #tag after FROM".into()),
+                _ => return Err("expected \"folder\", \"id:<uuid>\" or #tag after FROM".into()),
             }
             match toks.get(i) {
                 Some(Tok::Comma) => {
@@ -465,6 +481,19 @@ pub fn parse(src: &str) -> Result<Query, String> {
                 _ => break,
             }
         }
+    }
+    // Optional DIRECT: folder sources match direct children only.
+    let mut direct = false;
+    if matches!(toks.get(i), Some(t) if word_is(t, "direct")) {
+        i += 1;
+        direct = true;
+    }
+    if direct
+        && !sources
+            .iter()
+            .any(|s| matches!(s, Source::Folder(_) | Source::FolderId(_)))
+    {
+        return Err("DIRECT needs a FROM folder".into());
     }
     // Optional WHERE (runs to SORT/LIMIT/end).
     let mut filter = None;
@@ -521,7 +550,14 @@ pub fn parse(src: &str) -> Result<Query, String> {
     if i != toks.len() {
         return Err(format!("unexpected trailing tokens: {:?}", &toks[i..]));
     }
-    Ok(Query { output, sources, filter, sort, limit })
+    Ok(Query {
+        output,
+        sources,
+        direct,
+        filter,
+        sort,
+        limit,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -544,6 +580,10 @@ pub struct Planned {
 }
 
 fn sql_field(field: &str) -> String {
+    if field == "viewed_timestamp" {
+        // Per-user history joined as `v` by plan() whenever referenced.
+        return "v.viewed_at".to_string();
+    }
     if let Some(col) = builtin_column(field) {
         return col.to_string();
     }
@@ -552,9 +592,26 @@ fn sql_field(field: &str) -> String {
     format!("n.metadata->>'{key}'")
 }
 
+/// Whether an expression tree references the joined view history.
+fn expr_uses_viewed(e: &Expr) -> bool {
+    match e {
+        Expr::And(a, b) | Expr::Or(a, b) => expr_uses_viewed(a) || expr_uses_viewed(b),
+        Expr::Not(a) => expr_uses_viewed(a),
+        Expr::Eq(f, _)
+        | Expr::Ne(f, _)
+        | Expr::Gt(f, _)
+        | Expr::Lt(f, _)
+        | Expr::Gte(f, _)
+        | Expr::Lte(f, _)
+        | Expr::Contains(f, _)
+        | Expr::StartsWith(f, _) => f == "viewed_timestamp",
+    }
+}
+
 fn sql_cmp(field: &str, op: &str, v: &Value, now_ms: i64, next: &mut usize, out: &mut Vec<BoundValue>) -> String {
     let col = sql_field(field);
-    let is_ts = field == "created_timestamp" || field == "updated_timestamp";
+    let is_ts =
+        field == "created_timestamp" || field == "updated_timestamp" || field == "viewed_timestamp";
     let is_num_col = is_ts || field == "role";
     match v {
         Value::DurationMs(ms) => {
@@ -625,22 +682,47 @@ pub fn plan(
     let mut bindings: Vec<BoundValue> = Vec::new();
     let mut next = 1usize; // $1 reserved for user id
     let mut sql = String::from(
-        "SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color, n.icon, n.theme, n.accessibility, n.access, n.display, n.\"order\" AS node_order, n.size, n.metadata, n.created_timestamp, n.updated_timestamp, CASE WHEN n.role IN (1, 2) THEN n.thumbnail ELSE NULL END AS thumbnail FROM nodes n WHERE n.user_id = $1 AND n.deleted_at IS NULL",
+        "SELECT n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color, n.icon, n.theme, n.accessibility, n.access, n.display, n.\"order\" AS node_order, n.size, n.metadata, n.created_timestamp, n.updated_timestamp, CASE WHEN n.role IN (1, 2) THEN n.thumbnail ELSE NULL END AS thumbnail FROM nodes n",
     );
-    // Sources (comma = AND): folders by subtree, tags by membership.
+    // Per-user view history is only joined when referenced (filter or sort);
+    // $1 (user id) is reused, so no extra binding is needed.
+    let need_views = matches!(&q.sort, Some((f, _)) if f == "viewed_timestamp")
+        || q.filter.as_ref().is_some_and(expr_uses_viewed);
+    if need_views {
+        sql.push_str(" LEFT JOIN node_views v ON v.node_id = n.id AND v.user_id = $1");
+    }
+    sql.push_str(" WHERE n.user_id = $1 AND n.deleted_at IS NULL");
+    // Sources (comma = AND): folders by subtree (or direct children with
+    // DIRECT), tags by membership.
     for src in &q.sources {
         match src {
             Source::Folder(path) => match folders.get(path).copied().flatten() {
                 Some(id) => {
                     next += 1;
                     bindings.push(BoundValue::Str(id.to_string()));
+                    if q.direct {
+                        let _ = write!(sql, " AND n.parent_id = ${next}::uuid");
+                    } else {
+                        let _ = write!(
+                            sql,
+                            " AND n.id IN (WITH RECURSIVE sub(id) AS (SELECT ${next}::uuid UNION ALL SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id WHERE c.deleted_at IS NULL) SELECT id FROM sub)"
+                        );
+                    }
+                }
+                None => sql.push_str(" AND false"),
+            },
+            Source::FolderId(id) => {
+                next += 1;
+                bindings.push(BoundValue::Str(id.to_string()));
+                if q.direct {
+                    let _ = write!(sql, " AND n.parent_id = ${next}::uuid");
+                } else {
                     let _ = write!(
                         sql,
                         " AND n.id IN (WITH RECURSIVE sub(id) AS (SELECT ${next}::uuid UNION ALL SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id WHERE c.deleted_at IS NULL) SELECT id FROM sub)"
                     );
                 }
-                None => sql.push_str(" AND false"),
-            },
+            }
             Source::Tag(tag) => {
                 next += 1;
                 bindings.push(BoundValue::Str(format!("%,{tag},%")));
@@ -654,7 +736,15 @@ pub fn plan(
     }
     if let Some((field, desc)) = &q.sort {
         let col = sql_field(field);
-        let _ = write!(sql, " ORDER BY {col} {}", if *desc { "DESC" } else { "ASC" });
+        let dir = if *desc { "DESC" } else { "ASC" };
+        // Unviewed nodes have no history row: always sort them last so a
+        // "recently viewed" list starts with real views. (Postgres defaults
+        // would put NULLS FIRST under DESC.)
+        if field == "viewed_timestamp" {
+            let _ = write!(sql, " ORDER BY {col} {dir} NULLS LAST");
+        } else {
+            let _ = write!(sql, " ORDER BY {col} {dir}");
+        }
     } else {
         sql.push_str(" ORDER BY n.updated_timestamp DESC");
     }
@@ -727,5 +817,70 @@ mod tests {
     fn nesting_cap() {
         let deep = "LIST WHERE ".to_string() + &"NOT ".repeat(40) + "name = \"x\"";
         assert!(parse(&deep).is_err());
+    }
+
+    #[test]
+    fn direct_children_match_parent_only() {
+        let q = parse("LIST FROM \"Projects\" DIRECT").unwrap();
+        assert!(q.direct);
+        let mut folders = HashMap::new();
+        let id = uuid::Uuid::now_v7();
+        folders.insert("Projects".into(), Some(id));
+        let p = plan(&q, &folders, 0);
+        assert!(p.sql.contains("n.parent_id = $"), "{}", p.sql);
+        assert!(!p.sql.contains("WITH RECURSIVE"), "{}", p.sql);
+        assert_eq!(p.bindings.len(), 2); // folder + limit
+    }
+
+    #[test]
+    fn recursive_by_default() {
+        let q = parse("LIST FROM \"Projects\"").unwrap();
+        assert!(!q.direct);
+        let mut folders = HashMap::new();
+        folders.insert("Projects".into(), Some(uuid::Uuid::now_v7()));
+        let p = plan(&q, &folders, 0);
+        assert!(p.sql.contains("WITH RECURSIVE"), "{}", p.sql);
+    }
+
+    #[test]
+    fn direct_needs_a_folder() {
+        assert!(parse("LIST DIRECT").is_err());
+        assert!(parse("LIST FROM #tag DIRECT").is_err());
+    }
+
+    #[test]
+    fn folder_id_source_skips_path_lookup() {
+        let id = uuid::Uuid::now_v7();
+        let q = parse(&format!("LIST FROM \"id:{id}\" DIRECT")).unwrap();
+        assert_eq!(q.sources, vec![Source::FolderId(id)]);
+        assert!(q.direct);
+        // No folders map needed: the planner binds the id directly.
+        let p = plan(&q, &no_folders(), 0);
+        assert!(p.sql.contains("n.parent_id = $"), "{}", p.sql);
+        assert!(p.bindings.iter().any(|b| *b == BoundValue::Str(id.to_string())));
+        assert!(parse("LIST FROM \"id:nope\"").is_err());
+    }
+
+    #[test]
+    fn viewed_sort_joins_history_nulls_last() {
+        let q = parse("LIST FROM \"Projects\" SORT viewed_timestamp DESC LIMIT 10").unwrap();
+        let mut folders = HashMap::new();
+        folders.insert("Projects".into(), Some(uuid::Uuid::now_v7()));
+        let p = plan(&q, &folders, 0);
+        assert!(p.sql.contains("LEFT JOIN node_views v"), "{}", p.sql);
+        assert!(p.sql.contains("v.viewed_at DESC NULLS LAST"), "{}", p.sql);
+        // No join when the field is not referenced.
+        let q2 = parse("LIST FROM \"Projects\" SORT updated_timestamp DESC").unwrap();
+        let p2 = plan(&q2, &folders, 0);
+        assert!(!p2.sql.contains("node_views"), "{}", p2.sql);
+    }
+
+    #[test]
+    fn viewed_filter_with_duration() {
+        let q = parse("LIST WHERE viewed_timestamp > -7d").unwrap();
+        let p = plan(&q, &no_folders(), 1_000_000_000_000);
+        assert!(p.sql.contains("LEFT JOIN node_views v"), "{}", p.sql);
+        assert!(p.sql.contains("v.viewed_at > $"), "{}", p.sql);
+        assert_eq!(p.bindings[0], BoundValue::I64(1_000_000_000_000 - 7 * 86_400_000));
     }
 }

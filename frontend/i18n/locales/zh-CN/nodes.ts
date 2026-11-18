@@ -51,10 +51,6 @@ export default {
     toClose: '以关闭',
   },
 
-  index: {
-    nameLocked: '索引文件名在“设置 → 文档”中统一管理。',
-    open: '打开索引文件',
-  },
 
   modals: {
     delete: {

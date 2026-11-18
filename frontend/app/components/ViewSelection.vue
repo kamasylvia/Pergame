@@ -9,14 +9,16 @@
 
 <script setup lang="ts">
 import localForage from 'localforage';
-export type ViewMode = 'kanban' | 'list' | 'table' | 'advanced';
+export type ViewMode = 'overview' | 'kanban' | 'list' | 'table' | 'advanced';
 
 const props = withDefaults(
   defineProps<{
     showKanban?: boolean;
+    showOverview?: boolean;
   }>(),
   {
     showKanban: false,
+    showOverview: false,
   },
 );
 
@@ -26,9 +28,10 @@ const view = defineModel<ViewMode>();
 
 const viewOptions = computed(() => {
   const options = [
+    { icon: 'dashboard', label: t('components.viewSelection.overview'), value: 'overview' as ViewMode },
     { icon: 'table', label: t('components.viewSelection.list'), value: 'list' as ViewMode },
     { icon: 'list', label: t('components.viewSelection.table'), value: 'table' as ViewMode },
-  ];
+  ].filter(option => option.value !== 'overview' || props.showOverview);
   if (preferences.get('advancedView').value) {
     options.push({ icon: 'grid', label: 'Advanced', value: 'advanced' as ViewMode });
   }
@@ -39,7 +42,7 @@ const viewOptions = computed(() => {
 });
 
 // Keep the user's saved choice even when this container cannot display it.
-const preferredView = ref<ViewMode>('table');
+const preferredView = ref<ViewMode>('overview');
 let userSelectedView = false;
 const effectiveView = computed<ViewMode>(() =>
   viewOptions.value.some(option => option.value === preferredView.value) ? preferredView.value : 'table',
@@ -55,7 +58,7 @@ function selectView(newView: ViewMode) {
 
 onMounted(async () => {
   const storedView = await localForage.getItem<unknown>('viewSelection');
-  const knownViews: ViewMode[] = ['table', 'list', 'advanced', 'kanban'];
+  const knownViews: ViewMode[] = ['overview', 'table', 'list', 'advanced', 'kanban'];
   if (!userSelectedView && typeof storedView === 'string' && knownViews.includes(storedView as ViewMode)) {
     preferredView.value = storedView as ViewMode;
   }

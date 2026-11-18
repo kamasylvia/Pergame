@@ -1,6 +1,6 @@
 # Feature Spec — 目录索引文件(index.md)
 
-> 状态:**已实施(2026-11-13)**。跟踪:issue #4。需求源:用户 2026-11-07(原文照录见下)。
+> 状态:**已实施(2026-11-13)→ 已移除(2026-11-18,存档)**。用户裁决:index v2 的两张表(children/recent)直接内联为 workspace/folder 容器视图的默认概览(`ViewSelection` overview 模式),index 文件失去存在意义,整个功能删除——migration `0013` drop 唯一索引 + 存量节点软删入回收站;DQL `DIRECT`/`id:`/`viewed_timestamp`/`node_views` 保留(dataview 引擎通用);普通文档的 `children`/`recent` 块仍可用,`index` 块语法移除。跟踪:issue #4。需求源:用户 2026-11-07(原文照录见下)。
 
 ## 需求(用户原文)
 
@@ -12,7 +12,7 @@
 |---|---|
 | 身份标记 | `nodes.metadata.index = true`(与文件名解耦);服务端签发,客户端 create/update 提交的该键被剥离(不可伪造) |
 | 唯一性 | `migration 0010`:`UNIQUE INDEX idx_nodes_index_child ON nodes (parent_id) WHERE metadata->>'index'='true' AND deleted_at IS NULL` |
-| 自动创建 | `POST /nodes` 建 role 1/2 成功后即建 index 子文档(content = ` ```index ` 块模板,`order=-1`);响应体 `{node, index}` |
+| 自动创建 | `POST /nodes` 建 role 1/2 成功后即建 index 子文档(content = 新模板见下,`order=-1`);响应体 `{node, index}` |
 | 懒重建 | `GET /nodes/:id` 读到本人 role 1/2 且无 index 子 → 幂等补建(`auto_index` 字段回传);check-then-insert 竞态由唯一索引折回 |
 | 文件名设置 | 偏好键 `indexFileName`(默认 `index`,≤50 字);`PUT /user/settings` 检测到变化 → 同请求内批量 UPDATE 存量(含回收站行),响应带 `index_renamed` 计数 |
 | 可见性设置 | 偏好键 `displayIndexFiles`(默认 on):侧边栏树中显示/隐藏;隐藏只影响展示,不影响跳转与置顶 |
@@ -28,6 +28,28 @@
 1. 可见性 → **树中置顶显示 + 设置可隐藏**(`displayIndexFiles`)。
 2. index 块范围 → **整棵子树**(与既有预设一致),前端过滤 index 自身。
 3. 删除与移动 → **都可禁止**(锁定);目录删除时随子树进回收站,还原带回。
+
+## 模板 v2(2026-11-16,思源父目录内容对位)
+
+自动模板不再是单个 ` ```index ` 块,而是两个预设块(均可点击跳转,渲染时按所在位置解析,重命名/移动不失效):
+
+```markdown
+## 目录
+
+```children
+```
+
+## 最近查看
+
+```recent
+```
+```
+
+- ` ```children ` = 当前目录的直接子级(非递归,目录优先,过滤 index 自身);在父文档页则列该文档的直接子级。
+- ` ```recent ` = 当前子树内按 `viewed_timestamp` 倒序的前 10 篇文档(`WHERE role = 3`,未看过的沉底)。
+- `viewed_timestamp`:每用户每节点最后查看时间;`GET /nodes/:id` 成功读取时服务端 upsert(`node_views` 表,migration 0012);MCP 读取不记(程序化访问不污染)。
+- 底层 DQL 同步扩展(供手写块用):`FROM "id:<uuid>"`(稳定引用)、`FROM ... DIRECT`(收敛直接子级)、`viewed_timestamp` 字段(SORT 恒 `NULLS LAST`;TABLE 可投影,行内回填)。
+- 既有 ` ```index ` 预设保持递归子树不变(向后兼容)。
 
 ## 实施记录(2026-11-13)
 

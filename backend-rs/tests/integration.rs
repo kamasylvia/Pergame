@@ -124,8 +124,8 @@ async fn put_json(client: &Client, path: &str, body: &Value) -> (u16, ApiRespons
 }
 
 fn result_id_string(r: &ApiResponse) -> String {
-    // Folder creation returns `{node, index}` (issue #4); everything else
-    // returns the row itself. Accept both shapes.
+    // Folder creation returns `{node}`; everything else returns the row
+    // itself. Accept both shapes.
     let obj = r.result.get("node").unwrap_or(&r.result);
     obj.get("id")
         .map(|v| match v {
@@ -988,8 +988,8 @@ async fn snapshot_restore_roundtrip() {
         "ws1+ws2 must stay visible after delete, got {visible}"
     );
 
-    // Preview (dry-run) before restoring: incoming 5 nodes (each folder
-    // carries its auto-created index, issue #4) vs 4 currently live.
+    // Preview (dry-run) before restoring: incoming 3 nodes (ws1+ws2+doc)
+    // vs 2 currently live.
     let (status, r) = post_json(
         &client,
         &format!("/backup/snapshots/{snapshot_id}/preview"),
@@ -1008,7 +1008,7 @@ async fn snapshot_restore_roundtrip() {
         .get("current_nodes")
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
-    assert_eq!(incoming, 5, "archive holds ws1+ws2+doc+2 indexes");
+    assert_eq!(incoming, 3, "archive holds ws1+ws2+doc");
     assert!(
         current >= 2,
         "current rows must include ws1+ws2, got {current}"
@@ -1019,7 +1019,7 @@ async fn snapshot_restore_roundtrip() {
         "nothing is dropped by this restore"
     );
 
-    // Restore: the archived state (5 nodes + 1 link) must come back.
+    // Restore: the archived state (3 nodes + 1 link) must come back.
     let (status, r) = post_json(
         &client,
         &format!("/backup/snapshots/{snapshot_id}/restore"),
@@ -1028,7 +1028,7 @@ async fn snapshot_restore_roundtrip() {
     .await;
     assert_eq!(status, 200, "restore failed: {:?}", r.message);
     let report = &r.result;
-    assert_eq!(report.get("nodes").and_then(|v| v.as_u64()), Some(5));
+    assert_eq!(report.get("nodes").and_then(|v| v.as_u64()), Some(3));
     assert_eq!(report.get("links").and_then(|v| v.as_u64()), Some(1));
     assert!(
         report
@@ -2427,7 +2427,7 @@ async fn nodes_query_dql() {
     assert_eq!(status, 200);
     let doc_id = result_id_string(&r);
 
-    // LIST FROM folder returns folder + doc + auto index (issue #4).
+    // LIST FROM folder returns folder + doc (recursive subtree).
     let (status, r) = post_json(
         &client,
         "/nodes/query",
@@ -2436,7 +2436,7 @@ async fn nodes_query_dql() {
     .await;
     assert_eq!(status, 200);
     let rows = r.result["rows"].as_array().expect("rows");
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 2);
 
     // TABLE with tag source + WHERE narrows to the doc.
     let (status, r) = post_json(
@@ -2473,7 +2473,6 @@ async fn nodes_query_dql() {
     assert_eq!(status, 200);
 }
 
-
 /// POST a plugin archive (zip) to the admin install route.
 async fn install_plugin_zip(client: &Client, filename: &str, body: &[u8]) -> (u16, ApiResponse) {
     let boundary = "----pergame-plugin-boundary";
@@ -2507,15 +2506,14 @@ async fn install_plugin_zip(client: &Client, filename: &str, body: &[u8]) -> (u1
 /// Build a store-only zip from (name, bytes) pairs.
 fn zip_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     for (name, bytes) in entries {
         writer.start_file(*name, options).unwrap();
         std::io::Write::write_all(&mut writer, bytes).unwrap();
     }
     writer.finish().unwrap().into_inner()
 }
-
 
 // ------------------------------------------------------------------- plugins
 
@@ -2567,7 +2565,10 @@ async fn plugin_registry_lifecycle() {
         .expect("installed plugin listed");
     assert_eq!(row["granted"], json!([]));
     assert_eq!(row["capabilities"], json!(["ui", "net:example.com"]));
-    assert_eq!(row["entry_url"], json!(format!("/api/plugins/{slug}/entry")));
+    assert_eq!(
+        row["entry_url"],
+        json!(format!("/api/plugins/{slug}/entry"))
+    );
 
     // The entry is served same-origin as JavaScript.
     let resp = client
@@ -2582,7 +2583,10 @@ async fn plugin_registry_lifecycle() {
         "text/javascript; charset=utf-8"
     );
     let body = resp.text().await.unwrap();
-    assert!(body.contains("export default class"), "served entry: {body}");
+    assert!(
+        body.contains("export default class"),
+        "served entry: {body}"
+    );
 
     // Settings are refused until the user approves the plugin.
     let (status, _) = get(&client, &format!("/plugins/{slug}/kv")).await;
@@ -2596,7 +2600,11 @@ async fn plugin_registry_lifecycle() {
     )
     .await;
     assert_eq!(status, 200);
-    assert_eq!(r.result["granted"], json!(["ui"]), "unknown capability dropped");
+    assert_eq!(
+        r.result["granted"],
+        json!(["ui"]),
+        "unknown capability dropped"
+    );
 
     let (status, r) = get(&client, "/plugins").await;
     assert_eq!(status, 200);
@@ -2610,7 +2618,12 @@ async fn plugin_registry_lifecycle() {
     assert_eq!(row["granted"], json!(["ui"]));
 
     // KV round-trip inside the plugin namespace.
-    let (status, _) = put_json(&client, &format!("/plugins/{slug}/kv/theme"), &json!({"mode": "dark"})).await;
+    let (status, _) = put_json(
+        &client,
+        &format!("/plugins/{slug}/kv/theme"),
+        &json!({"mode": "dark"}),
+    )
+    .await;
     assert_eq!(status, 200);
     let (status, r) = get(&client, &format!("/plugins/{slug}/kv")).await;
     assert_eq!(status, 200);
@@ -2620,12 +2633,21 @@ async fn plugin_registry_lifecycle() {
     assert_eq!(r.result["deleted"], json!(true));
 
     // Disable: the plugin disappears from the user list and the entry 404s.
-    let (status, _) = patch_json(&client, &format!("/admin/plugins/{slug}"), &json!({"enabled": false})).await;
+    let (status, _) = patch_json(
+        &client,
+        &format!("/admin/plugins/{slug}"),
+        &json!({"enabled": false}),
+    )
+    .await;
     assert_eq!(status, 200);
     let (status, r) = get(&client, "/plugins").await;
     assert_eq!(status, 200);
     assert!(
-        !r.result.as_array().unwrap().iter().any(|row| row["id"] == json!(slug)),
+        !r.result
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == json!(slug)),
         "disabled plugin hidden from the loader list"
     );
     let resp = client
@@ -2644,116 +2666,5 @@ async fn plugin_registry_lifecycle() {
     assert_eq!(status, 404);
 
     demote_user(&user_id).await;
-    cleanup_user(&user_id).await;
-}
-
-// ---------------------------------------------------------------- directory index
-
-/// Directory index files (issue #4): folder creation auto-creates the
-/// index child; the index is locked (no rename/move/delete/unpin through
-/// the node endpoints); the settings filename renames every live index.
-#[tokio::test]
-#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
-async fn directory_index_lifecycle() {
-    let client = Client::new();
-    let (user_id, suffix) = signup_and_login_tagged(&client, "idx").await;
-
-    // Folder creation returns `{node, index}` with the auto-created file.
-    let (status, r) = post_json(
-        &client,
-        "/nodes",
-        &json!({"name": format!("ws-{suffix}"), "role": 1}),
-    )
-    .await;
-    assert_eq!(status, 200);
-    let folder_id = result_id_string(&r);
-    let index = r.result.get("index").expect("auto index returned");
-    assert_eq!(index["name"], json!("index"));
-    assert_eq!(index["parent_id"], json!(folder_id));
-    assert_eq!(index["role"], json!(3));
-    assert_eq!(index["order"], json!(-1));
-    assert_eq!(index["metadata"]["index"], json!(true));
-    let index_id = index["id"].as_str().expect("index id").to_string();
-
-    // A second folder gets its own index with the same default name.
-    let (status, r) = post_json(
-        &client,
-        "/nodes",
-        &json!({"name": format!("cat-{suffix}"), "role": 2}),
-    )
-    .await;
-    assert_eq!(status, 200);
-    let folder2_id = result_id_string(&r);
-    let index2 = r.result.get("index").expect("second auto index");
-    let index2_id = index2["id"].as_str().expect("index2 id").to_string();
-
-    // Locked: delete refused.
-    let (status, _) = del(&client, &format!("/nodes/{index_id}")).await;
-    assert_eq!(status, 403);
-
-    // Locked: move refused (same-folder touch passes the guard).
-    let (status, _) = put_json(
-        &client,
-        &format!("/nodes/{index_id}"),
-        &json!({"name": "index", "role": 3, "parent_id": folder2_id}),
-    )
-    .await;
-    assert_eq!(status, 403);
-
-    // Locked but silent: rename/unpin attempts keep the frozen fields while
-    // content edits go through.
-    let (status, r) = put_json(
-        &client,
-        &format!("/nodes/{index_id}"),
-        &json!({"name": "renamed", "role": 3, "order": 0, "content": "```index\n```\nnotes"}),
-    )
-    .await;
-    assert_eq!(status, 200);
-    assert_eq!(r.result["name"], json!("index"));
-    assert_eq!(r.result["order"], json!(-1));
-    assert_eq!(r.result["metadata"]["index"], json!(true));
-
-    // Settings rename batch-renames every live index of the user.
-    let (status, r) = put_json(
-        &client,
-        "/user/settings",
-        &json!({"general": {"index_file_name": "home"}}),
-    )
-    .await;
-    assert_eq!(status, 200);
-    assert_eq!(r.result["index_renamed"], json!(2));
-    let (status, r) = get(&client, &format!("/nodes/{index_id}")).await;
-    assert_eq!(status, 200);
-    assert_eq!(r.result["node"]["name"], json!("home"));
-    let (status, r) = get(&client, &format!("/nodes/{index2_id}")).await;
-    assert_eq!(status, 200);
-    assert_eq!(r.result["node"]["name"], json!("home"));
-
-    // Lazy rebuild: a folder whose index row vanished (pre-feature folder,
-    // manual DB surgery) gets one back on the next read, under the current
-    // settings name.
-    db_delete_node(&index2_id).await;
-    let (status, r) = get(&client, &format!("/nodes/{folder2_id}")).await;
-    assert_eq!(status, 200);
-    let rebuilt = r.result.get("auto_index").expect("lazy index returned");
-    assert_eq!(rebuilt["name"], json!("home"));
-    assert_eq!(rebuilt["parent_id"], json!(folder2_id));
-    assert_eq!(rebuilt["order"], json!(-1));
-
-    // A second read is a no-op (never a duplicate index).
-    let (status, r) = get(&client, &format!("/nodes/{folder2_id}")).await;
-    assert_eq!(status, 200);
-    assert!(r.result["auto_index"].is_null(), "no duplicate on re-read");
-
-    // New folders now use the renamed default.
-    let (status, r) = post_json(
-        &client,
-        "/nodes",
-        &json!({"name": format!("ws2-{suffix}"), "role": 1}),
-    )
-    .await;
-    assert_eq!(status, 200);
-    assert_eq!(r.result["index"]["name"], json!("home"));
-
     cleanup_user(&user_id).await;
 }
