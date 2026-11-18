@@ -50,7 +50,7 @@
                   <label class="page-size">
                     <span>{{ t('components.dataTable.rowsPerPage') }}</span>
                     <!-- eslint-disable-next-line vue/no-parsing-error -->
-                    <select :value="itemsPerPage" @change="(e: Event) => paginator.setMaxPerPage(parseInt((<HTMLSelectElement>e.target)?.value) || 10)">
+                    <select :value="itemsPerPage" @change="setPageSize">
                       <option value="10">10</option>
                       <option value="30">30</option>
                       <option value="50">50</option>
@@ -90,8 +90,16 @@ import { Paginator } from '../helpers/paginator';
 
 const { t } = useI18nT();
 const props = defineProps<{ headers: Header[]; rows: Field[] }>();
-const itemsPerPage = usePreferencesStore().get('datatableItemsCount');
+const preferencesStore = usePreferencesStore();
+const itemsPerPage = preferencesStore.get('datatableItemsCount');
 const searchInput = ref('');
+
+// Persist across remounts: the preference is the app-wide rows-per-page setting.
+function setPageSize(e: Event) {
+  const count = parseInt((e.target as HTMLSelectElement)?.value) || 10;
+  paginator.setMaxPerPage(count);
+  preferencesStore.set('datatableItemsCount', count);
+}
 
 // Pagination + filter
 const paginator = new Paginator<Field>(
