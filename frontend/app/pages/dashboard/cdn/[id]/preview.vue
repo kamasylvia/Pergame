@@ -18,6 +18,7 @@
         <LazyPDFViewer v-else-if="isPdfFile(mimeType)" :src="resourceURL(resource)" :zoom="zoom" />
         <video v-else-if="isVideoFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
         <audio v-else-if="isAudioFile(mimeType)" :src="resourceURL(resource)" crossorigin="use-credentials" controls />
+        <pre v-else-if="isCodeFile(resource.name || '')" class="code-preview"><code v-html="codeHtml"></code></pre>
         <div v-else class="no-preview">
           <p>{{ t('cdn.preview.unavailable') }}</p>
           <p>
@@ -35,7 +36,8 @@
 import DeleteNodeModal from '~/components/Node/Modals/Delete.vue';
 import DrawioEditorModal from '~/components/Node/Modals/DrawioEditor.vue';
 import { PDF_SCALES } from '~/helpers/constants';
-import { isImageFile, isPdfFile, isVideoFile, isAudioFile } from '~/helpers/resources';
+import { isImageFile, isPdfFile, isVideoFile, isAudioFile, isCodeFile, codeLanguage } from '~/helpers/resources';
+import hljs from 'highlight.js/lib/common';
 import { rerenderImages } from '~/helpers/DOM';
 
 definePageMeta({ breadcrumb: { i18n: 'common.actions.preview' } });
@@ -52,6 +54,24 @@ const zoom = ref<(typeof PDF_SCALES)[number]['id']>('automatic_zoom');
 
 const resource = computed(() => nodesStore.getById(route.params.id as string));
 const mimeType = computed(() => resource.value?.metadata?.filetype || '');
+
+// Code/text files render inline (256 KiB cap mirrors code-embed.ts).
+const codeHtml = ref('');
+watchEffect(async () => {
+  codeHtml.value = '';
+  const node = resource.value;
+  if (!node || !isCodeFile(node.name || '')) return;
+  try {
+    const resp = await fetch(resourceURL(node), { credentials: 'include' });
+    if (!resp.ok) return;
+    const text = await resp.text();
+    if (text.length > 256 * 1024 || (text.length > 0 && text.includes('\uFFFD'))) return;
+    const lang = codeLanguage(node.name || '');
+    codeHtml.value = lang && hljs.getLanguage(lang) ? hljs.highlight(text, { language: lang }).value : text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  } catch {
+    codeHtml.value = '';
+  }
+});
 
 // Actions
 const copyLink = () => navigator.clipboard.writeText(resourceURL(resource.value!));
@@ -108,6 +128,14 @@ header {
     max-height: 100%;
     object-fit: contain;
   }
+}
+
+.code-preview {
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  text-align: left;
 }
 
 .no-preview {

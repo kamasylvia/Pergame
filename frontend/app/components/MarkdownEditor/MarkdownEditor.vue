@@ -18,8 +18,6 @@
             :placeholder="t('components.editor.placeholder.title')"
             class="meta-title"
             required
-            :disabled="document.metadata?.index === true"
-            :title="document.metadata?.index === true ? t('nodes.index.nameLocked') : undefined"
             @input="autoSaveConditional"
           />
           <input

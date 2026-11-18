@@ -214,6 +214,99 @@ pub fn sanitize_html(input: Option<&str>) -> String {
     b.clean(s).to_string()
 }
 
+/// Source-code / text-file extensions accepted as resources even when the
+/// browser sends no useful Content-Type. Frontend mirrors this list in
+/// `frontend/app/helpers/resources.ts` (`CODE_EXTS`) for markdown embed
+/// dispatch — keep both in sync.
+pub const CODE_EXTS: &[&str] = &[
+    "py",
+    "rs",
+    "go",
+    "js",
+    "mjs",
+    "cjs",
+    "ts",
+    "tsx",
+    "jsx",
+    "java",
+    "c",
+    "h",
+    "cpp",
+    "hpp",
+    "cs",
+    "rb",
+    "php",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "sql",
+    "r",
+    "swift",
+    "kt",
+    "scala",
+    "pl",
+    "lua",
+    "toml",
+    "yaml",
+    "yml",
+    "json",
+    "xml",
+    "ini",
+    "md",
+    "markdown",
+    "txt",
+    "csv",
+    "diff",
+    "log",
+    "dockerfile",
+    "makefile",
+    "bat",
+    "ps1",
+    "vim",
+    "el",
+];
+
+/// Lowercased extension of `filename` (without the dot), empty when none.
+pub fn file_ext(filename: &str) -> String {
+    let name = filename.rsplit(['/', '\\']).next().unwrap_or(filename);
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => ext.to_ascii_lowercase(),
+        // Extensionless well-known names (Makefile, Dockerfile).
+        _ if CODE_EXTS.iter().any(|e| e.eq_ignore_ascii_case(name)) => name.to_ascii_lowercase(),
+        _ => String::new(),
+    }
+}
+
+/// A file is text/source when its extension is a known code extension or the
+/// mime is `text/*`.
+pub fn is_text_resource(filename: &str, filetype: &str) -> bool {
+    CODE_EXTS.contains(&file_ext(filename).as_str()) || filetype.starts_with("text/")
+}
+
+#[cfg(test)]
+mod code_ext_tests {
+    use super::*;
+
+    #[test]
+    fn file_ext_extracts_and_normalizes() {
+        assert_eq!(file_ext("a/b/c.PY"), "py");
+        assert_eq!(file_ext("main.rs"), "rs");
+        assert_eq!(file_ext("no_ext"), "");
+        assert_eq!(file_ext(".hidden"), "");
+        assert_eq!(file_ext("Makefile"), "makefile");
+        assert_eq!(file_ext("archive.tar.gz"), "gz");
+    }
+
+    #[test]
+    fn text_resource_by_ext_or_mime() {
+        assert!(is_text_resource("x.py", "application/octet-stream"));
+        assert!(is_text_resource("blob.bin", "text/plain"));
+        assert!(!is_text_resource("blob.bin", "application/octet-stream"));
+        assert!(!is_text_resource("x.png", "image/png"));
+    }
+}
+
 #[cfg(test)]
 mod proptests {
     use proptest::prelude::*;

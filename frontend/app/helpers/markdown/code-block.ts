@@ -32,26 +32,29 @@ export const copyCodePlugin = (md: MarkdownIt) => {
       : Number(rawThreshold);
     const collapsible = threshold > 0 && lines > threshold;
 
-    // The toggle lives in the header row next to the copy button. It only
+    // The toggle lives in a footer row centered below the code. It only
     // exists for long blocks; the click handler (ContentCompiled.vue) flips
-    // `collapsed` on the wrapper and swaps the label via CSS.
-    const toggle = collapsible
-      ? `<button type="button" class="code-toggle-btn" aria-expanded="false">
-           <span class="toggle-label-expand">${lines} lines · expand</span>
-           <span class="toggle-label-collapse">collapse</span>
-         </button>`
+    // `collapsed` on the wrapper and swaps the label via CSS. The copy
+    // button stays top-right in the header.
+    const footer = collapsible
+      ? `<div class="code-block-footer">
+           <button type="button" class="code-toggle-btn" aria-expanded="false">
+             <span class="toggle-label-expand">${lines} lines · expand</span>
+             <span class="toggle-label-collapse">collapse</span>
+           </button>
+         </div>`
       : '';
 
     return `
 <div class="code-block-wrapper${collapsible ? ' collapsed' : ''}">
   <div class="code-block-header">
-    ${toggle}
     <button type="button" class="code-copy-btn" aria-label="Copy code" title="Copy code">
       <span class="btn-icon">${ICON_COPY}</span>
       <span class="btn-icon-success">${ICON_CHECK}</span>
     </button>
   </div>
   ${original}
+  ${footer}
 </div>`;
   };
 };

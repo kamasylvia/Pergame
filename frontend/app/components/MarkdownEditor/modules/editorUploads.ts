@@ -1,5 +1,6 @@
 import { EditorView } from '@codemirror/view';
 import type { Node } from '~/stores';
+import { resourceEmbedUrl } from '~/helpers/resources';
 
 interface UploadHandlersParams {
   resourcesStore: ReturnType<typeof import('~/stores').useResourcesStore>;
@@ -8,7 +9,6 @@ interface UploadHandlersParams {
 }
 
 export function createUploadsHandlers({ resourcesStore, nodeId, insertText }: UploadHandlersParams) {
-  const { resourceURL } = useApi();
   return EditorView.domEventHandlers({
     paste: event => {
       const items = event.clipboardData?.items;
@@ -21,7 +21,7 @@ export function createUploadsHandlers({ resourcesStore, nodeId, insertText }: Up
           body.append('parent_id', nodeId || '');
           body.append('file', file);
           resourcesStore.post(body).then((result: Node) => {
-            insertText(`![${file.name}](${resourceURL(result)})\n`);
+            insertText(`![${file.name}](${resourceEmbedUrl(result, file.name)})\n`);
           });
         }
       }
@@ -37,7 +37,7 @@ export function createUploadsHandlers({ resourcesStore, nodeId, insertText }: Up
           body.append('parent_id', nodeId || '');
           body.append('file', file);
           resourcesStore.post(body).then((result: Node) => {
-            insertText(`![${file.name}](${resourceURL(result)})\n`);
+            insertText(`![${file.name}](${resourceEmbedUrl(result, file.name)})\n`);
           });
         }
       }

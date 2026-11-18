@@ -171,15 +171,24 @@
 	margin: 1em 0;
 }
 
-// Header row: expand/collapse toggle (long blocks only) + copy button.
+// Header row: copy button pinned top-right.
 .code-block-header {
 	position: absolute;
 	top: 8px;
 	right: 8px;
 	z-index: 5;
 	display: inline-flex;
+	justify-content: flex-end;
 	align-items: center;
 	gap: 6px;
+}
+
+// Footer row: expand/collapse toggle (long blocks only), centered below
+// the code with breathing room so it never touches the block edges.
+.code-block-footer {
+	display: flex;
+	justify-content: center;
+	padding: 10px 0 4px;
 }
 
 // The copy button used to be absolutely positioned on its own; inside the
@@ -232,17 +241,53 @@
 	content: '▴';
 }
 
-// Collapsed long block: clamp the code area and fade the cut edge.
+// Code area never carries a bottom margin in either state — the footer
+// toggle supplies the rhythm (padding 10px top), so expanded and collapsed
+// gaps match. Both states scroll long lines horizontally (thin track): if
+// only the expanded state could show a scrollbar, its reserved track would
+// push the expanded gap wider. Collapsing only clamps the height.
+.code-block-wrapper pre {
+	display: block;
+	margin-bottom: 0;
+	scrollbar-width: thin;
+}
+
+.code-block-wrapper pre::-webkit-scrollbar:horizontal {
+	height: 8px;
+}
+
+.code-block-wrapper pre::-webkit-scrollbar-thumb:horizontal {
+	border-radius: 4px;
+	background: rgb(255 255 255 / 20%);
+}
+
+// Long lines scroll on the <pre>, never on the highlighted <code>:
+// code-hljs gives code its own overflow-x, whose track would widen only the
+// expanded gap (in collapsed it sits below the fold, clipped). Letting lines
+// overflow the code box visibly hands scrolling to the pre, identical in
+// both states. Specificity (0,2,2) beats the vendor rule (0,1,2).
+.code-block-wrapper pre code.hljs {
+	overflow-x: visible;
+}
+
 .code-block-wrapper.collapsed pre {
 	max-height: 22rem;
-	margin-bottom: 0;
-	overflow: hidden;
+	overflow: auto hidden;
+}
+
+// The pergame theme sets no overflow on pre (others set auto): unify the
+// horizontal scroll container on the pre in both states so the track — when
+// long lines need one — reserves the same space either way.
+.code-block-wrapper:not(.collapsed) pre {
+	overflow-x: auto;
 }
 
 .code-block-wrapper.collapsed::after {
 	position: absolute;
 	right: 0;
-	bottom: 0;
+	// Stop above the centered footer toggle (footer ≈ 46px tall) so the
+	// fade never covers the button.
+	bottom: 46px;
 	left: 0;
 	height: 3rem;
 	background: linear-gradient(to bottom, transparent, var(--background-code, rgb(22 22 22 / 90%)));

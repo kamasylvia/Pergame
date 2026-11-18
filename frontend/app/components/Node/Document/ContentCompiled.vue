@@ -25,7 +25,8 @@ import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
 import { renderExtEmbeds } from '~/helpers/markdown/embeds';
 import { renderAbcBlocks } from '~/helpers/abc-render';
 import { renderDataviewBlocks } from '~/helpers/dataview-render';
-import { findIndexChild } from '~/helpers/node';
+import { renderCodeEmbeds } from '~/helpers/code-embed';
+import { resolveNodeLink } from '~/helpers/node';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ node?: Partial<Node> }>();
@@ -121,30 +122,16 @@ const handleCodeToggleClick = (e: MouseEvent) => {
 };
 
 // Navigate internal document links (#<id>) through the router, without a full page reload
-const handleInternalLinkClick = async (event: MouseEvent) => {
+const handleInternalLinkClick = (event: MouseEvent) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-internal-link]');
   if (!link) return;
   const id = link.dataset.internalLink;
   if (!id) return;
   event.preventDefault();
-  // Directory index (issue #4): a folder row opens the folder's index
-  // file, lazily rebuilding it through the folder read when missing.
   const target = nodesStore.getById(id);
-  if (target && (target.role === 1 || target.role === 2)) {
-    let indexId = findIndexChild(nodesStore.getAll.toSortedArray(), id);
-    if (!indexId) {
-      try {
-        await nodesStore.fetch({ id });
-        indexId = findIndexChild(nodesStore.getAll.toSortedArray(), id);
-      } catch {
-        indexId = undefined;
-      }
-    }
-    router.push(indexId ? `/dashboard/docs/${indexId}` : `/dashboard/categories/${id}`);
-    return;
-  }
-  router.push(`/dashboard/docs/${id}`);
+  if (target) router.push(resolveNodeLink(target));
+  else router.push(`/dashboard/docs/${id}`);
 };
 
 const handleClick = (event: MouseEvent) => {
@@ -197,11 +184,17 @@ function runDataviewRender() {
   renderDataviewBlocks(rootElement.value, config.public.baseApi || '', props.node, id => nodesStore.getById(id));
 }
 
+function runCodeEmbeds() {
+  if (!rootElement.value) return;
+  renderCodeEmbeds(rootElement.value);
+}
+
 onMounted(() => {
   runMermaidRender();
   runAbcRender();
   runPdfEmbeds();
   runDataviewRender();
+  runCodeEmbeds();
   const unsub = subscribeDrawioCacheInvalidated(() => {
     rerenderImages(rootElement.value!);
   });
@@ -219,6 +212,7 @@ watch(
     runAbcRender();
     runPdfEmbeds();
     runDataviewRender();
+    runCodeEmbeds();
     if (rootElement.value) renderExtEmbeds(rootElement.value);
   },
 );

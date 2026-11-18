@@ -25,6 +25,42 @@ const isAudioFile = (filetype: string): boolean => filetype.startsWith('audio/')
 /** Check if a filetype MIME string represents a PDF */
 const isPdfFile = (filetype: string): boolean => filetype.startsWith('application/pdf');
 
+/** Source-code / text extensions rendered as code blocks when embedded.
+ * Backend mirror: `backend-rs/src/utils.rs` (`CODE_EXTS`) — keep in sync. */
+const CODE_EXTS = ['py', 'rs', 'go', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'rb', 'php', 'sh', 'bash', 'zsh', 'fish', 'sql', 'r', 'swift', 'kt', 'scala', 'pl', 'lua', 'toml', 'yaml', 'yml', 'json', 'xml', 'ini', 'md', 'markdown', 'txt', 'csv', 'diff', 'log', 'dockerfile', 'makefile', 'bat', 'ps1', 'vim', 'el'];
+
+/** Lowercased extension of a filename (without the dot), '' when none. */
+const fileExt = (filename: string): string => {
+  const name = filename.split(/[\\/]/).pop() || filename;
+  const idx = name.lastIndexOf('.');
+  if (idx > 0 && idx < name.length - 1) return name.slice(idx + 1).toLowerCase();
+  return CODE_EXTS.includes(name.toLowerCase()) ? name.toLowerCase() : '';
+};
+
+/** True when the filename is a code/text file (embed renders as code block). */
+const isCodeFile = (filename: string): boolean => CODE_EXTS.includes(fileExt(filename));
+
+/** Map a code-file extension to a highlight.js language hint (best effort). */
+const codeLanguage = (filename: string): string => {
+  const ext = fileExt(filename);
+  const map: Record<string, string> = {
+    py: 'python', rs: 'rust', go: 'go', js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+    ts: 'typescript', tsx: 'typescript', jsx: 'javascript', java: 'java', cs: 'csharp',
+    rb: 'ruby', php: 'php', sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash', bat: 'batch',
+    ps1: 'powershell', kt: 'kotlin', swift: 'swift', scala: 'scala', pl: 'perl', r: 'r',
+    md: 'markdown', markdown: 'markdown', yml: 'yaml', toml: 'toml', ini: 'ini',
+    dockerfile: 'dockerfile', makefile: 'makefile', h: 'c', hpp: 'cpp', cpp: 'cpp',
+  };
+  return map[ext] || ext;
+};
+
+/** Embed URL for a resource: code files use the named route so the markdown
+ * renderer can dispatch on the extension; others use the bare file URL. */
+const resourceEmbedUrl = (node: Pick<Node, 'id'>, filename: string): string => {
+  const { resourceURL } = useApi();
+  return isCodeFile(filename) ? `${resourceURL(node as Node)}/${encodeURIComponent(filename)}` : resourceURL(node as Node);
+};
+
 /** Get the CDN preview URL for a resource node */
 const resolvePreviewUrl = (node: Node): string => {
   const { resourceURL } = useApi();
@@ -56,4 +92,4 @@ const resolveFileType = (mimeType: string) => {
   return 'File';
 };
 
-export { readableFileSize, resolvePreviewUrl, isImageFile, resolveFileIcon, resolveFileType, isPdfFile, isVideoFile, isAudioFile };
+export { readableFileSize, resolvePreviewUrl, isImageFile, resolveFileIcon, resolveFileType, isPdfFile, isVideoFile, isAudioFile, CODE_EXTS, fileExt, isCodeFile, codeLanguage, resourceEmbedUrl };

@@ -200,7 +200,11 @@ pub async fn upload_file(
     } else {
         file.content_type.clone()
     };
-    if !mime_allowed(&supported_types(), &mime) {
+    // Code/text files are accepted by extension: browsers send unreliable
+    // Content-Types for them (often application/octet-stream).
+    if !mime_allowed(&supported_types(), &mime)
+        && !crate::utils::is_text_resource(&file.filename, &mime)
+    {
         return Err(ApiError::BadRequest("file type not supported".into()));
     }
     if let Some(max_file) = quota.max_file
@@ -405,7 +409,9 @@ pub async fn update_file(
         } else {
             file.content_type.clone()
         };
-        if !mime_allowed(&supported_types(), &mime) {
+        if !mime_allowed(&supported_types(), &mime)
+            && !crate::utils::is_text_resource(&file.filename, &mime)
+        {
             return Err(ApiError::BadRequest("file type not supported".into()));
         }
         if let Some(max_file) = quota.max_file

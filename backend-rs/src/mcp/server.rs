@@ -2,7 +2,7 @@
 //!
 //! Seven tools, all acting as the token owner through the normal permission
 //! layer (`auth::guard`) — MCP is a second *entrance*, never a second policy:
-//! - reads: `search_notes`, `list_children`, `read_note`
+//! - reads: `search_notes`, `list_children`, `read_note`, `read_resource`
 //! - writes: `create_note`, `update_note`, `move_node`, `delete_node`
 //!
 //! Writes reuse the REST semantics verbatim: creation validates the parent
@@ -92,6 +92,13 @@ pub struct MoveNodeArgs {
 /// Arguments for `delete_node`.
 pub struct DeleteNodeArgs {
     /// Node id. The subtree moves to the trash and stays restorable.
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `read_resource`.
+pub struct ReadResourceArgs {
+    /// Resource (uploaded file) id.
     pub id: String,
 }
 
@@ -287,6 +294,101 @@ impl PergameMcp {
     }
 
     #[tool(
+        description = "Read the text of an uploaded code/text resource (role-4 node): returns name, language and full UTF-8 content. Text is inferred from the file extension or a text/* mime; binary resources and bodies above 2 MiB are refused."
+    )]
+    async fn read_resource(
+        &self,
+        Parameters(args): Parameters<ReadResourceArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
+        let (_, actor) = self.actor(&ctx)?;
+        let node = self
+            .load(&actor, parse_id(&args.id)?, NodeAction::Read)
+            .await?;
+        if node.role != 4 {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "not a resource (use read_note for documents)",
+                None,
+            ));
+        }
+        let meta = node.metadata.clone().unwrap_or(serde_json::json!({}));
+        let filename = meta
+            .get("original_path")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&node.name)
+            .to_string();
+        let filetype = meta
+            .get("filetype")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        if !crate::utils::is_text_resource(&filename, filetype) {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!("resource {filename} is not a text/code file"),
+                None,
+            ));
+        }
+        if let Some(size) = node.size
+            && size as usize > MAX_TEXT_BYTES
+        {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!(
+                    "resource larger than 2 MiB ({} bytes)",
+                    node.size.unwrap_or(0)
+                ),
+                None,
+            ));
+        }
+        let storage = self.state.storage.clone().ok_or_else(|| {
+            McpError::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                "storage not configured",
+                None,
+            )
+        })?;
+        let bytes = match meta
+            .get("content_sha256")
+            .and_then(serde_json::Value::as_str)
+        {
+            Some(sha) => storage.get_blob(sha).await,
+            None => {
+                let key = meta
+                    .get("transformed_path")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                storage.get_user_object(actor.user_id, &key).await
+            }
+        }
+        .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
+        if bytes.len() > MAX_TEXT_BYTES {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!("resource larger than 2 MiB ({} bytes)", bytes.len()),
+                None,
+            ));
+        }
+        let content = String::from_utf8(bytes).map_err(|_| {
+            McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "resource is not valid UTF-8 text",
+                None,
+            )
+        })?;
+        let ext = crate::utils::file_ext(&filename);
+        text(&serde_json::json!({
+            "id": node.id,
+            "name": node.name,
+            "filename": filename,
+            "language": if ext.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(ext) },
+            "content": content,
+        }))
+    }
+
+    #[tool(
         description = "Create a document (markdown note) inside a folder; folder_id may be omitted for the top level."
     )]
     async fn create_note(
@@ -376,13 +478,6 @@ impl PergameMcp {
             .await?;
 
         let mut write = Self::write_from_row(&node);
-        if node_repo::is_index(&node.metadata) && args.name.is_some() {
-            return Err(McpError::new(
-                rmcp::model::ErrorCode(-32003),
-                "index file name can only change through settings",
-                None,
-            ));
-        }
         if let Some(name) = args.name {
             let name = name.trim().to_string();
             if name.is_empty() {
@@ -445,14 +540,6 @@ impl PergameMcp {
             return Err(McpError::new(
                 rmcp::model::ErrorCode(-32003),
                 "only the owner can move this node",
-                None,
-            ));
-        }
-        // Directory index (issue #4, locked): it belongs to its folder.
-        if node_repo::is_index(&node.metadata) {
-            return Err(McpError::new(
-                rmcp::model::ErrorCode(-32003),
-                "index file cannot be moved",
                 None,
             ));
         }
@@ -523,14 +610,6 @@ impl PergameMcp {
         let node = self
             .load(&actor, parse_id(&args.id)?, NodeAction::Delete)
             .await?;
-        // Directory index (issue #4, locked): it belongs to its folder.
-        if node_repo::is_index(&node.metadata) {
-            return Err(McpError::new(
-                rmcp::model::ErrorCode(-32003),
-                "index file cannot be deleted",
-                None,
-            ));
-        }
         let (deleted_at, nodes) =
             node_repo::soft_delete_subtree(&self.state.db, node.id, node_repo::now_ms())
                 .await
