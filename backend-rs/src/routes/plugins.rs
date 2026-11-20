@@ -578,6 +578,19 @@ pub struct ProxyInput {
     pub headers: Option<std::collections::HashMap<String, String>>,
 }
 
+/// POST /plugins/{id}/render body.
+#[derive(Debug, Deserialize)]
+pub struct RenderInput {
+    pub url: String,
+    /// Selector gating extraction (challenge pages reload; the selector only
+    /// exists on the real page). Empty skips the wait.
+    #[serde(default)]
+    pub wait_selector: Option<String>,
+    /// Selector scoping the returned HTML; empty returns the whole document.
+    #[serde(default)]
+    pub html_selector: Option<String>,
+}
+
 /// Request headers a plugin may set on a proxied call.
 const PROXY_HEADER_ALLOWLIST: [&str; 5] = [
     "cookie",
@@ -820,6 +833,64 @@ pub async fn proxy_binary(
         "content_type": content_type,
         "base64": encoded,
         "url": url.to_string(),
+    })))
+}
+
+/// POST /plugins/{id}/render — render a URL through the plugin's configured
+/// camoufox MCP service (D' plan): anti-scraping walls (Zhihu zse-ck) need a
+/// real browser, and the endpoint URL comes from the plugin's own KV settings
+/// — the user pointing Pergame at their self-hosted service is the trust
+/// decision, so the usual public-target check does not apply here.
+pub async fn render_page(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<RenderInput>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_granted(&state, &auth, &id).await?;
+    let rows = repo::kv_list(&state.db, auth.user_id(), &id)
+        .await
+        .map_err(ApiError::from)?;
+    let map: HashMap<String, serde_json::Value> = rows.into_iter().collect();
+    let config = crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
+        ApiError::BadRequest(
+            "camoufox rendering is not configured: set camoufox_url in the plugin settings".into(),
+        )
+    })?;
+    let cookie = map
+        .get("zhihu_cookie")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let rendered = tokio::time::timeout(
+        // Three fingerprint attempts can each take ~60-90s (30s create cap +
+        // selector wait), so the outer budget is generous on purpose.
+        std::time::Duration::from_secs(config.wait_seconds + 240),
+        crate::plugins_render::render_page(
+            config,
+            body.url.trim(),
+            body.wait_selector.as_deref(),
+            body.html_selector.as_deref(),
+            cookie.as_deref(),
+        ),
+    )
+    .await
+    .map_err(|_| ApiError::BadRequest("render timed out".into()))?
+    .map_err(|e| ApiError::BadRequest(e.0))?;
+    crate::mcp::audit(
+        &state.db,
+        Some(auth.user_id()),
+        "plugin.render",
+        &format!(
+            "plugin {id} rendered {} ({} bytes)",
+            body.url,
+            rendered.html.len()
+        ),
+    )
+    .await;
+    Ok(ApiOk::ok(json!({
+        "html": rendered.html,
+        "title": rendered.title,
+        "final_url": rendered.final_url,
     })))
 }
 

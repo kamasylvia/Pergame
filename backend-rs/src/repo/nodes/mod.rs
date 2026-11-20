@@ -83,6 +83,23 @@ pub async fn list_shared(pool: &PgPool, user_id: Uuid) -> Result<Vec<NodeRow>, s
     .await
 }
 
+/// Containers only (workspaces + folders), for pickers that do not need the
+/// documents. A flat index scan instead of the recursive tree walk: a large
+/// library takes seconds through `list_all` but milliseconds here.
+pub async fn list_containers(pool: &PgPool, user_id: Uuid) -> Result<Vec<NodeRow>, sqlx::Error> {
+    sqlx::query_as::<_, NodeRow>(
+        r#"SELECT id, user_id, parent_id, name, description, tags, role, color, icon, theme,
+                  accessibility, access, display, "order" AS node_order, size, metadata,
+                  created_timestamp, updated_timestamp, thumbnail
+           FROM nodes
+           WHERE user_id = $1 AND role IN (1, 2) AND deleted_at IS NULL
+           ORDER BY role, name"#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
 /// Object keys still referenced by this user's resource nodes, trashed ones
 /// included: a file in the trash must survive until the trash is purged, so
 /// orphan detection can never treat it as garbage.

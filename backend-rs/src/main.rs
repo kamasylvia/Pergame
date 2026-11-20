@@ -312,17 +312,40 @@ async fn main() {
             "/api/nodes/{nodeId}/links/{linkId}",
             delete(routes::links::delete_link),
         )
+        .route("/api/nodes/containers", get(routes::nodes::list_containers))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/query", post(routes::dql::query))
         // Plugin registry (PS-D): installs are admin-only, everything else is
         // per-user (list/grants/settings + the served module).
         .route("/api/plugins", get(routes::plugins::list_plugins))
-        .route("/api/admin/plugins", get(routes::plugins::admin_list_plugins))
-        .route("/api/plugins/{pluginId}/entry", get(routes::plugins::plugin_entry))
-        .route("/api/plugins/{pluginId}/asset/{*path}", get(routes::plugins::plugin_asset))
-        .route("/api/plugins/{pluginId}/grants", put(routes::plugins::put_grants))
-        .route("/api/plugins/{pluginId}/proxy", post(routes::plugins::proxy_fetch))
-        .route("/api/plugins/{pluginId}/proxy-binary", post(routes::plugins::proxy_binary))
+        .route(
+            "/api/admin/plugins",
+            get(routes::plugins::admin_list_plugins),
+        )
+        .route(
+            "/api/plugins/{pluginId}/entry",
+            get(routes::plugins::plugin_entry),
+        )
+        .route(
+            "/api/plugins/{pluginId}/asset/{*path}",
+            get(routes::plugins::plugin_asset),
+        )
+        .route(
+            "/api/plugins/{pluginId}/grants",
+            put(routes::plugins::put_grants),
+        )
+        .route(
+            "/api/plugins/{pluginId}/proxy",
+            post(routes::plugins::proxy_fetch),
+        )
+        .route(
+            "/api/plugins/{pluginId}/proxy-binary",
+            post(routes::plugins::proxy_binary),
+        )
+        .route(
+            "/api/plugins/{pluginId}/render",
+            post(routes::plugins::render_page),
+        )
         .route("/api/plugins/{pluginId}/kv", get(routes::plugins::list_kv))
         .route(
             "/api/plugins/{pluginId}/kv/{key}",
@@ -332,10 +355,7 @@ async fn main() {
             "/api/plugins/{pluginId}/kv/{key}",
             delete(routes::plugins::delete_kv),
         )
-        .route(
-            "/api/admin/plugins",
-            post(routes::plugins::install_plugin),
-        )
+        .route("/api/admin/plugins", post(routes::plugins::install_plugin))
         .route(
             "/api/admin/plugins/{pluginId}",
             patch(routes::plugins::patch_plugin),

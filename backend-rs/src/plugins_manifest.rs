@@ -44,6 +44,13 @@ pub struct PluginManifest {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Dock/list icon: sprite name, emoji, or image URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Declarative settings the UI renders; opaque to the server (the plugin
+    /// reads the values back through its own KV namespace).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<serde_json::Value>,
 }
 
 fn string_field(value: &Value, key: &str) -> Option<String> {
@@ -219,6 +226,8 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         min_host_version,
         author: string_field(raw, "author"),
         description: string_field(raw, "description"),
+        icon: string_field(raw, "icon"),
+        settings: raw.get("settings").filter(|v| !v.is_null()).cloned(),
     })
 }
 

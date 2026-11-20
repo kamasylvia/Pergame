@@ -46,6 +46,19 @@ pub async fn search(
     Ok(ApiOk::ok(results))
 }
 
+/// GET /nodes/containers — the caller's workspaces and folders, flat.
+///
+/// Pickers (plugin dialogs, move targets) need names and ids, not the whole
+/// tree: `list_all` walks every node recursively, which costs seconds on a
+/// large library.
+pub async fn list_containers(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let nodes = node_repo::list_containers(&state.db, auth.user_id()).await?;
+    Ok(ApiOk::ok(nodes))
+}
+
 /// GET /nodes/user/:userId — full tree (self or admin); "@me" = caller.
 pub async fn get_user_nodes(
     State(state): State<AppState>,
