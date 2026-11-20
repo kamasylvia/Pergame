@@ -1,9 +1,10 @@
 {
   "id": "web-clipper",
   "name": "Web clipper",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "apiVersion": "1",
   "entry": "main.mjs",
+  "icon": "clip",
   "capabilities": [
     "nodes:read",
     "nodes:write",
@@ -12,5 +13,405 @@
     "net:*"
   ],
   "author": "Pergame",
-  "description": "Clip pages, posts and videos into notes (the ReadItLater feature set): article extraction, per-type templates, images as attachments."
+  "description": "Clip pages, posts and videos into notes (the ReadItLater feature set): per-type folder, title and body templates, batch clipping, images as attachments.",
+  "settings": [
+    {
+      "key": "workspace_id",
+      "label": "Default workspace",
+      "type": "select",
+      "choicesFrom": "workspaces",
+      "placeholder": "Pick a workspace",
+      "hint": "New clips land here unless the clip dialog picks another one."
+    },
+    {
+      "key": "inbox_dir",
+      "label": "Folder path template",
+      "type": "text",
+      "value": "{{contentType}}",
+      "placeholder": "{{contentType}} or Reading/{{date}}",
+      "hint": "Rendered inside the workspace; missing folders are created. Variables: contentType (the type's slug), date, title, author."
+    },
+    {
+      "key": "date_title_fmt",
+      "label": "Date format",
+      "type": "text",
+      "value": "YYYY-MM-DD",
+      "placeholder": "YYYY-MM-DD",
+      "hint": "Tokens: YYYY, YY, MM, DD, HH, mm, ss. Used by the {{date}} template variable."
+    },
+    {
+      "key": "file_exists_strategy",
+      "label": "When a note with the same title exists",
+      "type": "select",
+      "value": "suffix",
+      "choices": [
+        {
+          "value": "suffix",
+          "label": "Keep both (add a suffix)"
+        },
+        {
+          "value": "overwrite",
+          "label": "Replace the existing note"
+        }
+      ],
+      "hint": "Pergame allows duplicate names; this only affects a title you already used today."
+    },
+    {
+      "key": "batch_delimiter",
+      "label": "Batch URL delimiter",
+      "type": "select",
+      "value": "auto",
+      "choices": [
+        {
+          "value": "auto",
+          "label": "Auto (any whitespace, comma or semicolon)"
+        },
+        {
+          "value": "newline",
+          "label": "Newline"
+        },
+        {
+          "value": "comma",
+          "label": "Comma"
+        },
+        {
+          "value": "semicolon",
+          "label": "Semicolon"
+        },
+        {
+          "value": "tab",
+          "label": "Tab"
+        },
+        {
+          "value": "space",
+          "label": "Space"
+        }
+      ],
+      "hint": "Used by 'clip every URL in the clipboard'."
+    },
+    {
+      "key": "zhihu_cookie",
+      "label": "Zhihu cookie (optional)",
+      "type": "textarea",
+      "rows": 3,
+      "hint": "Zhihu blocks anonymous reads. Paste your own Cookie header value to clip zhihu.com pages."
+    },
+    {
+      "key": "camoufox_enabled",
+      "label": "Use camoufox browser service",
+      "type": "checkbox",
+      "group": "Browser rendering (camoufox)",
+      "hint": "Pages behind anti-scraping walls (Zhihu) need a real browser. Requires a self-hosted camoufox MCP service. Zhihu anonymous access is probabilistic — set the Zhihu cookie below for a deterministic pass."
+    },
+    {
+      "key": "camoufox_url",
+      "label": "Camoufox MCP endpoint",
+      "type": "text",
+      "group": "Browser rendering (camoufox)",
+      "placeholder": "http://camofox-mcp:8080/mcp",
+      "hint": "Base URL of your camoufox MCP service; /mcp is appended if missing."
+    },
+    {
+      "key": "camoufox_token",
+      "label": "Camoufox API token",
+      "type": "text",
+      "group": "Browser rendering (camoufox)",
+      "placeholder": "Bearer token (empty when auth is off)",
+      "hint": "Sent as Authorization: Bearer …"
+    },
+    {
+      "key": "camoufox_wait_seconds",
+      "label": "Render timeout (seconds)",
+      "type": "text",
+      "value": "30",
+      "group": "Browser rendering (camoufox)",
+      "hint": "How long the page may take to load before extraction. Drives every timeout in the chain — raise it on slow networks."
+    },
+    {
+      "key": "youtube_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "YouTube",
+      "placeholder": "YouTube",
+      "group": "YouTube",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "youtube_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "YouTube",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "youtube_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "{{ content }}\n\n[Watch on YouTube]({{ url }})\n",
+      "rows": 6,
+      "group": "YouTube",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "bilibili_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Bilibili",
+      "placeholder": "Bilibili",
+      "group": "Bilibili",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "bilibili_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Bilibili",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "bilibili_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "{{ content }}\n\n[Watch on Bilibili]({{ url }})\n",
+      "rows": 6,
+      "group": "Bilibili",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "vimeo_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Vimeo",
+      "placeholder": "Vimeo",
+      "group": "Vimeo",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "vimeo_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Vimeo",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "vimeo_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "{{ content }}\n\n[Watch on Vimeo]({{ url }})\n",
+      "rows": 6,
+      "group": "Vimeo",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "tiktok_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "TikTok",
+      "placeholder": "TikTok",
+      "group": "TikTok",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "tiktok_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "TikTok",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "tiktok_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "{{ content }}\n\n[Watch on TikTok]({{ url }})\n",
+      "rows": 6,
+      "group": "TikTok",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "twitter_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "X (Twitter)",
+      "placeholder": "X (Twitter)",
+      "group": "X (Twitter)",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "twitter_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ author }} · {{ date }}",
+      "group": "X (Twitter)",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "twitter_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "X (Twitter)",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "bluesky_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Bluesky",
+      "placeholder": "Bluesky",
+      "group": "Bluesky",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "bluesky_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ author }} · {{ date }}",
+      "group": "Bluesky",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "bluesky_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "Bluesky",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "mastodon_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Mastodon",
+      "placeholder": "Mastodon",
+      "group": "Mastodon",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "mastodon_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ author }} · {{ date }}",
+      "group": "Mastodon",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "mastodon_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "Mastodon",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "stackexchange_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Stack Exchange",
+      "placeholder": "Stack Exchange",
+      "group": "Stack Exchange",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "stackexchange_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Stack Exchange",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "stackexchange_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "Stack Exchange",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "pinterest_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Pinterest",
+      "placeholder": "Pinterest",
+      "group": "Pinterest",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "pinterest_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Pinterest",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "pinterest_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "Pinterest",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "website_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Article",
+      "placeholder": "Article",
+      "group": "Article",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "website_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Article",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "website_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "> {{ description }}\n\n[Source]({{ url }})\n\n{{ content }}\n",
+      "rows": 6,
+      "group": "Article",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    },
+    {
+      "key": "text_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Text snippet",
+      "placeholder": "Text snippet",
+      "group": "Text snippet",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "text_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ date }}",
+      "group": "Text snippet",
+      "hint": "Variables: title, author, date, url, contentType."
+    },
+    {
+      "key": "text_body",
+      "label": "Body template",
+      "type": "textarea",
+      "value": "{{ content }}\n",
+      "rows": 6,
+      "group": "Text snippet",
+      "hint": "Variables: content, title, description, author, published, url, date, contentType."
+    }
+  ]
 }

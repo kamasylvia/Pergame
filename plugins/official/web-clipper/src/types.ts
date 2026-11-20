@@ -51,4 +51,14 @@ export interface ParserContext {
   upload(bytes: Uint8Array, filename: string, contentType: string): Promise<string>;
   /** Plugin settings (cookie per host, template overrides, …). */
   setting<T = string>(key: string): Promise<T | undefined>;
+  /**
+   * Render a URL through the user's camoufox service (settings → browser
+   * rendering). For pages that answer 403/challenges to plain HTTP clients.
+   * Throws when the service is not configured or the render fails.
+   */
+  render(url: string, opts?: { waitSelector?: string; htmlSelector?: string }): Promise<{
+    html: string;
+    title: string;
+    finalUrl: string;
+  }>;
 }

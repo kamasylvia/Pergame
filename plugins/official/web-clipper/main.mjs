@@ -1690,8 +1690,9 @@ function detectType(url) {
   const trimmed = url.trim();
   return RULES.find((rule) => rule.test.test(trimmed))?.type ?? "website";
 }
-function splitBatch(text) {
-  return text.split(/[\s,;]+/).map((part) => part.trim()).filter((part) => isUrl(part));
+function splitBatch(text, delimiter = "auto") {
+  const pattern = delimiter === "newline" ? /\r?\n+/ : delimiter === "comma" ? /,/ : delimiter === "semicolon" ? /;/ : delimiter === "tab" ? /\t/ : delimiter === "space" ? /\s+/ : /[\s,;]+/;
+  return text.split(pattern).map((part) => part.trim()).filter((part) => isUrl(part));
 }
 
 // src/parsers/text.ts
@@ -2775,68 +2776,6 @@ ${media}
     extra: { favourites: status.favourites_count ?? 0 }
   };
 }
-async function parseGithub(url, ctx) {
-  const match = url.match(/github\.com\/([^/]+)\/([^/]+)(?:\/(issues|pull)\/(\d+))?/i);
-  if (!match)
-    return null;
-  const [, owner, repo, kind, number] = match;
-  const api = kind && number ? `https://api.github.com/repos/${owner}/${repo}/issues/${number}` : `https://api.github.com/repos/${owner}/${repo}`;
-  const response = await ctx.proxy(api, { headers: { accept: "application/vnd.github+json", "user-agent": "pergame-clipper" } });
-  if (response.status >= 400)
-    return null;
-  const data = JSON.parse(response.body);
-  if (kind && number) {
-    return {
-      type: "github",
-      title: `${owner}/${repo}#${number} ${String(data.title ?? "")}`.trim(),
-      content: `${String(data.body ?? "")}
-`,
-      description: `${String(data.state ?? "")} · ${String(data.comments ?? 0)} comments`,
-      author: data.user?.login,
-      published: String(data.created_at ?? ""),
-      url,
-      tags: Array.isArray(data.labels) ? data.labels.map((label) => label.name ?? "").filter(Boolean) : [],
-      extra: { state: data.state ?? "", comments: data.comments ?? 0 }
-    };
-  }
-  return {
-    type: "github",
-    title: `${owner}/${repo}`,
-    content: `${String(data.description ?? "")}
-
-${String(data.html_url ?? url)}
-`,
-    description: `${String(data.language ?? "")} · ★ ${String(data.stargazers_count ?? 0)}`,
-    author: owner,
-    url,
-    tags: Array.isArray(data.topics) ? data.topics : [],
-    extra: { stars: data.stargazers_count ?? 0, forks: data.forks_count ?? 0 }
-  };
-}
-async function parseWikipedia(url, ctx) {
-  const match = url.match(/^https?:\/\/([a-z-]+)\.wikipedia\.org\/wiki\/(.+)$/i);
-  if (!match)
-    return null;
-  const [, lang, title] = match;
-  const api = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(decodeURIComponent(title))}`;
-  const response = await ctx.proxy(api);
-  if (response.status >= 400)
-    return null;
-  const data = JSON.parse(response.body);
-  if (!data.extract)
-    return null;
-  return {
-    type: "wikipedia",
-    title: data.title ?? url,
-    content: `${data.extract}
-
-[Read on Wikipedia](${url})
-`,
-    description: data.description ?? "",
-    url,
-    extra: {}
-  };
-}
 
 // src/parsers/zhihu.ts
 var ZHIHU_COOKIE_KEY = "zhihu_cookie";
@@ -2848,22 +2787,33 @@ function toMarkdown(html) {
 }
 async function parseZhihu(url, ctx) {
   const cookie = await ctx.setting(ZHIHU_COOKIE_KEY);
-  const response = await ctx.proxy(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
-      "accept-language": "zh-CN,zh;q=0.9",
-      ...cookie ? { cookie } : {}
+  const selectors = {
+    waitSelector: /\/p\/\d+/.test(url) ? ".Post-RichText" : ".RichContent-inner",
+    htmlSelector: /\/p\/\d+/.test(url) ? ".Post-RichText" : ".RichContent-inner"
+  };
+  let html = "";
+  if (cookie) {
+    const response = await ctx.proxy(url, {
+      headers: {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
+        "accept-language": "zh-CN,zh;q=0.9",
+        cookie
+      }
+    });
+    if (response.status < 400 && /RichText/i.test(response.body)) {
+      html = response.body;
     }
-  });
-  if (response.status >= 400) {
-    throw new Error(`Zhihu answered ${response.status}${cookie ? "" : " (no cookie configured)"}`);
   }
-  const document2 = new DOMParser().parseFromString(response.body, "text/html");
+  if (!html) {
+    const rendered = await ctx.render(url, selectors);
+    html = rendered.html;
+  }
+  const document2 = new DOMParser().parseFromString(html, "text/html");
   const isArticle = /\/p\/\d+/.test(url);
   const title = isArticle ? document2.querySelector(".Post-Title")?.textContent?.trim() ?? document2.title : document2.querySelector(".QuestionHeader-title")?.textContent?.trim() ?? document2.title;
   const body = isArticle ? document2.querySelector(".Post-RichText")?.innerHTML : document2.querySelector(".RichText")?.innerHTML ?? document2.querySelector(".AnswerItem .RichText")?.innerHTML;
   if (!body) {
-    throw new Error("Zhihu returned a challenge page; paste the article instead or add a cookie in plugin settings");
+    throw new Error("Zhihu returned no article body. Configure the camoufox service or a valid cookie in plugin settings.");
   }
   const author = document2.querySelector(".AuthorInfo-name")?.textContent?.trim() ?? undefined;
   return {
@@ -2961,10 +2911,54 @@ function renderTemplate(template, data) {
 
 // src/service.ts
 var SETTINGS = {
-  parentId: "parent_id",
-  tags: "default_tags",
-  templatePrefix: "template_",
-  zhihuCookie: "zhihu_cookie"
+  workspaceId: "workspace_id",
+  inboxDir: "inbox_dir",
+  dateTitleFmt: "date_title_fmt",
+  fileExistsStrategy: "file_exists_strategy",
+  batchDelimiter: "batch_delimiter",
+  zhihuCookie: "zhihu_cookie",
+  slugSuffix: "_slug",
+  titleSuffix: "_title",
+  bodySuffix: "_body"
+};
+var SETTING_TYPES = [
+  "youtube",
+  "bilibili",
+  "vimeo",
+  "tiktok",
+  "twitter",
+  "bluesky",
+  "mastodon",
+  "stackexchange",
+  "pinterest",
+  "website",
+  "text"
+];
+var DEFAULT_SLUGS = {
+  youtube: "YouTube",
+  bilibili: "Bilibili",
+  vimeo: "Vimeo",
+  tiktok: "TikTok",
+  twitter: "X",
+  bluesky: "Bluesky",
+  mastodon: "Mastodon",
+  stackexchange: "Stack Exchange",
+  pinterest: "Pinterest",
+  website: "Articles",
+  text: "Snippets"
+};
+var DEFAULT_TITLES = {
+  youtube: "{{ title }}",
+  bilibili: "{{ title }}",
+  vimeo: "{{ title }}",
+  tiktok: "{{ title }}",
+  twitter: "{{ author }} · {{ date }}",
+  bluesky: "{{ author }} · {{ date }}",
+  mastodon: "{{ author }} · {{ date }}",
+  stackexchange: "{{ title }}",
+  pinterest: "{{ title }}",
+  website: "{{ title }}",
+  text: "{{ date }}"
 };
 var DEFAULT_TEMPLATES = {
   website: `> {{ description }}
@@ -3030,26 +3024,30 @@ async function parseByType(url, type, ctx) {
   switch (type) {
     case "zhihu":
       return await parseZhihu(url, ctx) ?? parseWebsite(url, ctx);
-    case "youtube":
     case "bilibili":
+    case "youtube":
     case "vimeo":
-    case "tiktok": {
-      const embedded = await parseOEmbed(url, ctx);
-      return embedded ?? parseWebsite(url, ctx);
-    }
-    case "stackexchange":
-      return await parseStackExchange(url, ctx) ?? parseWebsite(url, ctx);
+    case "tiktok":
+      return await parseOEmbed(url, ctx, type) ?? parseWebsite(url, ctx);
+    case "twitter":
+      return await parseBluesky(url, ctx) ?? parseWebsite(url, ctx);
     case "bluesky":
       return await parseBluesky(url, ctx) ?? parseWebsite(url, ctx);
     case "mastodon":
       return await parseMastodon(url, ctx) ?? parseWebsite(url, ctx);
-    case "github":
-      return await parseGithub(url, ctx) ?? parseWebsite(url, ctx);
-    case "wikipedia":
-      return await parseWikipedia(url, ctx) ?? parseWebsite(url, ctx);
+    case "stackexchange":
+      return await parseStackExchange(url, ctx) ?? parseWebsite(url, ctx);
+    case "pinterest":
+      return await parseWebsite(url, ctx) ?? parseWebsite(url, ctx);
     default:
       return parseWebsite(url, ctx);
   }
+}
+async function formatNow(ctx, key, fallback) {
+  const fmt = await ctx.setting(key) || fallback;
+  const now = new Date;
+  const pad = (n) => String(n).padStart(2, "0");
+  return fmt.replace(/YYYY/g, String(now.getFullYear())).replace(/YY/g, String(now.getFullYear()).slice(-2)).replace(/MM/g, pad(now.getMonth() + 1)).replace(/DD/g, pad(now.getDate())).replace(/HH/g, pad(now.getHours())).replace(/mm/g, pad(now.getMinutes())).replace(/ss/g, pad(now.getSeconds()));
 }
 async function clip(host, input, overrides = {}) {
   const { ctx } = host;
@@ -3058,9 +3056,12 @@ async function clip(host, input, overrides = {}) {
     throw new Error("nothing to clip");
   const type = isUrl(trimmed) ? detectType(trimmed) : "text";
   const parsed = isUrl(trimmed) ? await parseByType(trimmed, type, ctx) : parseText(trimmed);
-  const templateKey = `${SETTINGS.templatePrefix}${parsed.type}`;
-  const template = await ctx.setting(templateKey) || DEFAULT_TEMPLATES[parsed.type] || DEFAULT_TEMPLATES.website;
-  const body = renderTemplate(template, {
+  const kind = parsed.type;
+  const slug = await ctx.setting(`${kind}${SETTINGS.slugSuffix}`) || DEFAULT_SLUGS[kind] || "";
+  const titleTemplate = await ctx.setting(`${kind}${SETTINGS.titleSuffix}`) || DEFAULT_TITLES[kind] || "{{ title }}";
+  const bodyTemplate = await ctx.setting(`${kind}${SETTINGS.bodySuffix}`) || DEFAULT_TEMPLATES[kind] || DEFAULT_TEMPLATES.website;
+  const date = await formatNow(ctx, SETTINGS.dateTitleFmt, "YYYY-MM-DD");
+  const vars = {
     ...parsed.extra,
     title: parsed.title,
     content: parsed.content,
@@ -3068,22 +3069,26 @@ async function clip(host, input, overrides = {}) {
     author: parsed.author ?? "",
     published: parsed.published ?? "",
     url: parsed.url ?? "",
-    tags: parsed.tags ?? []
-  });
-  const parentId = overrides.parentId || await ctx.setting(SETTINGS.parentId) || undefined;
-  const tags = overrides.tags ?? await ctx.setting(SETTINGS.tags) ?? "";
-  const name = (overrides.title || parsed.title || "Clipped note").slice(0, 60);
-  const note = await host.createNote({
-    name,
-    content: body,
-    parent_id: parentId,
-    tags: tags || undefined
-  });
+    tags: parsed.tags ?? [],
+    date,
+    contentType: slug
+  };
+  const body = renderTemplate(bodyTemplate, vars);
+  const renderedTitle = renderTemplate(titleTemplate, vars).trim();
+  const name = (overrides.title || renderedTitle || parsed.title || "Clipped note").slice(0, 60);
+  const workspaceId = overrides.workspaceId || await ctx.setting(SETTINGS.workspaceId) || undefined;
+  const inboxTemplate = await ctx.setting(SETTINGS.inboxDir) || "{{contentType}}";
+  const inboxPath = renderTemplate(inboxTemplate, vars).split("/").map((segment) => segment.trim()).filter(Boolean);
+  const parentId = await host.ensureFolder(workspaceId, inboxPath);
+  const overrideTags = overrides.tags ?? "";
+  const tags = overrideTags || slug;
+  const note = await host.createNote({ name, content: body, parent_id: parentId, tags: tags || undefined });
   host.notify(`Clipped ${name}`, { type: "success", timeout: 4000 });
-  return { type: parsed.type, title: name, noteId: note.id, images: parsed.images ?? 0 };
+  return { type: kind, title: name, noteId: note.id, images: parsed.images ?? 0 };
 }
 async function clipBatch(host, text, overrides = {}) {
-  const urls = splitBatch(text);
+  const delimiter = await host.ctx.setting(SETTINGS.batchDelimiter) || "newline";
+  const urls = splitBatch(text, delimiter);
   if (!urls.length) {
     host.notify("No URLs in the clipboard", { type: "warning" });
     return { ok: 0, failed: 0 };
@@ -3109,14 +3114,9 @@ class WebClipper {
   host;
   ctxRef;
   async onload(ctx) {
-    const folders = async () => {
-      const top = [{ value: "", label: "Top level" }];
-      const listing = ctx.nodes.listChildren().then((nodes) => nodes.filter((node) => node.role === 1 || node.role === 2).map((node) => ({ value: node.id, label: node.name }))).catch(() => []);
-      const containers = await Promise.race([
-        listing,
-        new Promise((resolve) => setTimeout(() => resolve([]), 1500))
-      ]);
-      return [...top, ...containers];
+    const loadWorkspaces = async () => {
+      const nodes = await ctx.nodes.listContainers();
+      return nodes.filter((node) => node.role === 1).map((node) => ({ value: node.id, label: node.name }));
     };
     const parserCtx = {
       proxy: (url, init) => ctx.net.proxy(url, init),
@@ -3126,25 +3126,65 @@ class WebClipper {
         const stored = await ctx.resources.upload(new File([blob], filename, { type: contentType }));
         return `/api/resources/${stored.id}/file`;
       },
-      setting: (key) => ctx.settings.get(key)
+      setting: (key) => ctx.settings.get(key),
+      render: (url, opts) => ctx.net.render(url, opts)
+    };
+    const ensureFolder = async (workspaceId, path) => {
+      if (!workspaceId)
+        return;
+      let parentId = workspaceId;
+      for (const segment of path) {
+        const children = await ctx.nodes.listChildren(parentId);
+        const existing = children.find((node) => node.role === 2 && node.name === segment.slice(0, 50));
+        parentId = existing?.id ?? (await ctx.nodes.create({ name: segment.slice(0, 50), role: 2, parent_id: parentId })).id;
+      }
+      return parentId;
     };
     const host = {
       ctx: parserCtx,
       createNote: (input) => ctx.nodes.create({ ...input, role: 3 }),
+      ensureFolder,
       notify: (message, opts) => ctx.ui.notice(message, opts)
     };
     this.host = host;
     this.ctxRef = ctx;
+    const pasteFallback = async (url) => {
+      const pasted = await ctx.ui.modal({
+        title: "Paste the article",
+        description: "This page needs a login. Copy the article text from your browser and paste it here.",
+        fields: [
+          { key: "title", label: "Title", type: "text", placeholder: "Article title" },
+          { key: "body", label: "Article text", type: "textarea", rows: 12, required: true }
+        ],
+        submitLabel: "Save note"
+      });
+      if (!pasted)
+        return;
+      const title = String(pasted.title ?? "").trim() || "Pasted article";
+      const body = String(pasted.body ?? "").trim();
+      if (!body)
+        return;
+      try {
+        await clip(host, `[${title}](${url})
+
+${body}`, { title });
+      } catch (err) {
+        ctx.ui.notice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
+      }
+    };
     const askAndClip = async (initialUrl) => {
-      const saved = await ctx.settings.get(SETTINGS.parentId);
+      const saved = await ctx.settings.get(SETTINGS.workspaceId);
+      loadWorkspaces().then((choices) => ctx.ui.patchModalChoices("workspace", choices)).catch(() => {
+        return;
+      });
       const result = await ctx.ui.modal({
         title: "Clip to note",
-        description: "Paste a URL, or any text to save it as a note. Leave the title empty to use the page title.",
+        description: "Paste a URL, or any text to save it as a note. The folder comes from the content-type and inbox path templates in settings.",
         fields: [
           { key: "url", label: "URL or text", type: "textarea", value: initialUrl, required: true },
-          { key: "title", label: "Title (optional)", type: "text", placeholder: "Use the detected title" },
-          { key: "tags", label: "Tags (optional)", type: "text", placeholder: "comma, separated" },
-          { key: "parent", label: "Folder", type: "select", value: saved ?? "", choices: await folders() }
+          { key: "title", label: "Title (optional)", type: "text", placeholder: "Use the title template" },
+          { key: "tags", label: "Tags (optional)", type: "text", placeholder: "Defaults to the content-type slug" },
+          { key: "workspace", label: "Workspace", type: "select", value: saved ?? "", choices: [] }
         ],
         submitLabel: "Clip"
       });
@@ -3152,40 +3192,34 @@ class WebClipper {
         return;
       try {
         await clip(host, String(result.url ?? ""), {
-          parentId: String(result.parent ?? "") || undefined,
+          workspaceId: String(result.workspace ?? "") || undefined,
           tags: String(result.tags ?? ""),
           title: String(result.title ?? "") || undefined
         });
       } catch (err) {
-        ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
+        const message = err instanceof Error ? err.message : String(err);
+        ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000 });
+        if (/challenge|cookie|401|403/i.test(message))
+          await pasteFallback(String(result.url ?? ""));
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {
-      const clipboard = await navigator.clipboard.readText().catch(() => "");
-      await askAndClip(clipboard.trim());
+      await askAndClip("");
     });
-    ctx.ui.command("clip-clipboard", "Web clipper: clip from clipboard", async () => {
+    ctx.ui.command("clip-from-clipboard", "Web clipper: clip from clipboard", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       if (!text.trim()) {
         ctx.ui.notice("Clipboard is empty", { type: "warning" });
         return;
       }
-      try {
-        await clip(host, text);
-      } catch (err) {
-        ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
-      }
+      await askAndClip(text.trim());
     });
     ctx.ui.command("clip-batch", "Web clipper: clip every URL in the clipboard", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       await clipBatch(host, text);
     });
-    ctx.ui.ribbon("\uD83D\uDDDE️", "Web clipper", async () => {
-      const text = await navigator.clipboard.readText().catch(() => "");
-      if (text.trim())
-        await askAndClip(text.trim());
-      else
-        await askAndClip("");
+    ctx.ui.ribbon("clip", "Web clipper", async () => {
+      await askAndClip("");
     });
     await ctx.settings.set("template_defaults", DEFAULT_TEMPLATES);
   }

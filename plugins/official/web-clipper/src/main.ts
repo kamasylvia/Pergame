@@ -1,16 +1,15 @@
 /**
  * Web clipper — clip pages, posts and videos into Pergame notes.
  *
- * Replaces the SiYuan ReadItLater plugin's job (this plugin started as
- * `web-clipper`): clipboard/batch clipping, per-type parsing, templates and
- * images stored as attachments. Browser automation is not involved: pages are
- * fetched server-side through `ctx.net.proxy`, and anything that still needs a
- * login is handled with the user's own cookie or a paste.
+ * Mirrors the SiYuan ReadItLater plugin's job: per-content-type folder slug,
+ * title template and body template, batch clipping, images as attachments.
+ * Pages are fetched server-side through `ctx.net.proxy`; anything behind a
+ * login uses the user's own cookie or a paste.
  */
-import { clip, clipBatch, DEFAULT_TEMPLATES, SETTINGS, type ClipHost } from './service';
-import type { ParsedContent, ParserContext } from './types';
+import { clip, clipBatch, DEFAULT_TEMPLATES, SETTING_TYPES, SETTINGS, type ClipHost } from './service';
+import type { ParserContext } from './types';
 
-/** Folder choices for the save dialog. */
+/** A container choice for the save dialog. */
 interface FolderOption {
   value: string;
   label: string;
@@ -21,22 +20,11 @@ export default class WebClipper {
   private ctxRef!: unknown;
 
   async onload(ctx: any) {
-    // The dialog must open immediately: listing every node can be slow on a
-    // large library, so the picker gives up after a moment and falls back to
-    // "top level" (the folder can still be set in plugin settings).
-    const folders = async (): Promise<FolderOption[]> => {
-      const top = [{ value: '', label: 'Top level' }];
-      const listing = ctx.nodes
-        .listChildren()
-        .then((nodes: any[]) =>
-          nodes.filter(node => node.role === 1 || node.role === 2).map(node => ({ value: node.id, label: node.name })),
-        )
-        .catch(() => []);
-      const containers = await Promise.race([
-        listing,
-        new Promise<FolderOption[]>(resolve => setTimeout(() => resolve([]), 1500)),
-      ]);
-      return [...top, ...containers];
+    // Containers only: the full node listing walks the whole tree (seconds on
+    // a large library), while this is one flat index scan.
+    const loadWorkspaces = async (): Promise<FolderOption[]> => {
+      const nodes: any[] = await ctx.nodes.listContainers();
+      return nodes.filter(node => node.role === 1).map(node => ({ value: node.id, label: node.name }));
     };
 
     // Adapt the host context to the parser surface: parsers stay independent
@@ -51,56 +39,111 @@ export default class WebClipper {
         return `/api/resources/${stored.id}/file`;
       },
       setting: key => ctx.settings.get(key),
+      render: (url, opts) => ctx.net.render(url, opts),
     };
+
+    /**
+     * Ensure `workspace/<segment>/<segment>/…` exists and return the leaf id.
+     *
+     * ReadItLater renders its `inboxDir` template inside one notebook; the
+     * equivalent here is a folder path inside one workspace, so the template
+     * can route thirteen content types into thirteen folders without extra
+     * settings. Existing folders are matched by name at each level.
+     */
+    const ensureFolder = async (workspaceId: string | undefined, path: string[]): Promise<string | undefined> => {
+      if (!workspaceId) return undefined;
+      let parentId = workspaceId;
+      for (const segment of path) {
+        const children: any[] = (await ctx.nodes.listChildren(parentId)) as any[];
+        const existing = children.find(node => node.role === 2 && node.name === segment.slice(0, 50));
+        parentId = existing?.id ?? (await ctx.nodes.create({ name: segment.slice(0, 50), role: 2, parent_id: parentId })).id;
+      }
+      return parentId;
+    };
+
     const host: ClipHost = {
       ctx: parserCtx,
       createNote: input => ctx.nodes.create({ ...input, role: 3 }),
+      ensureFolder,
       notify: (message, opts) => ctx.ui.notice(message, opts),
     };
     this.host = host;
     this.ctxRef = ctx;
 
+    /** Save pasted text as a note, keeping the source URL for reference. */
+    const pasteFallback = async (url: string) => {
+      const pasted = await ctx.ui.modal({
+        title: 'Paste the article',
+        description: 'This page needs a login. Copy the article text from your browser and paste it here.',
+        fields: [
+          { key: 'title', label: 'Title', type: 'text', placeholder: 'Article title' },
+          { key: 'body', label: 'Article text', type: 'textarea', rows: 12, required: true },
+        ],
+        submitLabel: 'Save note',
+      });
+      if (!pasted) return;
+      const title = String(pasted.title ?? '').trim() || 'Pasted article';
+      const body = String(pasted.body ?? '').trim();
+      if (!body) return;
+      try {
+        await clip(host, `[${title}](${url})\n\n${body}`, { title });
+      } catch (err) {
+        ctx.ui.notice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, { type: 'error', timeout: 8000 });
+      }
+    };
+
     const askAndClip = async (initialUrl: string) => {
-      const saved = await ctx.settings.get<string>(SETTINGS.parentId);
+      const saved = await ctx.settings.get<string>(SETTINGS.workspaceId);
+      // Kick the listing off first, then open the dialog without awaiting it:
+      // on a large library the listing takes seconds and the dialog must not
+      // wait for it.
+      void loadWorkspaces()
+        .then(choices => ctx.ui.patchModalChoices('workspace', choices))
+        .catch(() => undefined);
       const result = await ctx.ui.modal({
         title: 'Clip to note',
-        description: 'Paste a URL, or any text to save it as a note. Leave the title empty to use the page title.',
+        description:
+          'Paste a URL, or any text to save it as a note. The folder comes from the content-type and inbox path templates in settings.',
         fields: [
           { key: 'url', label: 'URL or text', type: 'textarea', value: initialUrl, required: true },
-          { key: 'title', label: 'Title (optional)', type: 'text', placeholder: 'Use the detected title' },
-          { key: 'tags', label: 'Tags (optional)', type: 'text', placeholder: 'comma, separated' },
-          { key: 'parent', label: 'Folder', type: 'select', value: saved ?? '', choices: await folders() },
+          { key: 'title', label: 'Title (optional)', type: 'text', placeholder: 'Use the title template' },
+          { key: 'tags', label: 'Tags (optional)', type: 'text', placeholder: 'Defaults to the content-type slug' },
+          { key: 'workspace', label: 'Workspace', type: 'select', value: saved ?? '', choices: [] },
         ],
         submitLabel: 'Clip',
       });
       if (!result) return;
       try {
         await clip(host, String(result.url ?? ''), {
-          parentId: String(result.parent ?? '') || undefined,
+          workspaceId: String(result.workspace ?? '') || undefined,
           tags: String(result.tags ?? ''),
           title: String(result.title ?? '') || undefined,
         });
       } catch (err) {
-        ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: 'error', timeout: 8000 });
+        const message = err instanceof Error ? err.message : String(err);
+        ctx.ui.notice(`Clip failed: ${message}`, { type: 'error', timeout: 8000 });
+        // Pages behind a login wall (Zhihu is the known one) cannot be fetched
+        // without the user's own session. Offer the paste path instead of
+        // leaving them at an error: the text becomes a note through the same
+        // template pipeline, with the source URL kept.
+        if (/challenge|cookie|401|403/i.test(message)) await pasteFallback(String(result.url ?? ''));
       }
     };
 
+
     ctx.ui.command('clip', 'Web clipper: clip a URL', async () => {
-      const clipboard = await navigator.clipboard.readText().catch(() => '');
-      await askAndClip(clipboard.trim());
+      // No clipboard read here: the browser asks for permission first and the
+      // dialog would arrive late behind that prompt. The dialog has the field.
+      await askAndClip('');
     });
 
-    ctx.ui.command('clip-clipboard', 'Web clipper: clip from clipboard', async () => {
+    ctx.ui.command('clip-from-clipboard', 'Web clipper: clip from clipboard', async () => {
       const text = await navigator.clipboard.readText().catch(() => '');
       if (!text.trim()) {
         ctx.ui.notice('Clipboard is empty', { type: 'warning' });
         return;
       }
-      try {
-        await clip(host, text);
-      } catch (err) {
-        ctx.ui.notice(`Clip failed: ${err instanceof Error ? err.message : String(err)}`, { type: 'error', timeout: 8000 });
-      }
+      await askAndClip(text.trim());
     });
 
     ctx.ui.command('clip-batch', 'Web clipper: clip every URL in the clipboard', async () => {
@@ -108,14 +151,17 @@ export default class WebClipper {
       await clipBatch(host, text);
     });
 
-    ctx.ui.ribbon('🗞️', 'Web clipper', async () => {
-      const text = await navigator.clipboard.readText().catch(() => '');
-      if (text.trim()) await askAndClip(text.trim());
-      else await askAndClip('');
+    ctx.ui.ribbon('clip', 'Web clipper', async () => {
+      // Same reasoning as the command: asking for clipboard permission up
+      // front makes the dialog look broken, so open it empty and let the user
+      // paste into the field (browsers allow paste there without a prompt).
+      await askAndClip('');
     });
 
-    // Expose the template defaults so a user can copy them into settings.
+    // Seed the template defaults so a user can copy them into the settings
+    // form, and keep the body templates in sync for types that ship defaults.
     await ctx.settings.set('template_defaults', DEFAULT_TEMPLATES);
+    void SETTING_TYPES;
   }
 
   async onunload() {

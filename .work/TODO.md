@@ -2,6 +2,15 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## Web clipper v0.5.0(2026-11-20 批次)
+
+- [x] **插件设置界面** ✅:manifest 可声明 `settings`(group 折叠分组),设置页齿轮按钮打开表单,值存插件 KV(`ctx.settings` 同源)。43 项设置对齐 SiYuan ReadItLater 构造:General 7(workspace 下拉/路径模板/日期格式/重名策略/批量分隔符/知乎 cookie)+ Browser rendering 4 + 11 内容类型 × 3(slug/标题/正文模板)。
+- [x] **每类型模板生效 + 自动建 folder** ✅:`<type>_slug` 作文件夹名与标签,`inbox_dir` 路径模板渲染后逐级 ensure folder;`render` 服务经后端 MCP 客户端(camoufox)出真实浏览器页,30s create 上限走空开页签+navigate 流程,3 轮指纹重试,signin 落地检测。
+- [x] **camoufox 通道** ✅(D' 方案):后端 `POST /api/plugins/:id/render`,URL/token 从插件 KV 读(用户自建服务=信任决策,免 SSRF 校验);超时用户可配(`camoufox_wait_seconds`,驱动 wait_for_selector + 后端 HTTP + 外层预算)。
+- [x] **轻量容器接口** ✅:`GET /api/nodes/containers`(1.2s vs 全量 14s),插件 `listContainers` + workspace 下拉。
+- [ ] **知乎匿名通过率实测为 0**(2026-11-20 晚,4/4 被弹 signin;当日 20:00 曾成功一次):cookie 桥接已实现——设置里填 `zhihu_cookie` 后渲染前自动 `import_cookies` 进 camoufox,确定性通过。**待用户填 cookie 实测**。obscura v0.2.7 stealth 实测不过(质询过、内容层 403)。
+- [ ] 生产部署:stack 42 后端需加挂 camofox docker 网络(或走宿主 3000 端口)才能通 camoufox。
+
 ## 思源 → Pergame 全量搬迁(2026-11-17 用户指令)
 
 - [x] **全量搬迁到 pergame_dev(本地 dev 库)** ✅ 2026-11-17:872/872 文档(168 纯父目录 → category folder,704 → 笔记)+ 5 笔记本 → 5 workspace + 210 思源 `assets/` 随迁为 resource(外部 http 直链保留原样)。引擎 = /tmp/mig.py(JWT 自签 + REST + siyuan MCP 直连;断点映射 /tmp/mig-map.json)。**验证**:树结构三方对齐(role/parent/name 全 0 错,workspace 5/5 OK)+ 抽样内容比对(KDL 药品文档字节级 MATCH;图库笔记差异仅为预期资源 URL 改写)+ :3000 health OK。资源 URL 与前端原生一致(`/api/resources/:id/file`)。

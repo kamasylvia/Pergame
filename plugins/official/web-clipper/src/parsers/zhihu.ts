@@ -19,21 +19,40 @@ function toMarkdown(html: string): string {
   return service.turndown(html);
 }
 
-/** Parse a Zhihu answer or column article; null when the page is a challenge. */
+/** Parse a Zhihu answer or column article.
+ *
+ * Escalation chain (mirrors ReadItLater v0.12): direct fetch with the user's
+ * cookie first (fast), then the camoufox browser render for pages that serve
+ * a challenge to plain HTTP clients. Both fail → error with guidance.
+ */
 export async function parseZhihu(url: string, ctx: ParserContext): Promise<ParsedContent | null> {
   const cookie = await ctx.setting<string>(ZHIHU_COOKIE_KEY);
-  const response = await ctx.proxy(url, {
-    headers: {
-      'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36',
-      'accept-language': 'zh-CN,zh;q=0.9',
-      ...(cookie ? { cookie } : {}),
-    },
-  });
-  if (response.status >= 400) {
-    throw new Error(`Zhihu answered ${response.status}${cookie ? '' : ' (no cookie configured)'}`);
-  }
-  const document = new DOMParser().parseFromString(response.body, 'text/html');
+  const selectors = {
+    waitSelector: /\/p\/\d+/.test(url) ? '.Post-RichText' : '.RichContent-inner',
+    htmlSelector: /\/p\/\d+/.test(url) ? '.Post-RichText' : '.RichContent-inner',
+  };
 
+  let html = '';
+  if (cookie) {
+    const response = await ctx.proxy(url, {
+      headers: {
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        cookie,
+      },
+    });
+    if (response.status < 400 && /RichText/i.test(response.body)) {
+      html = response.body;
+    }
+  }
+  if (!html) {
+    // Camoufox render: user-configured self-hosted service, same as the
+    // SiYuan ReadItLater path. Errors carry through with guidance.
+    const rendered = await ctx.render(url, selectors);
+    html = rendered.html;
+  }
+
+  const document = new DOMParser().parseFromString(html, 'text/html');
   const isArticle = /\/p\/\d+/.test(url);
   const title = isArticle
     ? document.querySelector('.Post-Title')?.textContent?.trim() ?? document.title
@@ -43,8 +62,9 @@ export async function parseZhihu(url: string, ctx: ParserContext): Promise<Parse
     : document.querySelector('.RichText')?.innerHTML ?? document.querySelector('.AnswerItem .RichText')?.innerHTML;
 
   if (!body) {
-    // Login wall / JS challenge: let the caller offer the paste path.
-    throw new Error('Zhihu returned a challenge page; paste the article instead or add a cookie in plugin settings');
+    throw new Error(
+      'Zhihu returned no article body. Configure the camoufox service or a valid cookie in plugin settings.',
+    );
   }
   const author = document.querySelector('.AuthorInfo-name')?.textContent?.trim() ?? undefined;
   return {

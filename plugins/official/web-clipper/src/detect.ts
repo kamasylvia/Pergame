@@ -33,10 +33,28 @@ export function detectType(url: string): ContentType {
   return RULES.find(rule => rule.test.test(trimmed))?.type ?? 'website';
 }
 
-/** Split a clipboard batch into URLs (newlines, commas, or spaces). */
-export function splitBatch(text: string): string[] {
+/**
+ * Split a clipboard batch into URLs.
+ *
+ * `delimiter` mirrors the plugin setting: `newline`, `comma`, `semicolon`,
+ * `tab`, `space`. The default (`auto`) accepts all of them, so a pasted list
+ * works before anyone visits settings.
+ */
+export function splitBatch(text: string, delimiter = 'auto'): string[] {
+  const pattern =
+    delimiter === 'newline'
+      ? /\r?\n+/
+      : delimiter === 'comma'
+        ? /,/
+        : delimiter === 'semicolon'
+          ? /;/
+          : delimiter === 'tab'
+            ? /\t/
+            : delimiter === 'space'
+              ? /\s+/
+              : /[\s,;]+/;
   return text
-    .split(/[\s,;]+/)
+    .split(pattern)
     .map(part => part.trim())
     .filter(part => isUrl(part));
 }
