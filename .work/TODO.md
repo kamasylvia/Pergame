@@ -10,6 +10,7 @@
 - [x] **轻量容器接口** ✅:`GET /api/nodes/containers`(1.2s vs 全量 14s),插件 `listContainers` + workspace 下拉。
 - [x] **知乎风控定性(2026-11-21,内容分级门)**:实测矩阵——列表页/官方帮助文匿名稳定通过;UGC 专栏/回答按篇掷骰(部分放行部分 signin/unhuman);质询 JS 全过(`__zse_ck` 能算出);obscura v0.2.7 stealth 引擎指纹被识别(内容层 403);本机 camoufox-cli 与 NAS camofox-mcp 同结论。signin/unhuman 页可离开但拿不到被拦内容。**匿名通路活着但按内容分级**;登录态(cookie 桥接)使被拦篇目确定性通过。**注**:思源「剪藏成功」传闻经查证无落库记录(11-20 后新建文档 0 篇),此前成功结论不成立。
 - [x] **生产 stack 42 恢复 + v0.0.12 上线** ✅(2026-11-21):用户在 Portainer UI 手动连网络触发重部署 → 旧 stack file(v0.0.10 镜像)对 migration 12 库校验失败循环崩溃(11-21 凌晨起生产 502)。修复:发 v0.0.12(含 0001-0012 + 本批 render/containers)→ stack file 更新镜像 tag + backend 挂 `camofox` external 网络(用户网络操作的持久化)。核验:health 200、三网络就位(camofox/pergame/postgres)、migration 干净过。**教训**:Portainer UI 对运行容器的网络改动会在下次 stack 部署时被 compose 覆盖——网络声明必须进 stack file。
+- [x] **双渲染引擎(2026-11-21 用户决策:dev=本地 camoufox-cli,prod=camofox-mcp 容器)**:`render_engine` 设置(builtin|external_mcp|auto;auto = camoufox_url 有值走 external,否则 builtin)。builtin = 后端 spawn `camoufox-cli --session pergame --persistent` 子进程(open → settle → eval 探针),门内文 explore 预热一轮,cookie 桥接走 cli 原生 `cookies import`。活测:官方文 200/397KB(51s),被门文 400 + cookie 指引(139s)。工程坑见 GOAL-STATE(cli 走 stderr 报错、probe 双括号)。生产 v0.0.12 含 external 引擎;builtin 供 dev(本机 cli+浏览器已装)。
 
 ## 思源 → Pergame 全量搬迁(2026-11-17 用户指令)
 
