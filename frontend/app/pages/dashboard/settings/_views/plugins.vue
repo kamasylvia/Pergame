@@ -25,6 +25,13 @@
             <span class="version">v{{ plugin.version }} · {{ plugin.id }}</span>
           </div>
           <div class="row-actions">
+            <AppBtnIcon
+              v-if="plugin.manifest.settings?.length"
+              icon="settings"
+              display="sm"
+              :tooltip="t('settings.plugins.settings')"
+              @click="settingsFor = plugin"
+            />
             <AppToggle v-if="isAdmin" :model-value="plugin.enabled" @update:model-value="toggleEnabled(plugin, $event)" />
             <AppButton v-if="isAdmin" type="danger" @click="remove(plugin)">{{ t('common.actions.delete') }}</AppButton>
           </div>
@@ -43,6 +50,8 @@
         <p v-else-if="!plugin.enabled" class="hint warn">{{ t('settings.plugins.disabled') }}</p>
       </div>
     </section>
+
+    <PluginSettingsModal v-if="settingsFor" v-model:open="settingsOpen" :plugin="settingsFor" />
   </div>
 </template>
 
@@ -66,6 +75,13 @@ const nuxtApp = useNuxtApp();
 
 const isAdmin = computed(() => userStore.user?.role === 2);
 const plugins = ref<AdminPluginRow[]>([]);
+const settingsFor = ref<AdminPluginRow | null>(null);
+const settingsOpen = computed({
+  get: () => settingsFor.value !== null,
+  set: (open: boolean) => {
+    if (!open) settingsFor.value = null;
+  },
+});
 const fileInput = ref<HTMLInputElement>();
 const installing = ref(false);
 const installMessage = ref('');

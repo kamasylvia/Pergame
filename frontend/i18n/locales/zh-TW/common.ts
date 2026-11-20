@@ -17,6 +17,8 @@ export default {
     export: '匯出',
     import: '匯入',
     new: '新增',
+    newDocument: '新建文件',
+    newFolder: '新建資料夾',
     open: '開啟',
     pin: '釘選至頂端',
     preview: '預覽',

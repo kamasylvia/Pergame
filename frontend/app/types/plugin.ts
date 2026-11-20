@@ -34,6 +34,40 @@ export interface PluginManifest {
   /** Optional author line shown in the settings list. */
   author?: string;
   description?: string;
+  /** Icon shown in the dock/settings list: a sprite name, emoji, or image URL. */
+  icon?: string;
+  /**
+   * Settings the plugin wants the host to render (Settings → Plugins → the
+   * plugin). Values live in the plugin's own KV namespace under `field.key`,
+   * so the plugin reads them with `ctx.settings.get(key)`.
+   */
+  settings?: PluginSettingField[];
+}
+
+/** One declarative settings field, rendered as a labelled control. */
+export interface PluginSettingField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'select' | 'checkbox';
+  /** Default when the KV has no value yet. */
+  value?: string | boolean;
+  placeholder?: string;
+  /** Help text under the control. */
+  hint?: string;
+  choices?: Array<{ value: string; label: string }>;
+  /**
+   * Load `choices` from the user's own containers instead of declaring them.
+   * `workspaces` = role 1 only, `folders` = role 2 only, `containers` = both.
+   */
+  choicesFrom?: 'workspaces' | 'folders' | 'containers';
+  /** Grow the textarea to fit longer content (templates). */
+  rows?: number;
+  /**
+   * Collapsible group this field belongs to. Fields sharing a `group` render
+   * under one collapsible header, in declaration order. Without it the field
+   * renders at the top level.
+   */
+  group?: string;
 }
 
 /** Cleanup handle returned by every registration (design §3: unload is total). */
@@ -67,6 +101,8 @@ export interface PluginNode {
 export interface NodeClient {
   get(id: string): Promise<PluginNode>;
   listChildren(parentId?: string): Promise<PluginNode[]>;
+  /** Workspaces and folders only — cheap on a large library. */
+  listContainers(): Promise<PluginNode[]>;
   create(input: { name: string; parent_id?: string; content?: string; role?: number }): Promise<PluginNode>;
   update(id: string, patch: { name?: string; content?: string; description?: string; tags?: string }): Promise<PluginNode>;
   remove(id: string): Promise<void>;
@@ -92,6 +128,13 @@ export interface UiClient {
   ribbon(icon: string, title: string, run: () => void): Disposable;
   /** Ask the user for input; resolves to the field values or `null`. */
   modal(spec: ModalSpec): Promise<ModalResult>;
+  /**
+   * Fill a `select` field's choices on the dialog that is already open.
+   *
+   * For lists that are slow to build: open the dialog immediately with the
+   * field empty, then patch the choices in when the data arrives.
+   */
+  patchModalChoices(fieldKey: string, choices: Array<{ value: string; label: string }>): void;
 }
 
 /** Network facade (design §3: capability-gated, method/size limited). */
@@ -109,6 +152,16 @@ export interface NetClient {
   }>;
   /** Server-side GET of bytes (images, fonts) as a base64 payload. */
   proxyBinary(url: string): Promise<{ contentType: string; base64: string }>;
+  /**
+   * Server-side render of a URL through the plugin's configured camoufox
+   * service, for pages that reject plain HTTP clients (anti-scraping walls).
+   * Configure the service under the plugin's settings first.
+   */
+  render(url: string, opts?: { waitSelector?: string; htmlSelector?: string }): Promise<{
+    html: string;
+    title: string;
+    finalUrl: string;
+  }>;
 }
 
 /** One field of a plugin dialog. */

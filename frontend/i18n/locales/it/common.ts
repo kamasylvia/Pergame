@@ -17,6 +17,8 @@ export default {
     export: 'Esporta',
     import: 'Importa',
     new: 'Nuovo',
+    newDocument: 'Nuovo documento',
+    newFolder: 'Nuova cartella',
     open: 'Apri',
     pin: 'Fissa in alto',
     preview: 'Anteprima',

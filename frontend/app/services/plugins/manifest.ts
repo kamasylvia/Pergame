@@ -131,6 +131,8 @@ export function validateManifest(raw: unknown, hostVersion?: string): ManifestRe
       minHostVersion,
       author: asString(m.author),
       description: asString(m.description),
+      icon: asString(m.icon),
+      settings: Array.isArray(m.settings) ? (m.settings as PluginSettingField[]) : undefined,
     },
   };
 }

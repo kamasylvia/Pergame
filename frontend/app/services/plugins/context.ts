@@ -148,6 +148,21 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
         body: response.result.body,
       };
     },
+    async render(url, opts) {
+      const response = await request<{ html: string; title: string; final_url: string }>(
+        `plugins/${pluginId}/render`,
+        'POST',
+        { url: String(url), waitSelector: opts?.waitSelector, htmlSelector: opts?.htmlSelector },
+      );
+      if (response.status !== 'success' || !response.result) {
+        throw new Error(response.message || 'render request failed');
+      }
+      return {
+        html: response.result.html,
+        title: response.result.title,
+        finalUrl: response.result.final_url,
+      };
+    },
     async proxyBinary(url) {
       const target = new URL(String(url));
       if (!netAllows(capabilities, target)) {
@@ -176,6 +191,7 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
       const rows = unwrap(await request<PluginNode[]>('nodes/user/@me', 'GET'), 'cannot list nodes');
       return parentId ? rows.filter(n => n.parent_id === parentId) : rows;
     },
+    listContainers: async () => unwrap(await request<PluginNode[]>('nodes/containers', 'GET'), 'cannot list containers'),
     async create(input) {
       const created = unwrap(
         await request<PluginNode | { node: PluginNode }>('nodes', 'POST', input),
@@ -231,6 +247,7 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
       command: (id, title, run) => deps.ui.command(id, title, run),
       ribbon: (icon, title, run) => deps.ui.ribbon(icon, title, run),
       modal: spec => deps.ui.modal(spec),
+      patchModalChoices: (fieldKey, choices) => deps.ui.patchModalChoices(fieldKey, choices),
     },
     net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id),
     markdown: deps.markdown ?? createMarkdownClient(() => {}),

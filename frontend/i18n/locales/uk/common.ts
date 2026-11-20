@@ -17,6 +17,8 @@ export default {
     export: 'Експорт',
     import: 'Імпорт',
     new: 'Новий',
+    newDocument: 'Новий документ',
+    newFolder: 'Нова тека',
     open: 'Відкрити',
     pin: 'Закріпити вгорі',
     preview: 'Попередній перегляд',

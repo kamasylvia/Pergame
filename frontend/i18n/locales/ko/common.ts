@@ -17,6 +17,8 @@ export default {
     export: '내보내기',
     import: '가져오기',
     new: '새로 만들기',
+    newDocument: '새 문서',
+    newFolder: '새 폴더',
     open: '열기',
     pin: '상단 고정',
     preview: '미리보기',

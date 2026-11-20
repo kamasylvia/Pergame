@@ -11,7 +11,14 @@
     <div class="menu-group">
       <button class="menu-item" @click="action('open')"><Icon name="file_open" />{{ t('common.actions.open') }}<kbd>Enter</kbd></button>
       <button class="menu-item" @click="action('edit')"><Icon name="edit_page" />{{ t('common.actions.edit') }}<kbd>E</kbd></button>
-      <button class="menu-item" @click="action('new')"><Icon name="add_file" />{{ t('common.actions.new') }}</button>
+      <div class="menu-item has-submenu" @mouseenter="positionSubmenu">
+        <Icon name="add_file" />{{ t('common.actions.new') }}
+        <Icon class="submenu-arrow" name="chevron_right" />
+        <div class="submenu">
+          <button class="menu-item" @click="action('new')"><Icon name="file" />{{ t('common.actions.newDocument') }}</button>
+          <button v-if="node.role <= 2" class="menu-item" @click="action('newFolder')"><Icon name="folder" />{{ t('common.actions.newFolder') }}</button>
+        </div>
+      </div>
     </div>
 
     <div class="menu-group">
@@ -47,6 +54,7 @@
 import NodePermissions from '../Modals/Permissions.vue';
 import NodeDeleteModal from '../Modals/Delete.vue';
 import NodeCloneModal from '../Modals/CloneTo.vue';
+import CreateCategoryModal from '../Modals/CreateCategory.vue';
 import type { Node } from '~/stores';
 import { nodeFullPath, resolveNodeLink } from '~/helpers/node';
 
@@ -88,6 +96,9 @@ async function action(name: string) {
       break;
     case 'new':
       router.push(`/dashboard/docs/new?parent_id=${props.node.id}`);
+      break;
+    case 'newFolder':
+      modals.add(new Modal(shallowRef(CreateCategoryModal), { props: { role: 2, parentId: props.node.id }, size: 'small' }));
       break;
     case 'cloneTo':
       modals.add(new Modal(shallowRef(NodeCloneModal), { props: { node: props.node }, size: 'small' }));

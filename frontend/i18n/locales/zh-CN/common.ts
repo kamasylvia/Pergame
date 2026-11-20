@@ -17,6 +17,8 @@ export default {
     export: '导出',
     import: '导入',
     new: '新增',
+    newDocument: '新建文档',
+    newFolder: '新建文件夹',
     open: '打开',
     pin: '置顶',
     preview: '预览',

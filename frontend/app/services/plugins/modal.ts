@@ -50,3 +50,22 @@ export function settlePluginModal(result: ModalResult): void {
   state.current = null;
   pending.resolve(result);
 }
+
+/**
+ * Replace one field's `choices` on the dialog that is already open.
+ *
+ * `state.current` is shallow-reactive, so the spec object itself must be
+ * swapped for the host to re-render: mutate a copy, then assign a new spec.
+ * Used by plugins that open the dialog first and fill slow lists later.
+ */
+export function patchPluginModalChoices(fieldKey: string, choices: Array<{ value: string; label: string }>): void {
+  const pending = state.current;
+  if (!pending) return;
+  state.current = {
+    ...pending,
+    spec: {
+      ...pending.spec,
+      fields: pending.spec.fields.map(f => (f.key === fieldKey ? { ...f, choices } : f)),
+    },
+  };
+}
