@@ -852,30 +852,83 @@ pub async fn render_page(
         .await
         .map_err(ApiError::from)?;
     let map: HashMap<String, serde_json::Value> = rows.into_iter().collect();
-    let config = crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
-        ApiError::BadRequest(
-            "camoufox rendering is not configured: set camoufox_url in the plugin settings".into(),
-        )
-    })?;
+    // CamoufoxConfig (external MCP) resolves inside the external branch —
+    // the builtin cli engine needs no endpoint, only the wait budget.
+    let wait_seconds = map
+        .get("camoufox_wait_seconds")
+        .and_then(|v| v.as_u64())
+        .filter(|s| *s > 0 && *s <= 300)
+        .unwrap_or(30);
     let cookie = map
         .get("zhihu_cookie")
         .and_then(|v| v.as_str())
         .map(str::to_string);
-    let rendered = tokio::time::timeout(
-        // Three fingerprint attempts can each take ~60-90s (30s create cap +
-        // selector wait), so the outer budget is generous on purpose.
-        std::time::Duration::from_secs(config.wait_seconds + 240),
-        crate::plugins_render::render_page(
-            config,
-            body.url.trim(),
-            body.wait_selector.as_deref(),
-            body.html_selector.as_deref(),
-            cookie.as_deref(),
-        ),
-    )
-    .await
-    .map_err(|_| ApiError::BadRequest("render timed out".into()))?
-    .map_err(|e| ApiError::BadRequest(e.0))?;
+    // Engine choice: explicit render_engine setting, else auto — external
+    // MCP when camoufox_url is configured, builtin cli when a local
+    // camoufox-cli is on PATH (dev setup, 2026-11-21 user decision).
+    let engine = map
+        .get("render_engine")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| {
+            if map
+                .get("camoufox_url")
+                .and_then(|v| v.as_str())
+                .map(|s| !s.trim().is_empty())
+                == Some(true)
+            {
+                Some("external_mcp".into())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "builtin".into());
+    let rendered = match engine.as_str() {
+        "builtin" => {
+            let cli_path = map
+                .get("camoufox_cli_path")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("camoufox-cli")
+                .to_string();
+            tokio::time::timeout(
+                std::time::Duration::from_secs(wait_seconds + 180),
+                crate::plugins_render::render_page_builtin(
+                    &cli_path,
+                    body.url.trim(),
+                    body.wait_selector.as_deref(),
+                    body.html_selector.as_deref(),
+                    cookie.as_deref(),
+                    wait_seconds,
+                ),
+            )
+            .await
+            .map_err(|_| ApiError::BadRequest("render timed out".into()))?
+            .map_err(|e| ApiError::BadRequest(e.0))?
+        }
+        _ => {
+            let config = crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
+                ApiError::BadRequest(
+                    "camoufox rendering is not configured: set camoufox_url in the plugin settings".into(),
+                )
+            })?;
+            tokio::time::timeout(
+                // Three fingerprint attempts can each take ~60-90s (30s create
+                // cap + selector wait), so the outer budget is generous.
+                std::time::Duration::from_secs(wait_seconds + 240),
+                crate::plugins_render::render_page(
+                    config,
+                    body.url.trim(),
+                    body.wait_selector.as_deref(),
+                    body.html_selector.as_deref(),
+                    cookie.as_deref(),
+                ),
+            )
+            .await
+            .map_err(|_| ApiError::BadRequest("render timed out".into()))?
+            .map_err(|e| ApiError::BadRequest(e.0))?
+        }
+    };
     crate::mcp::audit(
         &state.db,
         Some(auth.user_id()),

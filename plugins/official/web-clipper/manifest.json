@@ -1,7 +1,7 @@
 {
   "id": "web-clipper",
   "name": "Web clipper",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "apiVersion": "1",
   "entry": "main.mjs",
   "icon": "clip",
@@ -97,6 +97,28 @@
       "hint": "Zhihu blocks anonymous reads. Paste your own Cookie header value to clip zhihu.com pages."
     },
     {
+      "key": "render_engine",
+      "label": "Render engine",
+      "type": "select",
+      "value": "auto",
+      "group": "Browser rendering (camoufox)",
+      "choices": [
+        {
+          "value": "auto",
+          "label": "Auto (external MCP when endpoint set, else local CLI)"
+        },
+        {
+          "value": "builtin",
+          "label": "Local camoufox-cli (dev — backend spawns it)"
+        },
+        {
+          "value": "external_mcp",
+          "label": "External camofox-mcp service (production)"
+        }
+      ],
+      "hint": "Dev machines: install camoufox-cli and its browser, keep the endpoint empty. Production: point the endpoint at the camofox-mcp container."
+    },
+    {
       "key": "camoufox_enabled",
       "label": "Use camoufox browser service",
       "type": "checkbox",
@@ -109,7 +131,7 @@
       "type": "text",
       "group": "Browser rendering (camoufox)",
       "placeholder": "http://camofox-mcp:8080/mcp",
-      "hint": "Base URL of your camoufox MCP service; /mcp is appended if missing."
+      "hint": "Production container DNS name (pergame-backend joins the camofox network). /mcp appended if missing."
     },
     {
       "key": "camoufox_token",

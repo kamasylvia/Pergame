@@ -413,3 +413,170 @@ async fn render_once(
         final_url,
     })
 }
+
+// ---------------------------------------------------------------- builtin
+//
+// Dev engine: drive a locally installed camoufox-cli as subprocesses
+// (user decision 2026-11-21: dev = local cli, production = camofox-mcp
+// container). The cli speaks one command per invocation — open/wait/eval/
+// cookies import — and keeps a daemon alive across commands, so the
+// `--session pergame --persistent` identity (frozen fingerprint + cookie
+// jar) accumulates exactly the reputation Zhihu's content-tiered wall
+// rewards. No HTTP endpoint: the backend owns the process tree.
+
+/// CLI invocation result.
+struct CliRun {
+    stdout: String,
+    success: bool,
+}
+
+/// One command against the persistent pergame session.
+async fn cli_run(cli_path: &str, args: &[&str], timeout: Duration) -> Result<CliRun, RenderError> {
+    // A wedged daemon would hang the child forever; the budget caps it.
+    let output = tokio::time::timeout(
+        timeout,
+        tokio::process::Command::new(cli_path)
+            .args(["--session", "pergame", "--persistent"])
+            .args(args)
+            .env("HOME", std::env::var("HOME").unwrap_or_default())
+            .output(),
+    )
+    .await
+    .map_err(|_| RenderError(format!("camoufox-cli {} timed out", args.first().unwrap_or(&""))))?
+    .map_err(|e| RenderError(format!("camoufox-cli spawn failed: {e}")))?;
+    // The cli writes results to stdout and errors to stderr; both matter —
+    // a stale daemon answers "Browser not launched" on stderr with an empty
+    // stdout, and the caller must see that instead of a bare EOF.
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let success = output.status.success();
+    if !success && stdout.is_empty() && !stderr.is_empty() {
+        return Err(RenderError(format!("camoufox-cli: {}", first_line(&stderr))));
+    }
+    Ok(CliRun { success, stdout })
+}
+
+/// Extracted page state parsed from the eval probe.
+#[derive(Debug, serde::Deserialize)]
+struct CliPageState {
+    title: String,
+    url: String,
+    html: String,
+    gated: bool,
+}
+
+/// Builtin render: local camoufox-cli subprocess flow.
+///
+/// Escalation inside one call: cookie import (deterministic pass) →
+/// navigate → settle → eval-probe → gated pages get one explore warm-up
+/// round-trip before failing (the gate is content-tiered; list pages
+/// always pass and the round trip sometimes unlocks the article).
+pub async fn render_page_builtin(
+    cli_path: &str,
+    url: &str,
+    wait_selector: Option<&str>,
+    html_selector: Option<&str>,
+    cookie: Option<&str>,
+    wait_seconds: u64,
+) -> Result<RenderedPage, RenderError> {
+    let settle_ms = format!("{}000", wait_seconds.max(10));
+    let overall = Duration::from_secs(wait_seconds * 2 + 60);
+
+    // Cookie bridge: the cli imports through a temp file (native command).
+    if let Some(raw) = cookie.filter(|c| !c.trim().is_empty()) {
+        let cookies: Vec<serde_json::Value> = raw
+            .split(';')
+            .filter_map(|pair| {
+                let (name, value) = pair.split_once('=')?;
+                let name = name.trim();
+                if name.is_empty() || value.trim().is_empty() {
+                    return None;
+                }
+                Some(json!({ "name": name, "value": value.trim(), "domain": ".zhihu.com", "path": "/" }))
+            })
+            .collect();
+        if !cookies.is_empty() {
+            let path =
+                std::env::temp_dir().join(format!("pergame-cookies-{}.json", std::process::id()));
+            if std::fs::write(&path, serde_json::to_string(&cookies).unwrap_or_default()).is_ok() {
+                let path_str = path.to_string_lossy().to_string();
+                let _ = cli_run(cli_path, &["cookies", "import", &path_str], overall).await;
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    let open_args = ["open", url, "--timeout", &wait_seconds.max(15).to_string()];
+    let open = cli_run(cli_path, &open_args, overall).await?;
+    if !open.success && open.stdout.is_empty() {
+        return Err(RenderError(
+            "camoufox-cli open failed (is it installed?)".into(),
+        ));
+    }
+    let _ = cli_run(cli_path, &["wait", &settle_ms], overall).await;
+
+    let selector_js = html_selector.unwrap_or("");
+    let probe = format!(
+        "JSON.stringify({{title: document.title, url: location.href, \
+         html: ({sel} ? (document.querySelector({sel})?.innerHTML ?? document.documentElement.outerHTML) \
+         : document.documentElement.outerHTML), \
+         gated: /signin|unhuman/.test(location.href) || !!document.querySelector('#zh-zse-ck')}})",
+        sel = serde_json::to_string(selector_js).unwrap_or_default()
+    );
+    let probe_args = ["eval", &probe];
+    let mut state = cli_run(cli_path, &probe_args, overall).await?;
+    let mut parsed: CliPageState = parse_cli_state(&state.stdout)?;
+
+    if parsed.gated {
+        // Warm-up round trip: list pages always pass; arriving at the article
+        // from inside the site occasionally unlocks it.
+        let _ = cli_run(
+            cli_path,
+            &["open", "https://www.zhihu.com/explore", "--timeout", "45"],
+            overall,
+        )
+        .await;
+        let _ = cli_run(cli_path, &["wait", &settle_ms], overall).await;
+        let _ = cli_run(cli_path, &open_args, overall).await;
+        let _ = cli_run(cli_path, &["wait", &settle_ms], overall).await;
+        state = cli_run(cli_path, &probe_args, overall).await?;
+        parsed = parse_cli_state(&state.stdout)?;
+        if parsed.gated {
+            return Err(RenderError(
+                "page is behind Zhihu's login gate; set zhihu_cookie in the plugin settings for a deterministic pass".into(),
+            ));
+        }
+    }
+
+    // wait_selector is honored implicitly by the settle wait above; a caller
+    // selector only scopes the extraction probe.
+
+    Ok(RenderedPage {
+        html: parsed.html,
+        title: parsed.title,
+        final_url: parsed.url,
+    })
+}
+
+/// The eval probe prints a bare JSON object (verified against cli 0.8.x);
+/// accept either that or the --json envelope.
+fn parse_cli_state(stdout: &str) -> Result<CliPageState, RenderError> {
+    let trimmed = stdout.trim();
+    let payload = if trimmed.starts_with('{') {
+        trimmed.to_string()
+    } else {
+        // --json envelope: {id, success, data?} — find the first {...} that
+        // parses with our keys by scanning from the first brace.
+        match trimmed.find("{\"") {
+            Some(i) => trimmed[i..].to_string(),
+            None => trimmed.to_string(),
+        }
+    };
+    serde_json::from_str(&payload).map_err(|e| {
+        RenderError(format!(
+            "camoufox-cli probe returned unexpected output ({e}): bytes={} head={:?}",
+            trimmed.len(),
+            trimmed.chars().take(80).collect::<Vec<_>>()
+        ))
+    })
+}
