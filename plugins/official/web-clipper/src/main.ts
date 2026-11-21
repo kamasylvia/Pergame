@@ -109,7 +109,7 @@ export default class WebClipper {
       };
       let lastLabel = '';
       const onProgress = (p: { percent: number; stage: string }) => {
-        const label = `剪藏中 — ${p.percent}%:${STAGE_ZH[p.stage] ?? p.stage}`;
+        const label = `剪藏中 — ${p.percent}%：${STAGE_ZH[p.stage] ?? p.stage}`;
         if (label !== lastLabel) {
           lastLabel = label;
           ctx.ui.notice(label, { timeout: 300000, id: toastId });
@@ -124,11 +124,11 @@ export default class WebClipper {
           onProgress,
         });
         activeProgress = undefined;
-        ctx.ui.notice(`剪藏完成:${outcome.title}`, { type: 'success', timeout: 4000, id: toastId });
+        ctx.ui.notice(`剪藏完成：${outcome.title}`, { type: 'success', timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`剪藏失败:${message}`, { type: 'error', timeout: 8000, id: toastId });
+        ctx.ui.notice(`剪藏失败：${message}`, { type: 'error', timeout: 8000, id: toastId });
       }
     };
 

@@ -226,9 +226,9 @@ export async function clipBatch(
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`剪藏失败:${url} — ${reason}`, { type: 'error', timeout: 6000 });
+      host.notify(`剪藏失败：${url} — ${reason}`, { type: 'error', timeout: 6000 });
     }
   }
-  host.notify(`批量剪藏完成 ${ok}/${urls.length}${failed ? `(失败 ${failed})` : ''}`, { type: failed ? 'warning' : 'success' });
+  host.notify(`批量剪藏完成:${ok}/${urls.length}${failed ? `(失败 ${failed})` : ''}`, { type: failed ? 'warning' : 'success' });
   return { ok, failed };
 }

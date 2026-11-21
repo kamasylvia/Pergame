@@ -194,7 +194,7 @@ export function createNetClient(
             extracted: '提取正文',
             queued: '排队中',
           };
-          const label = `剪藏中 — ${percent}%:${STAGE_ZH[stage] ?? stage}`;
+          const label = `剪藏中 — ${percent}%：${STAGE_ZH[stage] ?? stage}`;
           if (lastStage !== label) {
             lastStage = label;
             notify(label, { id: `render-${jobId}`, timeout: 120000 });

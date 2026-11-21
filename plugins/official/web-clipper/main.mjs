@@ -3101,10 +3101,10 @@ async function clipBatch(host, text, overrides = {}) {
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`剪藏失败:${url} — ${reason}`, { type: "error", timeout: 6000 });
+      host.notify(`剪藏失败：${url} — ${reason}`, { type: "error", timeout: 6000 });
     }
   }
-  host.notify(`批量剪藏完成 ${ok}/${urls.length}${failed ? `(失败 ${failed})` : ""}`, { type: failed ? "warning" : "success" });
+  host.notify(`批量剪藏完成:${ok}/${urls.length}${failed ? `(失败 ${failed})` : ""}`, { type: failed ? "warning" : "success" });
   return { ok, failed };
 }
 
@@ -3174,7 +3174,7 @@ class WebClipper {
       };
       let lastLabel = "";
       const onProgress = (p) => {
-        const label = `剪藏中 — ${p.percent}%:${STAGE_ZH[p.stage] ?? p.stage}`;
+        const label = `剪藏中 — ${p.percent}%：${STAGE_ZH[p.stage] ?? p.stage}`;
         if (label !== lastLabel) {
           lastLabel = label;
           ctx.ui.notice(label, { timeout: 300000, id: toastId });
@@ -3189,11 +3189,11 @@ class WebClipper {
           onProgress
         });
         activeProgress = undefined;
-        ctx.ui.notice(`剪藏完成:${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
+        ctx.ui.notice(`剪藏完成：${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`剪藏失败:${message}`, { type: "error", timeout: 8000, id: toastId });
+        ctx.ui.notice(`剪藏失败：${message}`, { type: "error", timeout: 8000, id: toastId });
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {
