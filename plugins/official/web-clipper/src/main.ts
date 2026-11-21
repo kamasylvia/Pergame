@@ -109,7 +109,7 @@ export default class WebClipper {
       };
       let lastLabel = '';
       const onProgress = (p: { percent: number; stage: string }) => {
-        const label = `剪藏中 — ${p.percent}%：${STAGE_ZH[p.stage] ?? p.stage}`;
+        const label = `剪藏中 — ${p.percent}% ：${STAGE_ZH[p.stage] ?? p.stage}`;
         if (label !== lastLabel) {
           lastLabel = label;
           ctx.ui.notice(label, { timeout: 300000, id: toastId });
