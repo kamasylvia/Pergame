@@ -3166,6 +3166,7 @@ class WebClipper {
       });
       if (!result)
         return;
+      ctx.ui.notice("Clipping — fetching the page in a browser session…", { timeout: 60000 });
       try {
         await clip(host, String(result.url ?? ""), {
           workspaceId: String(result.workspace ?? "") || undefined,

@@ -58,6 +58,8 @@ export interface PluginContextDeps {
    * inject the in-memory one.
    */
   settings?: KVStore;
+  /** Refetch the host's node tree after a plugin mutates nodes. */
+  onNodesChanged?: () => Promise<void>;
   /** Markdown/editor hook clients (PS-C); default to the global registries. */
   markdown?: PluginMarkdownClient;
   editor?: PluginEditorClient;
@@ -197,14 +199,23 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
         await request<PluginNode | { node: PluginNode }>('nodes', 'POST', input),
         'cannot create node',
       );
+      // Plugin writes bypass the host stores; let the tree refetch.
+      void deps.onNodesChanged?.();
       // Folder creation answers `{node, index}` (issue #4).
       return 'node' in created ? created.node : created;
     },
-    update: async (id, patch) =>
-      unwrap(await request<PluginNode>(`nodes/${id}`, 'PUT', { ...patch }), 'cannot update node'),
+    update: async (id, patch) => {
+      const updated = unwrap(
+        await request<PluginNode>(`nodes/${id}`, 'PUT', { ...patch }),
+        'cannot update node',
+      );
+      void deps.onNodesChanged?.();
+      return updated;
+    },
     remove: async id => {
       const result = await request(`nodes/${id}`, 'DELETE');
       if (result.status !== 'success') throw new Error(result.message || 'cannot delete node');
+      void deps.onNodesChanged?.();
     },
   };
 

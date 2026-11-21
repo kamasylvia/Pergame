@@ -42,6 +42,11 @@ export interface PluginHostDeps {
   createUi?: (pluginId: string, track: (disposable: import('../../types/plugin').Disposable) => void) => PluginUiClient;
   /** ESM importer; injectable so the kernel is testable without a browser. */
   loadModule?: (url: string) => Promise<unknown>;
+  /**
+   * Called after a plugin mutates nodes through its REST calls, so the
+   * host's in-memory tree can refetch — plugin writes bypass the stores.
+   */
+  onNodesChanged?: () => Promise<void>;
   /** Text fetcher for manifests (defaults to `fetch`). */
   fetchText?: (url: string) => Promise<string>;
 }
@@ -136,6 +141,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         markdown,
         editor,
         granted,
+        onNodesChanged: deps.onNodesChanged,
       });
       await instance.onload(ctx);
 

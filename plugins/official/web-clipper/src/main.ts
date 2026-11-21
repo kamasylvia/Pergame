@@ -92,6 +92,9 @@ export default class WebClipper {
         submitLabel: 'Clip',
       });
       if (!result) return;
+      // Rendering runs a real browser (tens of seconds); say so up front or
+      // the dialog closure reads as a silent hang.
+      ctx.ui.notice('Clipping — fetching the page in a browser session…', { timeout: 60000 });
       try {
         await clip(host, String(result.url ?? ''), {
           workspaceId: String(result.workspace ?? '') || undefined,

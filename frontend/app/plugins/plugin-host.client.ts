@@ -49,6 +49,11 @@ export default defineNuxtPlugin(async nuxtApp => {
     },
     notify: (message, opts) =>
       notifications.add({ title: message, type: opts?.type ?? 'info', timeout: opts?.timeout }),
+    async onNodesChanged() {
+      // Plugin node writes bypass the pinia stores (plain REST); refetch so
+      // the sidebar/tree shows plugin-created notes without a full reload.
+      await useNodesStore().fetch();
+    },
   });
 
   // Dev-only inspection hook: lets a developer (or a browser check) see what a
