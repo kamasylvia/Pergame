@@ -294,6 +294,17 @@ pub async fn render_page(
 ) -> Result<RenderedPage, RenderError> {
     let mut client = McpClient::new(config);
     client.initialize().await?;
+    // Headed/virtual display is load-bearing against the same wall as the
+    // builtin engine: the container has no GUI, so request its virtual
+    // display (Xvfb) instead of headless. The override persists server-side
+    // ("saved as virtual display mode"); a TIMEOUT here still applied it,
+    // so the error is tolerated and the tab flow proceeds.
+    let _ = client
+        .call(
+            "toggle_display",
+            json!({"headless": "virtual", "userId": "default"}),
+        )
+        .await;
     // A logged-in session makes the pass deterministic: import the user's
     // Zhihu cookie into the browser jar once per render (cheap), and the
     // auto-saved profile keeps it for later tabs.
@@ -436,13 +447,22 @@ async fn cli_run(cli_path: &str, args: &[&str], timeout: Duration) -> Result<Cli
     let output = tokio::time::timeout(
         timeout,
         tokio::process::Command::new(cli_path)
-            .args(["--session", "pergame", "--persistent"])
+            // Headed is load-bearing: Zhihu's wall fingerprints headless /
+            // automation traits and soft-blocks UGC pages for them (2026-11-21
+            // matrix: headed passes where headless is bounced to
+            // signin/unhuman). The dev host shows a brief window per render.
+            .args(["--session", "pergame", "--persistent", "--headed"])
             .args(args)
             .env("HOME", std::env::var("HOME").unwrap_or_default())
             .output(),
     )
     .await
-    .map_err(|_| RenderError(format!("camoufox-cli {} timed out", args.first().unwrap_or(&""))))?
+    .map_err(|_| {
+        RenderError(format!(
+            "camoufox-cli {} timed out",
+            args.first().unwrap_or(&"")
+        ))
+    })?
     .map_err(|e| RenderError(format!("camoufox-cli spawn failed: {e}")))?;
     // The cli writes results to stdout and errors to stderr; both matter —
     // a stale daemon answers "Browser not launched" on stderr with an empty
@@ -451,7 +471,10 @@ async fn cli_run(cli_path: &str, args: &[&str], timeout: Duration) -> Result<Cli
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     let success = output.status.success();
     if !success && stdout.is_empty() && !stderr.is_empty() {
-        return Err(RenderError(format!("camoufox-cli: {}", first_line(&stderr))));
+        return Err(RenderError(format!(
+            "camoufox-cli: {}",
+            first_line(&stderr)
+        )));
     }
     Ok(CliRun { success, stdout })
 }

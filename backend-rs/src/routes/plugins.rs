@@ -909,7 +909,8 @@ pub async fn render_page(
         _ => {
             let config = crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
                 ApiError::BadRequest(
-                    "camoufox rendering is not configured: set camoufox_url in the plugin settings".into(),
+                    "camoufox rendering is not configured: set camoufox_url in the plugin settings"
+                        .into(),
                 )
             })?;
             tokio::time::timeout(
