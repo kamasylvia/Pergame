@@ -186,7 +186,7 @@ export function createNetClient(
         if (onProgress) {
           onProgress({ percent, stage });
         } else if (notify) {
-          const label = `${percent}% — ${stage}`;
+          const label = `Rendering ${percent}% — ${stage}`;
           if (lastStage !== label) {
             lastStage = label;
             notify(label, { id: `render-${jobId}`, timeout: done ? 4000 : 120000 });

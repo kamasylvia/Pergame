@@ -41,7 +41,9 @@ export default class WebClipper {
         return `/api/resources/${stored.id}/file`;
       },
       setting: key => ctx.settings.get(key),
-      render: (url, opts, onProgress) => ctx.net.render(url, opts, onProgress),
+      // Closure-inject the clip's progress sink: parsers call render
+      // blind, and the sink is whatever clip is currently in flight.
+      render: (url, opts) => ctx.net.render(url, opts, p => activeProgress?.(p)),
     };
 
     /**
@@ -103,7 +105,7 @@ export default class WebClipper {
       const onProgress = (p: { percent: number; stage: string }) => {
         if (p.percent !== lastPercent) {
           lastPercent = p.percent;
-          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 300000, id: toastId });
+          ctx.ui.notice(`Clipping — ${p.percent}%: ${p.stage}`, { timeout: 300000, id: toastId });
         }
       };
       activeProgress = onProgress;

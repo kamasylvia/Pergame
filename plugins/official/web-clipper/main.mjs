@@ -3127,7 +3127,7 @@ class WebClipper {
         return `/api/resources/${stored.id}/file`;
       },
       setting: (key) => ctx.settings.get(key),
-      render: (url, opts, onProgress) => ctx.net.render(url, opts, onProgress)
+      render: (url, opts) => ctx.net.render(url, opts, (p) => activeProgress?.(p))
     };
     const ensureFolder = async (workspaceId, path) => {
       if (!workspaceId)
@@ -3171,7 +3171,7 @@ class WebClipper {
       const onProgress = (p) => {
         if (p.percent !== lastPercent) {
           lastPercent = p.percent;
-          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 300000, id: toastId });
+          ctx.ui.notice(`Clipping — ${p.percent}%: ${p.stage}`, { timeout: 300000, id: toastId });
         }
       };
       activeProgress = onProgress;
