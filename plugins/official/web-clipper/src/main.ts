@@ -70,27 +70,6 @@ export default class WebClipper {
     this.host = host;
     this.ctxRef = ctx;
 
-    /** Save pasted text as a note, keeping the source URL for reference. */
-    const pasteFallback = async (url: string) => {
-      const pasted = await ctx.ui.modal({
-        title: 'Paste the article',
-        description: 'This page needs a login. Copy the article text from your browser and paste it here.',
-        fields: [
-          { key: 'title', label: 'Title', type: 'text', placeholder: 'Article title' },
-          { key: 'body', label: 'Article text', type: 'textarea', rows: 12, required: true },
-        ],
-        submitLabel: 'Save note',
-      });
-      if (!pasted) return;
-      const title = String(pasted.title ?? '').trim() || 'Pasted article';
-      const body = String(pasted.body ?? '').trim();
-      if (!body) return;
-      try {
-        await clip(host, `[${title}](${url})\n\n${body}`, { title });
-      } catch (err) {
-        ctx.ui.notice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, { type: 'error', timeout: 8000 });
-      }
-    };
 
     const askAndClip = async (initialUrl: string) => {
       const saved = await ctx.settings.get<string>(SETTINGS.workspaceId);
@@ -122,11 +101,6 @@ export default class WebClipper {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notice(`Clip failed: ${message}`, { type: 'error', timeout: 8000 });
-        // Pages behind a login wall (Zhihu is the known one) cannot be fetched
-        // without the user's own session. Offer the paste path instead of
-        // leaving them at an error: the text becomes a note through the same
-        // template pipeline, with the source URL kept.
-        if (/challenge|cookie|401|403/i.test(message)) await pasteFallback(String(result.url ?? ''));
       }
     };
 

@@ -1669,7 +1669,7 @@ var require_readability = __commonJS((exports, module) => {
 
 // src/detect.ts
 var RULES = [
-  { type: "zhihu", test: /^https?:\/\/(?:www\.)?zhihu\.com\/(?:question\/\d+\/answer\/\d+|p\/\d+)/i },
+  { type: "zhihu", test: /^https?:\/\/(?:[a-z0-9-]+\.)?zhihu\.com\/(?:question\/\d+\/answer\/\d+|p\/\d+)/i },
   { type: "youtube-channel", test: /^https?:\/\/(?:www\.)?youtube\.com\/(?:@|channel\/|c\/|user\/)/i },
   { type: "youtube", test: /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?|shorts\/|embed\/)|youtu\.be\/)/i },
   { type: "bilibili", test: /^https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\//i },
@@ -3148,30 +3148,6 @@ class WebClipper {
     };
     this.host = host;
     this.ctxRef = ctx;
-    const pasteFallback = async (url) => {
-      const pasted = await ctx.ui.modal({
-        title: "Paste the article",
-        description: "This page needs a login. Copy the article text from your browser and paste it here.",
-        fields: [
-          { key: "title", label: "Title", type: "text", placeholder: "Article title" },
-          { key: "body", label: "Article text", type: "textarea", rows: 12, required: true }
-        ],
-        submitLabel: "Save note"
-      });
-      if (!pasted)
-        return;
-      const title = String(pasted.title ?? "").trim() || "Pasted article";
-      const body = String(pasted.body ?? "").trim();
-      if (!body)
-        return;
-      try {
-        await clip(host, `[${title}](${url})
-
-${body}`, { title });
-      } catch (err) {
-        ctx.ui.notice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, { type: "error", timeout: 8000 });
-      }
-    };
     const askAndClip = async (initialUrl) => {
       const saved = await ctx.settings.get(SETTINGS.workspaceId);
       loadWorkspaces().then((choices) => ctx.ui.patchModalChoices("workspace", choices)).catch(() => {
@@ -3199,8 +3175,6 @@ ${body}`, { title });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000 });
-        if (/challenge|cookie|401|403/i.test(message))
-          await pasteFallback(String(result.url ?? ""));
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {

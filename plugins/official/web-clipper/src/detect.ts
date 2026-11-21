@@ -7,7 +7,7 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
-  { type: 'zhihu', test: /^https?:\/\/(?:www\.)?zhihu\.com\/(?:question\/\d+\/answer\/\d+|p\/\d+)/i },
+  { type: 'zhihu', test: /^https?:\/\/(?:[a-z0-9-]+\.)?zhihu\.com\/(?:question\/\d+\/answer\/\d+|p\/\d+)/i },
   { type: 'youtube-channel', test: /^https?:\/\/(?:www\.)?youtube\.com\/(?:@|channel\/|c\/|user\/)/i },
   { type: 'youtube', test: /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?|shorts\/|embed\/)|youtu\.be\/)/i },
   { type: 'bilibili', test: /^https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\//i },
