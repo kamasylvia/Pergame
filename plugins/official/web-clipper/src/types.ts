@@ -56,7 +56,11 @@ export interface ParserContext {
    * rendering). For pages that answer 403/challenges to plain HTTP clients.
    * Throws when the service is not configured or the render fails.
    */
-  render(url: string, opts?: { waitSelector?: string; htmlSelector?: string }): Promise<{
+  render(
+    url: string,
+    opts?: { waitSelector?: string; htmlSelector?: string },
+    onProgress?: (p: { percent: number; stage: string }) => void,
+  ): Promise<{
     html: string;
     title: string;
     finalUrl: string;

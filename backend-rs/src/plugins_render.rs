@@ -14,11 +14,30 @@
 
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+/// Stage progress of one async render job. Percent reflects completed
+/// stages (10/30/60/75/90/100) — a linear percentage would be fiction; the
+/// stage text carries the actual meaning.
+#[derive(Debug, Clone, Serialize)]
+pub struct RenderJobState {
+    pub percent: u8,
+    pub stage: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<RenderedPage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// In-memory async render jobs (per-instance; jobs are short-lived and
+/// polled only by their creator).
+pub type RenderJobs = std::sync::Arc<
+    tokio::sync::Mutex<std::collections::HashMap<String, RenderJobState>>,
+>;
+
 /// One rendered page: extracted HTML plus the evaluated page title.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RenderedPage {
     /// Extracted page HTML, scoped by the caller's selector when given.
     pub html: String,
@@ -291,7 +310,9 @@ pub async fn render_page(
     wait_selector: Option<&str>,
     html_selector: Option<&str>,
     cookie: Option<&str>,
+    progress: &(dyn Fn(u8, &str) + Send + Sync),
 ) -> Result<RenderedPage, RenderError> {
+    progress(10, "browser session connecting");
     let mut client = McpClient::new(config);
     client.initialize().await?;
     // Headed/virtual display is load-bearing against the same wall as the
@@ -334,7 +355,10 @@ pub async fn render_page(
     let mut last_error: Option<RenderError> = None;
     for _attempt in 0..3 {
         match render_once(&mut client, url, wait_selector, html_selector).await {
-            Ok(page) if !page.final_url.contains("/signin") => return Ok(page),
+            Ok(page) if !page.final_url.contains("/signin") => {
+                progress(60, "content extracted");
+                return Ok(page);
+            }
             Ok(signin_page) => {
                 last_error = Some(RenderError(format!(
                     "camoufox landed on the login wall ({})",
@@ -504,7 +528,9 @@ pub async fn render_page_builtin(
     html_selector: Option<&str>,
     cookie: Option<&str>,
     wait_seconds: u64,
+    progress: &(dyn Fn(u8, &str) + Send + Sync),
 ) -> Result<RenderedPage, RenderError> {
+    progress(10, "browser session connecting");
     let settle_ms = format!("{}000", wait_seconds.max(10));
     let overall = Duration::from_secs(wait_seconds * 2 + 60);
 
@@ -580,6 +606,7 @@ pub async fn render_page_builtin(
     // wait_selector is honored implicitly by the settle wait above; a caller
     // selector only scopes the extraction probe.
 
+    progress(60, "content extracted");
     Ok(RenderedPage {
         html: parsed.html,
         title: parsed.title,

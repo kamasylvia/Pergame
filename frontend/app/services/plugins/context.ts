@@ -150,20 +150,37 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
         body: response.result.body,
       };
     },
-    async render(url, opts) {
-      const response = await request<{ html: string; title: string; final_url: string }>(
-        `plugins/${pluginId}/render`,
-        'POST',
-        { url: String(url), waitSelector: opts?.waitSelector, htmlSelector: opts?.htmlSelector },
-      );
-      if (response.status !== 'success' || !response.result) {
-        throw new Error(response.message || 'render request failed');
+    async render(url, opts, onProgress) {
+      const start = await request<{ job_id: string }>(`plugins/${pluginId}/render`, 'POST', {
+        url: String(url),
+        waitSelector: opts?.waitSelector,
+        htmlSelector: opts?.htmlSelector,
+      });
+      if (start.status !== 'success' || !start.result) {
+        throw new Error(start.message || 'render request failed');
       }
-      return {
-        html: response.result.html,
-        title: response.result.title,
-        finalUrl: response.result.final_url,
-      };
+      const jobId = start.result.job_id;
+      // Renders run 30-90s in a real browser; poll stage progress so the
+      // plugin can surface percentages instead of a silent hang.
+      const deadline = Date.now() + 300000;
+      for (;;) {
+        await new Promise(r => setTimeout(r, 1000));
+        const poll = await request<{ percent: number; stage: string; done: boolean; result?: { html: string; title: string; final_url: string }; error?: string }>(
+          `plugins/${pluginId}/render/${jobId}`,
+          'GET',
+        );
+        if (poll.status !== 'success' || !poll.result) {
+          throw new Error(poll.message || 'render job lost');
+        }
+        const { percent, stage, done, result, error } = poll.result;
+        onProgress?.({ percent, stage });
+        if (done) {
+          if (error) throw new Error(error);
+          if (!result) throw new Error('render job finished without a result');
+          return { html: result.html, title: result.title, finalUrl: result.final_url };
+        }
+        if (Date.now() > deadline) throw new Error('render timed out');
+      }
     },
     async proxyBinary(url) {
       const target = new URL(String(url));

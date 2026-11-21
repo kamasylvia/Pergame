@@ -157,7 +157,11 @@ export interface NetClient {
    * service, for pages that reject plain HTTP clients (anti-scraping walls).
    * Configure the service under the plugin's settings first.
    */
-  render(url: string, opts?: { waitSelector?: string; htmlSelector?: string }): Promise<{
+  render(
+    url: string,
+    opts?: { waitSelector?: string; htmlSelector?: string },
+    onProgress?: (p: { percent: number; stage: string }) => void,
+  ): Promise<{
     html: string;
     title: string;
     finalUrl: string;

@@ -149,7 +149,7 @@ async function formatNow(ctx: ParserContext, key: string, fallback: string): Pro
 export async function clip(
   host: ClipHost,
   input: string,
-  overrides: { workspaceId?: string; tags?: string; title?: string } = {},
+  overrides: { workspaceId?: string; tags?: string; title?: string; onProgress?: (p: { percent: number; stage: string }) => void } = {},
 ): Promise<ClipOutcome> {
   const { ctx } = host;
   const trimmed = input.trim();

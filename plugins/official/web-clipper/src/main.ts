@@ -30,6 +30,8 @@ export default class WebClipper {
     // Adapt the host context to the parser surface: parsers stay independent
     // of the plugin API shape, and the mapping is the only place that knows
     // where attachments and settings live.
+    /** Progress sink of the clip in flight; parsers call ctx.render blind. */
+    let activeProgress: ((p: { percent: number; stage: string }) => void) | undefined;
     const parserCtx: ParserContext = {
       proxy: (url, init) => ctx.net.proxy(url, init),
       proxyBinary: url => ctx.net.proxyBinary(url),
@@ -39,7 +41,7 @@ export default class WebClipper {
         return `/api/resources/${stored.id}/file`;
       },
       setting: key => ctx.settings.get(key),
-      render: (url, opts) => ctx.net.render(url, opts),
+      render: (url, opts, onProgress) => ctx.net.render(url, opts, onProgress),
     };
 
     /**
@@ -94,14 +96,24 @@ export default class WebClipper {
       if (!result) return;
       // Rendering runs a real browser (tens of seconds); say so up front or
       // the dialog closure reads as a silent hang.
-      ctx.ui.notice('Clipping — fetching the page in a browser session…', { timeout: 60000 });
+      let lastPercent = -1;
+      const onProgress = (p: { percent: number; stage: string }) => {
+        if (p.percent !== lastPercent) {
+          lastPercent = p.percent;
+          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 4000 });
+        }
+      };
+      activeProgress = onProgress;
       try {
         await clip(host, String(result.url ?? ''), {
           workspaceId: String(result.workspace ?? '') || undefined,
           tags: String(result.tags ?? ''),
           title: String(result.title ?? '') || undefined,
+          onProgress,
         });
+        activeProgress = undefined;
       } catch (err) {
+        activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notice(`Clip failed: ${message}`, { type: 'error', timeout: 8000 });
       }

@@ -3118,6 +3118,7 @@ class WebClipper {
       const nodes = await ctx.nodes.listContainers();
       return nodes.filter((node) => node.role === 1).map((node) => ({ value: node.id, label: node.name }));
     };
+    let activeProgress;
     const parserCtx = {
       proxy: (url, init) => ctx.net.proxy(url, init),
       proxyBinary: (url) => ctx.net.proxyBinary(url),
@@ -3127,7 +3128,7 @@ class WebClipper {
         return `/api/resources/${stored.id}/file`;
       },
       setting: (key) => ctx.settings.get(key),
-      render: (url, opts) => ctx.net.render(url, opts)
+      render: (url, opts, onProgress) => ctx.net.render(url, opts, onProgress)
     };
     const ensureFolder = async (workspaceId, path) => {
       if (!workspaceId)
@@ -3166,14 +3167,24 @@ class WebClipper {
       });
       if (!result)
         return;
-      ctx.ui.notice("Clipping — fetching the page in a browser session…", { timeout: 60000 });
+      let lastPercent = -1;
+      const onProgress = (p) => {
+        if (p.percent !== lastPercent) {
+          lastPercent = p.percent;
+          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 4000 });
+        }
+      };
+      activeProgress = onProgress;
       try {
         await clip(host, String(result.url ?? ""), {
           workspaceId: String(result.workspace ?? "") || undefined,
           tags: String(result.tags ?? ""),
-          title: String(result.title ?? "") || undefined
+          title: String(result.title ?? "") || undefined,
+          onProgress
         });
+        activeProgress = undefined;
       } catch (err) {
+        activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
         ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000 });
       }

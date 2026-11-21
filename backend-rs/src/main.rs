@@ -69,6 +69,7 @@ async fn main() {
         locks: locks::WorkspaceLocks::new(),
         disk_cache: disk_cache::DiskCache::from_env().map(std::sync::Arc::new),
         download_flights: std::sync::Arc::new(disk_cache::SingleFlight::default()),
+        render_jobs: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
     };
     match &state.disk_cache {
         Some(cache) => {
@@ -345,6 +346,10 @@ async fn main() {
         .route(
             "/api/plugins/{pluginId}/render",
             post(routes::plugins::render_page),
+        )
+        .route(
+            "/api/plugins/{pluginId}/render/{jobId}",
+            get(routes::plugins::render_job_status),
         )
         .route("/api/plugins/{pluginId}/kv", get(routes::plugins::list_kv))
         .route(

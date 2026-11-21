@@ -852,8 +852,6 @@ pub async fn render_page(
         .await
         .map_err(ApiError::from)?;
     let map: HashMap<String, serde_json::Value> = rows.into_iter().collect();
-    // CamoufoxConfig (external MCP) resolves inside the external branch —
-    // the builtin cli engine needs no endpoint, only the wait budget.
     let wait_seconds = map
         .get("camoufox_wait_seconds")
         .and_then(|v| v.as_u64())
@@ -883,72 +881,145 @@ pub async fn render_page(
             }
         })
         .unwrap_or_else(|| "builtin".into());
-    let rendered = match engine.as_str() {
-        "builtin" => {
-            let cli_path = map
-                .get("camoufox_cli_path")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or("camoufox-cli")
-                .to_string();
-            tokio::time::timeout(
-                std::time::Duration::from_secs(wait_seconds + 180),
-                crate::plugins_render::render_page_builtin(
+    let external_config = if engine == "external_mcp" {
+        Some(crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
+            ApiError::BadRequest(
+                "camoufox rendering is not configured: set camoufox_url in the plugin settings"
+                    .into(),
+            )
+        })?)
+    } else {
+        None
+    };
+
+    // Async job: renders run 30-90s; the plugin polls progress so the user
+    // sees stage percentages instead of a silent hang.
+    let job_id = crate::types::new_id().to_string();
+    let jobs = state.render_jobs.clone();
+    {
+        let mut map = jobs.lock().await;
+        map.insert(
+            job_id.clone(),
+            crate::plugins_render::RenderJobState {
+                percent: 5,
+                stage: "queued".into(),
+                result: None,
+                error: None,
+            },
+        );
+    }
+    let job_key = job_id.clone();
+    let url = body.url.trim().to_string();
+    tokio::spawn(async move {
+        let progress = |percent: u8, stage: &str| {
+            // Fire-and-forget: the poller reads whatever stage is current.
+            let jobs = jobs.clone();
+            let key = job_key.clone();
+            let stage = stage.to_string();
+            async move {
+                let mut map = jobs.lock().await;
+                if let Some(job) = map.get_mut(&key) {
+                    job.percent = percent;
+                    job.stage = stage;
+                }
+            }
+        };
+        let progress = move |percent: u8, stage: &str| {
+            tokio::spawn(progress(percent, stage));
+        };
+        let outcome = match engine.as_str() {
+            "builtin" => {
+                let cli_path = map
+                    .get("camoufox_cli_path")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or("camoufox-cli")
+                    .to_string();
+                let budget = wait_seconds + 180;
+                let fut = crate::plugins_render::render_page_builtin(
                     &cli_path,
-                    body.url.trim(),
+                    &url,
                     body.wait_selector.as_deref(),
                     body.html_selector.as_deref(),
                     cookie.as_deref(),
                     wait_seconds,
-                ),
-            )
-            .await
-            .map_err(|_| ApiError::BadRequest("render timed out".into()))?
-            .map_err(|e| ApiError::BadRequest(e.0))?
-        }
-        _ => {
-            let config = crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
-                ApiError::BadRequest(
-                    "camoufox rendering is not configured: set camoufox_url in the plugin settings"
-                        .into(),
-                )
-            })?;
-            tokio::time::timeout(
-                // Three fingerprint attempts can each take ~60-90s (30s create
-                // cap + selector wait), so the outer budget is generous.
-                std::time::Duration::from_secs(wait_seconds + 240),
-                crate::plugins_render::render_page(
+                    &progress,
+                );
+                tokio::time::timeout(std::time::Duration::from_secs(budget), fut).await
+            }
+            _ => {
+                let config = external_config.expect("resolved before spawn");
+                let budget = wait_seconds + 240;
+                let fut = crate::plugins_render::render_page(
                     config,
-                    body.url.trim(),
+                    &url,
                     body.wait_selector.as_deref(),
                     body.html_selector.as_deref(),
                     cookie.as_deref(),
-                ),
-            )
-            .await
-            .map_err(|_| ApiError::BadRequest("render timed out".into()))?
-            .map_err(|e| ApiError::BadRequest(e.0))?
+                    &progress,
+                );
+                tokio::time::timeout(std::time::Duration::from_secs(budget), fut).await
+            }
+        };
+        let jobs = state.render_jobs.clone();
+        let mut map = jobs.lock().await;
+        if let Some(job) = map.get_mut(&job_key) {
+            match outcome {
+                Ok(Ok(page)) => {
+                    job.percent = 100;
+                    job.stage = "done".into();
+                    job.result = Some(page);
+                }
+                Ok(Err(err)) => {
+                    job.percent = 100;
+                    job.stage = "error".into();
+                    job.error = Some(err.0);
+                }
+                Err(_) => {
+                    job.percent = 100;
+                    job.stage = "error".into();
+                    job.error = Some("render timed out".into());
+                }
+            }
         }
-    };
-    crate::mcp::audit(
-        &state.db,
-        Some(auth.user_id()),
-        "plugin.render",
-        &format!(
-            "plugin {id} rendered {} ({} bytes)",
-            body.url,
-            rendered.html.len()
-        ),
-    )
-    .await;
-    Ok(ApiOk::ok(json!({
-        "html": rendered.html,
-        "title": rendered.title,
-        "final_url": rendered.final_url,
-    })))
+        // Drop the inner closure borrow noise; job state is stored above.
+    });
+
+    Ok(ApiOk::ok(json!({ "job_id": job_id })))
 }
 
-/// GET /plugins/{id}/kv — the caller's whole settings namespace.
+/// GET /plugins/{id}/render/{jobId} — poll one async render job.
+///
+/// The finished payload (or error) is returned once and then dropped, so the
+/// map never grows: the creator consumes its own job.
+pub async fn render_job_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((id, job_id)): Path<(String, String)>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    require_granted(&state, &auth, &id).await?;
+    let jobs = state.render_jobs.clone();
+    let mut map = jobs.lock().await;
+    let Some(job) = map.get(&job_id) else {
+        // Consumed or expired: treat as an error the plugin can surface.
+        return Err(ApiError::NotFound("render job not found".into()));
+    };
+    let payload = json!({
+        "percent": job.percent,
+        "stage": job.stage,
+        "done": job.result.is_some() || job.error.is_some(),
+        "result": job.result.as_ref().map(|r| json!({
+            "html": r.html, "title": r.title, "final_url": r.final_url,
+        })),
+        "error": job.error,
+    });
+    if job.result.is_some() || job.error.is_some() {
+        map.remove(&job_id);
+    }
+    Ok(ApiOk::ok(payload))
+}
+
+/// GET /plugins/{id}/kv — the caller's whole settings namespace./// GET /plugins/{id}/kv — the caller's whole settings namespace.
 pub async fn list_kv(
     State(state): State<AppState>,
     auth: AuthUser,
