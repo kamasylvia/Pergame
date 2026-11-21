@@ -450,8 +450,11 @@ async fn cli_run(cli_path: &str, args: &[&str], timeout: Duration) -> Result<Cli
             // Headed is load-bearing: Zhihu's wall fingerprints headless /
             // automation traits and soft-blocks UGC pages for them (2026-11-21
             // matrix: headed passes where headless is bounced to
-            // signin/unhuman). The dev host shows a brief window per render.
-            .args(["--session", "pergame", "--persistent", "--headed"])
+            // signin/unhuman). macOS has no Xvfb equivalent, so the window
+            // itself is unavoidable — but the daemon is long-lived and its
+            // browser persists across renders, so a 24h idle timeout bounds
+            // the pop-up to at most one per day (first render of the day).
+            .args(["--session", "pergame", "--persistent", "--headed", "--timeout", "86400"])
             .args(args)
             .env("HOME", std::env::var("HOME").unwrap_or_default())
             .output(),
@@ -529,7 +532,10 @@ pub async fn render_page_builtin(
         }
     }
 
-    let open_args = ["open", url, "--timeout", &wait_seconds.max(15).to_string()];
+    // The cli overloads --timeout (daemon idle + navigation cap; the last
+    // one parsed wins, measured). Use one large value for both: a hung
+    // navigation is bounded by the outer tokio budget, not this flag.
+    let open_args = ["open", url, "--timeout", "86400"];
     let open = cli_run(cli_path, &open_args, overall).await?;
     if !open.success && open.stdout.is_empty() {
         return Err(RenderError(
