@@ -3083,7 +3083,6 @@ async function clip(host, input, overrides = {}) {
   const overrideTags = overrides.tags ?? "";
   const tags = overrideTags || slug;
   const note = await host.createNote({ name, content: body, parent_id: parentId, tags: tags || undefined });
-  host.notify(`Clipped ${name}`, { type: "success", timeout: 4000 });
   return { type: kind, title: name, noteId: note.id, images: parsed.images ?? 0 };
 }
 async function clipBatch(host, text, overrides = {}) {
@@ -3167,26 +3166,28 @@ class WebClipper {
       });
       if (!result)
         return;
+      const toastId = "clip-progress";
       let lastPercent = -1;
       const onProgress = (p) => {
         if (p.percent !== lastPercent) {
           lastPercent = p.percent;
-          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 4000 });
+          ctx.ui.notice(`Clipping ${p.percent}% — ${p.stage}`, { timeout: 300000, id: toastId });
         }
       };
       activeProgress = onProgress;
       try {
-        await clip(host, String(result.url ?? ""), {
+        const outcome = await clip(host, String(result.url ?? ""), {
           workspaceId: String(result.workspace ?? "") || undefined,
           tags: String(result.tags ?? ""),
           title: String(result.title ?? "") || undefined,
           onProgress
         });
         activeProgress = undefined;
+        ctx.ui.notice(`Clipped: ${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000 });
+        ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000, id: toastId });
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {

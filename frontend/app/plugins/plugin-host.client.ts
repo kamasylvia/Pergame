@@ -38,6 +38,7 @@ export default defineNuxtPlugin(async nuxtApp => {
   const notifications = useNotifications();
   const userStore = useUserStore();
 
+  const progressToasts = new Map<string, number>();
   const host: PluginHost = createPluginHost({
     host: {
       name: 'Pergame',
@@ -47,8 +48,21 @@ export default defineNuxtPlugin(async nuxtApp => {
     async request(route, method, body) {
       return await makeRequest(route, method, (body ?? {}) as object);
     },
-    notify: (message, opts) =>
-      notifications.add({ title: message, type: opts?.type ?? 'info', timeout: opts?.timeout }),
+    notify: (message, opts) => {
+      const payload = { title: message, type: opts?.type ?? 'info', timeout: opts?.timeout };
+      if (opts?.id) {
+        // Progress toasts: the plugin reuses one id, the host updates that
+        // toast in place instead of stacking one per stage.
+        const numeric = progressToasts.get(opts.id);
+        if (numeric !== undefined) {
+          notifications.update(numeric, payload, opts.timeout);
+          return;
+        }
+        progressToasts.set(opts.id, notifications.add(payload));
+        return;
+      }
+      notifications.add(payload);
+    },
     async onNodesChanged() {
       // Plugin node writes bypass the pinia stores (plain REST); refetch so
       // the sidebar/tree shows plugin-created notes without a full reload.

@@ -201,7 +201,7 @@ export async function clip(
 
   const note = await host.createNote({ name, content: body, parent_id: parentId, tags: tags || undefined });
 
-  host.notify(`Clipped ${name}`, { type: 'success', timeout: 4000 });
+  // Success toast is shown by the caller (same toast id as the progress).
   return { type: kind, title: name, noteId: note.id, images: parsed.images ?? 0 };
 }
 

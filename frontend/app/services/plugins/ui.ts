@@ -47,6 +47,7 @@ export const pluginUiState: PluginUiState = (() => {
 
 /** Registration API handed to each plugin (bound to its id + bag). */
 export interface PluginUiClient {
+  notice(message: string, opts?: { type?: 'info' | 'success' | 'warning' | 'error'; timeout?: number; id?: string }): void;
   command(id: string, title: string, run: () => void): Disposable;
   ribbon(icon: string, title: string, run: () => void): Disposable;
   modal(spec: ModalSpec): Promise<ModalResult>;
@@ -78,6 +79,9 @@ export function createUiClient(pluginId: string, track: (disposable: Disposable)
   }
 
   return {
+    // Never called in practice: createPluginContext overrides notice with
+    // the host notify (which owns progress-id semantics).
+    notice: () => {},
     command: (id, title, run) =>
       register(pluginUiState.commands, { id: `${pluginId}:${id}`, pluginId, title, run }),
     ribbon: (icon, title, run) =>

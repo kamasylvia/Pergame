@@ -121,7 +121,11 @@ export interface SearchClient {
 
 /** UI surface: notices (PS-A), commands and ribbons (PS-B). */
 export interface UiClient {
-  notice(message: string, opts?: { type?: 'info' | 'success' | 'warning' | 'error'; timeout?: number }): void;
+  /**
+   * Show a toast. With `opts.id`, the toast with that id is updated in place
+   * instead of stacked — long operations render progress in one toast.
+   */
+  notice(message: string, opts?: { type?: 'info' | 'success' | 'warning' | 'error'; timeout?: number; id?: string }): void;
   /** Register a command; it appears in the command palette. */
   command(id: string, title: string, run: () => void): Disposable;
   /** Register a sidebar dock button. */
