@@ -312,7 +312,7 @@ pub async fn render_page(
     cookie: Option<&str>,
     progress: &(dyn Fn(u8, &str) + Send + Sync),
 ) -> Result<RenderedPage, RenderError> {
-    progress(10, "browser session connecting");
+    progress(10, "connecting");
     let mut client = McpClient::new(config);
     client.initialize().await?;
     // Headed/virtual display is load-bearing against the same wall as the
@@ -356,7 +356,7 @@ pub async fn render_page(
     for _attempt in 0..3 {
         match render_once(&mut client, url, wait_selector, html_selector).await {
             Ok(page) if !page.final_url.contains("/signin") => {
-                progress(60, "content extracted");
+                progress(60, "extracted");
                 return Ok(page);
             }
             Ok(signin_page) => {
@@ -530,7 +530,7 @@ pub async fn render_page_builtin(
     wait_seconds: u64,
     progress: &(dyn Fn(u8, &str) + Send + Sync),
 ) -> Result<RenderedPage, RenderError> {
-    progress(10, "browser session connecting");
+    progress(10, "connecting");
     let settle_ms = format!("{}000", wait_seconds.max(10));
     let overall = Duration::from_secs(wait_seconds * 2 + 60);
 
@@ -606,7 +606,7 @@ pub async fn render_page_builtin(
     // wait_selector is honored implicitly by the settle wait above; a caller
     // selector only scopes the extraction probe.
 
-    progress(60, "content extracted");
+    progress(60, "extracted");
     Ok(RenderedPage {
         html: parsed.html,
         title: parsed.title,

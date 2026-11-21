@@ -185,11 +185,19 @@ export function createNetClient(
         // that passes onProgress owns the messaging instead.
         if (onProgress) {
           onProgress({ percent, stage });
-        } else if (notify) {
-          const label = `Rendering ${percent}% — ${stage}`;
+        } else if (notify && !done) {
+          // Fallback for older plugin bundles that call render blind. Stage
+          // keys arrive from the backend; wording stays in the host.
+          const STAGE_ZH: Record<string, string> = {
+            connecting: '连接浏览器会话',
+            rendering: '渲染页面',
+            extracted: '提取正文',
+            queued: '排队中',
+          };
+          const label = `剪藏中 — ${percent}%:${STAGE_ZH[stage] ?? stage}`;
           if (lastStage !== label) {
             lastStage = label;
-            notify(label, { id: `render-${jobId}`, timeout: done ? 4000 : 120000 });
+            notify(label, { id: `render-${jobId}`, timeout: 120000 });
           }
         }
         if (done) {

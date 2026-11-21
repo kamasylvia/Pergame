@@ -101,11 +101,18 @@ export default class WebClipper {
       // One toast updated in place: percent rolls, then flips to the final
       // state. Without opts.id each stage would stack its own toast.
       const toastId = 'clip-progress';
-      let lastPercent = -1;
+      // Backend stages arrive as keys; the clipper owns the wording.
+      const STAGE_ZH: Record<string, string> = {
+        connecting: '连接浏览器会话',
+        rendering: '渲染页面',
+        extracted: '提取正文',
+      };
+      let lastLabel = '';
       const onProgress = (p: { percent: number; stage: string }) => {
-        if (p.percent !== lastPercent) {
-          lastPercent = p.percent;
-          ctx.ui.notice(`Clipping — ${p.percent}%: ${p.stage}`, { timeout: 300000, id: toastId });
+        const label = `剪藏中 — ${p.percent}%:${STAGE_ZH[p.stage] ?? p.stage}`;
+        if (label !== lastLabel) {
+          lastLabel = label;
+          ctx.ui.notice(label, { timeout: 300000, id: toastId });
         }
       };
       activeProgress = onProgress;
@@ -117,11 +124,11 @@ export default class WebClipper {
           onProgress,
         });
         activeProgress = undefined;
-        ctx.ui.notice(`Clipped: ${outcome.title}`, { type: 'success', timeout: 4000, id: toastId });
+        ctx.ui.notice(`剪藏完成:${outcome.title}`, { type: 'success', timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`Clip failed: ${message}`, { type: 'error', timeout: 8000, id: toastId });
+        ctx.ui.notice(`剪藏失败:${message}`, { type: 'error', timeout: 8000, id: toastId });
       }
     };
 
@@ -135,7 +142,7 @@ export default class WebClipper {
     ctx.ui.command('clip-from-clipboard', 'Web clipper: clip from clipboard', async () => {
       const text = await navigator.clipboard.readText().catch(() => '');
       if (!text.trim()) {
-        ctx.ui.notice('Clipboard is empty', { type: 'warning' });
+        ctx.ui.notice('剪贴板中没有链接', { type: 'warning' });
         return;
       }
       await askAndClip(text.trim());

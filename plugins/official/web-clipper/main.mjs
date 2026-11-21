@@ -3089,7 +3089,7 @@ async function clipBatch(host, text, overrides = {}) {
   const delimiter = await host.ctx.setting(SETTINGS.batchDelimiter) || "newline";
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
-    host.notify("No URLs in the clipboard", { type: "warning" });
+    host.notify("剪贴板中没有链接", { type: "warning" });
     return { ok: 0, failed: 0 };
   }
   let ok = 0;
@@ -3101,10 +3101,10 @@ async function clipBatch(host, text, overrides = {}) {
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`Clip failed: ${url} — ${reason}`, { type: "error", timeout: 6000 });
+      host.notify(`剪藏失败:${url} — ${reason}`, { type: "error", timeout: 6000 });
     }
   }
-  host.notify(`Clipped ${ok}/${urls.length}${failed ? ` (${failed} failed)` : ""}`, { type: failed ? "warning" : "success" });
+  host.notify(`批量剪藏完成 ${ok}/${urls.length}${failed ? `(失败 ${failed})` : ""}`, { type: failed ? "warning" : "success" });
   return { ok, failed };
 }
 
@@ -3167,11 +3167,17 @@ class WebClipper {
       if (!result)
         return;
       const toastId = "clip-progress";
-      let lastPercent = -1;
+      const STAGE_ZH = {
+        connecting: "连接浏览器会话",
+        rendering: "渲染页面",
+        extracted: "提取正文"
+      };
+      let lastLabel = "";
       const onProgress = (p) => {
-        if (p.percent !== lastPercent) {
-          lastPercent = p.percent;
-          ctx.ui.notice(`Clipping — ${p.percent}%: ${p.stage}`, { timeout: 300000, id: toastId });
+        const label = `剪藏中 — ${p.percent}%:${STAGE_ZH[p.stage] ?? p.stage}`;
+        if (label !== lastLabel) {
+          lastLabel = label;
+          ctx.ui.notice(label, { timeout: 300000, id: toastId });
         }
       };
       activeProgress = onProgress;
@@ -3183,11 +3189,11 @@ class WebClipper {
           onProgress
         });
         activeProgress = undefined;
-        ctx.ui.notice(`Clipped: ${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
+        ctx.ui.notice(`剪藏完成:${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`Clip failed: ${message}`, { type: "error", timeout: 8000, id: toastId });
+        ctx.ui.notice(`剪藏失败:${message}`, { type: "error", timeout: 8000, id: toastId });
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {
@@ -3196,7 +3202,7 @@ class WebClipper {
     ctx.ui.command("clip-from-clipboard", "Web clipper: clip from clipboard", async () => {
       const text = await navigator.clipboard.readText().catch(() => "");
       if (!text.trim()) {
-        ctx.ui.notice("Clipboard is empty", { type: "warning" });
+        ctx.ui.notice("剪贴板中没有链接", { type: "warning" });
         return;
       }
       await askAndClip(text.trim());

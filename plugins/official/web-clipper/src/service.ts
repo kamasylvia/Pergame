@@ -214,7 +214,7 @@ export async function clipBatch(
   const delimiter = (await host.ctx.setting<string>(SETTINGS.batchDelimiter)) || 'newline';
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
-    host.notify('No URLs in the clipboard', { type: 'warning' });
+    host.notify('剪贴板中没有链接', { type: 'warning' });
     return { ok: 0, failed: 0 };
   }
   let ok = 0;
@@ -226,9 +226,9 @@ export async function clipBatch(
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`Clip failed: ${url} — ${reason}`, { type: 'error', timeout: 6000 });
+      host.notify(`剪藏失败:${url} — ${reason}`, { type: 'error', timeout: 6000 });
     }
   }
-  host.notify(`Clipped ${ok}/${urls.length}${failed ? ` (${failed} failed)` : ''}`, { type: failed ? 'warning' : 'success' });
+  host.notify(`批量剪藏完成 ${ok}/${urls.length}${failed ? `(失败 ${failed})` : ''}`, { type: failed ? 'warning' : 'success' });
   return { ok, failed };
 }
