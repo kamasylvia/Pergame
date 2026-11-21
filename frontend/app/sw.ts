@@ -309,7 +309,13 @@ registerRoute(
 
 // ─── API cache ───────────────────────────────────────────────────────────────
 registerRoute(
-  ({ url }) => url.origin === baseApi && !url.pathname.startsWith('/api/backup/'),
+  ({ url }) =>
+    url.origin === baseApi &&
+    !url.pathname.startsWith('/api/backup/') &&
+    // Plugin entry/progress are version-sensitive: a stale cached entry runs
+    // old plugin code, and cached poll responses would freeze progress at an
+    // old stage for seconds at a time.
+    !url.pathname.startsWith('/api/plugins/'),
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 3,

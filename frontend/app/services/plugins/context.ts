@@ -103,7 +103,13 @@ export function createMemoryKV(initial: Record<string, unknown> = {}): KVStore {
 }
 
 /** Network facade: capability allowlist, method and size limits (spec §9.4). */
-export function createNetClient(capabilities: readonly string[], request: PluginRequest, pluginId: string): NetClient {
+export function createNetClient(
+  capabilities: readonly string[],
+  request: PluginRequest,
+  pluginId: string,
+  /** Host notify (id-aware) — the render fallback progress needs it. */
+  notify?: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void,
+): NetClient {
   return {
     async fetch(url, init) {
       const target = new URL(String(url));
@@ -163,6 +169,7 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
       // Renders run 30-90s in a real browser; poll stage progress so the
       // plugin can surface percentages instead of a silent hang.
       const deadline = Date.now() + 300000;
+      let lastStage = '';
       for (;;) {
         await new Promise(r => setTimeout(r, 1000));
         const poll = await request<{ percent: number; stage: string; done: boolean; result?: { html: string; title: string; final_url: string }; error?: string }>(
@@ -173,7 +180,18 @@ export function createNetClient(capabilities: readonly string[], request: Plugin
           throw new Error(poll.message || 'render job lost');
         }
         const { percent, stage, done, result, error } = poll.result;
-        onProgress?.({ percent, stage });
+        // Progress is a host capability: older plugin bundles call render
+        // without onProgress, so the host announces stages itself. A plugin
+        // that passes onProgress owns the messaging instead.
+        if (onProgress) {
+          onProgress({ percent, stage });
+        } else if (notify) {
+          const label = `${percent}% — ${stage}`;
+          if (lastStage !== label) {
+            lastStage = label;
+            notify(label, { id: `render-${jobId}`, timeout: done ? 4000 : 120000 });
+          }
+        }
         if (done) {
           if (error) throw new Error(error);
           if (!result) throw new Error('render job finished without a result');
@@ -277,7 +295,7 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
       modal: spec => deps.ui.modal(spec),
       patchModalChoices: (fieldKey, choices) => deps.ui.patchModalChoices(fieldKey, choices),
     },
-    net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id),
+    net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id, deps.notify),
     markdown: deps.markdown ?? createMarkdownClient(() => {}),
     editor: deps.editor ?? createEditorClient(() => {}),
   };

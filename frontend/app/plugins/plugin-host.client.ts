@@ -98,6 +98,7 @@ export default defineNuxtPlugin(async nuxtApp => {
   async function loadFromRegistry() {
     const response = await makeRequest<RegistryEntry[]>('plugins', 'GET');
     if (response.status !== 'success' || !response.result) return;
+    console.log('[plugin-host] registry rows:', response.result.map(r => `${r.id}@${r.version} granted=${r.granted.length}`));
     for (const row of response.result) {
       // Nothing granted = the user has not approved this plugin yet.
       if (!row.granted.length) continue;
@@ -114,14 +115,18 @@ export default defineNuxtPlugin(async nuxtApp => {
   }
 
   async function loadAll() {
+    console.log('[plugin-host] loadAll started, user =', userStore.user?.username ?? null);
     await loadFromRegistry();
     await loadDevPlugins();
+    console.log('[plugin-host] loadAll finished');
   }
 
   if (userStore.user) {
+    console.log('[plugin-host] user present at init, loading immediately');
     await loadAll();
     return;
   }
+  console.log('[plugin-host] user not ready yet, watching');
   const stop = watch(
     () => userStore.user,
     user => {
