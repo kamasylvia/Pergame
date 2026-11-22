@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 微信公众号剪藏修复(web-clipper 0.8.2,2026-11-23)
+
+- [x] **公众号文章剪藏失败根修(用户报:思源成功、pergame 失败)**:同一篇 `mp.weixin.qq.com` 链接,思源插件成功、pergame 失败。定案:微信对 **UA 缺失/陌生的请求 302 到验证码墙**(`wappoc_appmsgcaptcha`,title 未知错误)——curl 实证:无 UA/微信内嵌 UA=302,桌面 Chrome UA=200(3.85MB 完整文章)。pergame 的 proxy 直抓从不带 UA。修 = ①web-clipper website.ts 直抓带浏览器 UA(+accept/accept-language,后端 allowlist 本就放行 user-agent);②显式探测验证码页(wappoc_appmsgcaptcha)给出明确报错;③**WeChat DOM fix 三件套**(Obsidian/SiYuan issue #187 同款):正文容器去 visibility style、懒加载 img[data-src]→src、div>figure 提升;④后端 proxy_fetch 默认浏览器 UA(插件未带时兜底,全插件受益)。生产已装 0.8.2,proxy 带 UA 实测 200/3.8MB 无验证码。`a35e27bf`。
+
 ## 生产 v0.0.13 发布 + 库/桶统一(2026-11-23)
 
 - [x] **生产 v0.0.13 上线**:release v0.0.13(target main)触发 build ✓ → Portainer API(stack 42)PUT 更新(镜像 v0.0.13 + 显式 S3_BUCKET)→ 双容器重建。验证:health ok、生产 JWT 打开迁移文档页 **10/10 微信外链真图**(no-referrer 生效)、containers/note API 200。issue #19 已关。
