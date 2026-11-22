@@ -7,6 +7,7 @@ import { resolveIcon, resolveNodeLink } from '~/helpers/node';
 import type { Node } from '~/stores';
 
 let globalBuilder: TreeBuilder<Node> | null = null;
+let globalBuilderSource: Node[] | null = null;
 let globalTree: ComputedRef<TreeItem<Node>[]> | null = null;
 let globalTreeMap: ComputedRef<Map<string, TreeItem<Node>>> | null = null;
 
@@ -14,7 +15,8 @@ function initGlobalTree(sortNodes: (a: TreeItem<Node>, b: TreeItem<Node>) => num
   const nodesStore = useNodesStore();
 
   if (!globalBuilder) {
-    globalBuilder = new TreeBuilder<Node>(toRaw(nodesStore.nodes), transformNode, sortNodes, parentId =>
+    globalBuilderSource = toRaw(nodesStore.nodes);
+    globalBuilder = new TreeBuilder<Node>(globalBuilderSource, transformNode, sortNodes, parentId =>
       (nodesStore.linksByParent.get(parentId) ?? []).map(l => ({ nodeId: l.node_id, linkId: l.id })),
     );
   }
@@ -23,9 +25,21 @@ function initGlobalTree(sortNodes: (a: TreeItem<Node>, b: TreeItem<Node>) => num
     globalTree = computed(() => {
       console.debug('[useNodesTree] 🌳 Rebuilding global tree from store trigger');
 
-      globalBuilder!.clearCache();
+      // Reading the store here (and rebuilding the builder when fetch swaps
+      // the array reference) gives this computed a reactive dependency —
+      // without it the tree froze on whatever the store held at first use,
+      // so modals opened before the first fetch rendered permanently empty.
+      const source = toRaw(nodesStore.nodes);
+      if (globalBuilderSource !== source) {
+        globalBuilderSource = source;
+        globalBuilder = new TreeBuilder<Node>(source, transformNode, sortNodes, parentId =>
+          (nodesStore.linksByParent.get(parentId) ?? []).map(l => ({ nodeId: l.node_id, linkId: l.id })),
+        );
+      }
 
-      return globalBuilder!.buildTree({
+      globalBuilder.clearCache();
+
+      return globalBuilder.buildTree({
         rootFilter: node => {
           if (node?.role <= 1) return true; // Include teams and categories as root nodes
           if (!nodesStore.getById(node.parent_id ?? '')) return true;

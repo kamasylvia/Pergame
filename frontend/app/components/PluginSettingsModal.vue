@@ -99,12 +99,27 @@ watch(open, async isOpen => {
     const stored = response.status === 'success' && response.result ? response.result : {};
     for (const field of fields.value) {
       const fallback = field.type === 'checkbox' ? false : '';
-      values[field.key] = (stored[field.key] as string | boolean | undefined) ?? field.value ?? fallback;
+      const storedVal = stored[field.key] as string | boolean | undefined;
+      // An empty string in KV counts as unset — a stale empty value must not
+      // shadow the manifest default (template defaults especially).
+      const effective =
+        storedVal === undefined || storedVal === '' ? field.value ?? fallback : storedVal;
+      values[field.key] = effective;
+    }
+    // Selects backed by dynamic choices: default to the first option when
+    // nothing is set (workspace pickers, …) so the control never shows the
+    // bare placeholder as if it were a value.
+    for (const field of fields.value) {
+      if (field.type !== 'select' || !field.choices?.length) continue;
+      const current = values[field.key];
+      if (current === '' || current === undefined || !field.choices.some(c => c.value === current)) {
+        values[field.key] = field.choices[0]!.value;
+      }
     }
   } finally {
     loading.value = false;
   }
-});
+}, { immediate: true });
 
 async function save() {
   saving.value = true;

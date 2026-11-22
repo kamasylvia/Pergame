@@ -46,7 +46,10 @@ export default defineNuxtConfig({
         },
         { content: 'Pergame Team', name: 'author' },
         { content: 'index, follow', name: 'robots' },
-        { content: 'strict-origin-when-cross-origin', name: 'referrer' },
+        // no-referrer: hotlink-protected CDNs (WeChat mmbiz.qpic.cn, Weibo et al.) serve
+        // placeholder images to any request carrying a foreign Referer — the same
+       // reason SiYuan renders these pages fine while we got placeholders.
+        { content: 'no-referrer', name: 'referrer' },
 
         // PWA / Mobile
         { content: 'Pergame', name: 'application-name' },

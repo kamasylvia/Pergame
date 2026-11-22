@@ -68,6 +68,9 @@ const flattenedWorkspaces = computed(() => flattenWorkspaces(props.teams));
 watch(
   () => props.workspaces,
   async opts => {
+    // localForage has no driver on the server; running this during SSR setup
+    // crashes every direct load of a /dashboard route (unhandledRejection).
+    if (!import.meta.client) return;
     const storage_item = await localForage.getItem<string>('filterWorkspace');
     if (storage_item && [...opts, ...flattenedWorkspaces.value, sharedWorkspaces.value].find(option => option.value == storage_item)) {
       workspaceId.value = storage_item;
