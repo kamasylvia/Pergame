@@ -1,7 +1,7 @@
 {
   "id": "web-clipper",
   "name": "Web clipper",
-  "version": "0.7.5",
+  "version": "0.8.1",
   "apiVersion": "1",
   "entry": "main.mjs",
   "icon": "clip",
@@ -148,6 +148,32 @@
       "value": "30",
       "group": "Browser rendering (camoufox)",
       "hint": "How long the page may take to load before extraction. Drives every timeout in the chain — raise it on slow networks."
+    },
+    {
+      "key": "zhihu_slug",
+      "label": "Folder / tag",
+      "type": "text",
+      "value": "Zhihu",
+      "placeholder": "Zhihu",
+      "group": "Zhihu",
+      "hint": "Folder name (from the path template) and the tag applied to clips of this type."
+    },
+    {
+      "key": "zhihu_title",
+      "label": "Title template",
+      "type": "text",
+      "value": "{{ title }}",
+      "group": "Zhihu",
+      "hint": "Variables: title, questionTitle, author, date, url, contentType."
+    },
+    {
+      "key": "zhihu_body",
+      "label": "Body template",
+      "type": "textarea",
+      "rows": 6,
+      "value": "[Source]({{ url }}){{ author }}\n\n{{ content }}\n",
+      "group": "Zhihu",
+      "hint": "Variables: content, title, questionTitle, author, date, url, contentType."
     },
     {
       "key": "youtube_slug",

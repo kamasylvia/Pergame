@@ -295,6 +295,13 @@ export default {
 
   plugins: {
     capabilities: 'Дозволи',
+    clip: {
+      progress: 'Збереження — {percent}%: {stage}',
+      stageConnecting: 'з\'єднання з сесією браузера',
+      stageExtracted: 'витягання вмісту',
+      stageQueued: 'в черзі',
+      stageRendering: 'рендерінг сторінки',
+    },
     disabled: 'Вимкнено адміністратором.',
     empty: 'Ще немає встановлених плагінів.',
     install: 'Встановити плагін',

@@ -42,6 +42,8 @@ export interface PluginHostInfo {
   name: string;
   version: string;
   client: string;
+  /** UI language tag (BCP-47, e.g. `en`, `zh-CN`) so plugins can word their own messages. */
+  locale?: string;
 }
 
 /** Dependencies the kernel injects into every context. */
@@ -51,6 +53,11 @@ export interface PluginContextDeps {
   host: PluginHostInfo;
   request: PluginRequest;
   notify: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void;
+  /**
+   * Render-stage label in the UI language (from `percent` + the backend
+   * `stage` key). The kernel stays i18n-free; the Nuxt boot plugin injects it.
+   */
+  formatClipProgress?: (percent: number, stage: string) => string;
   /** Command/ribbon registrations for this plugin (PS-B). */
   ui: PluginUiClient;
   /**
@@ -109,6 +116,8 @@ export function createNetClient(
   pluginId: string,
   /** Host notify (id-aware) — the render fallback progress needs it. */
   notify?: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void,
+  /** UI-language label builder for render stages (injected by the boot plugin). */
+  formatProgress?: (percent: number, stage: string) => string,
 ): NetClient {
   return {
     async fetch(url, init) {
@@ -180,21 +189,16 @@ export function createNetClient(
           throw new Error(poll.message || 'render job lost');
         }
         const { percent, stage, done, result, error } = poll.result;
+        // Label is the host's job: the backend only sends a stage key, and the
+        // wording must follow the UI language, not the plugin bundle's.
+        const label = formatProgress?.(percent, stage) ?? `${stage} ${percent}%`;
         // Progress is a host capability: older plugin bundles call render
         // without onProgress, so the host announces stages itself. A plugin
         // that passes onProgress owns the messaging instead.
         if (onProgress) {
-          onProgress({ percent, stage });
+          onProgress({ percent, stage, label });
         } else if (notify && !done) {
-          // Fallback for older plugin bundles that call render blind. Stage
-          // keys arrive from the backend; wording stays in the host.
-          const STAGE_ZH: Record<string, string> = {
-            connecting: '连接浏览器会话',
-            rendering: '渲染页面',
-            extracted: '提取正文',
-            queued: '排队中',
-          };
-          const label = `剪藏中 — ${percent}% ：${STAGE_ZH[stage] ?? stage}`;
+          // Fallback for older plugin bundles that call render blind.
           if (lastStage !== label) {
             lastStage = label;
             notify(label, { id: `render-${jobId}`, timeout: 120000 });
@@ -303,7 +307,7 @@ export function createPluginContext(deps: PluginContextDeps): PluginContext {
       modal: spec => deps.ui.modal(spec),
       patchModalChoices: (fieldKey, choices) => deps.ui.patchModalChoices(fieldKey, choices),
     },
-    net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id, deps.notify),
+    net: createNetClient(deps.granted ?? deps.manifest.capabilities, request, deps.manifest.id, deps.notify, deps.formatClipProgress),
     markdown: deps.markdown ?? createMarkdownClient(() => {}),
     editor: deps.editor ?? createEditorClient(() => {}),
   };

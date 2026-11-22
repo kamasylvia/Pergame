@@ -297,6 +297,13 @@ export default {
 
   plugins: {
     capabilities: 'Berechtigungen',
+    clip: {
+      progress: 'Clipping — {percent}%: {stage}',
+      stageConnecting: 'Browsersitzung wird verbunden',
+      stageExtracted: 'Inhalt wird extrahiert',
+      stageQueued: 'in Warteschlange',
+      stageRendering: 'Seite wird gerendert',
+    },
     disabled: 'Von einem Administrator deaktiviert.',
     empty: 'Noch keine Plugins installiert.',
     install: 'Plugin installieren',

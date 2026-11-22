@@ -35,6 +35,8 @@ export interface PluginHostDeps {
   host: PluginHostInfo;
   request: PluginRequest;
   notify: (message: string, opts?: Parameters<UiClient['notice']>[1]) => void;
+  /** UI-language label builder for render-stage progress (see PluginContextDeps). */
+  formatClipProgress?: (percent: number, stage: string) => string;
   /**
    * Build the per-plugin UI client. Defaults to the global reactive registry;
    * injected by tests that want an isolated one.
@@ -137,6 +139,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         host: deps.host,
         request: deps.request,
         notify: deps.notify,
+        formatClipProgress: deps.formatClipProgress,
         ui,
         markdown,
         editor,

@@ -15,6 +15,50 @@ interface FolderOption {
   label: string;
 }
 
+/**
+ * UI wording by host locale (`ctx.api.host.locale`). The host translates the
+ * progress label itself; these strings cover the plugin's own toasts. Locales
+ * outside the map fall back to English.
+ */
+const TEXTS = {
+  'zh-CN': {
+    done: '剪藏完成：{title}',
+    failed: '剪藏失败：{message}',
+    clipFailed: '剪藏失败：{url} — {reason}',
+    batchDone: '批量剪藏完成：{ok}/{total}',
+    batchFailedPart: '(失败 {count})',
+    clipboardEmpty: '剪贴板中没有链接',
+  },
+  'zh-TW': {
+    done: '剪藏完成：{title}',
+    failed: '剪藏失敗：{message}',
+    clipFailed: '剪藏失敗：{url} — {reason}',
+    batchDone: '批次剪藏完成：{ok}/{total}',
+    batchFailedPart: '(失敗 {count})',
+    clipboardEmpty: '剪貼簿中沒有連結',
+  },
+  en: {
+    done: 'Clipped: {title}',
+    failed: 'Clip failed: {message}',
+    clipFailed: 'Clip failed: {url} — {reason}',
+    batchDone: 'Batch clip finished: {ok}/{total}',
+    batchFailedPart: ' ({count} failed)',
+    clipboardEmpty: 'No link found in the clipboard',
+  },
+} as const;
+
+type ClipTextKey = keyof typeof TEXTS.en;
+
+/** Build the locale-bound text helper handed to the service layer. */
+function makeText(locale: string | undefined) {
+  const dict = TEXTS[locale as keyof typeof TEXTS] ?? TEXTS.en;
+  return (key: ClipTextKey, vars: Record<string, string | number> = {}) => {
+    let out: string = dict[key];
+    for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v));
+    return out;
+  };
+}
+
 export default class WebClipper {
   private host!: ClipHost;
   private ctxRef!: unknown;
@@ -31,7 +75,7 @@ export default class WebClipper {
     // of the plugin API shape, and the mapping is the only place that knows
     // where attachments and settings live.
     /** Progress sink of the clip in flight; parsers call ctx.render blind. */
-    let activeProgress: ((p: { percent: number; stage: string }) => void) | undefined;
+    let activeProgress: ((p: { percent: number; stage: string; label?: string }) => void) | undefined;
     const parserCtx: ParserContext = {
       proxy: (url, init) => ctx.net.proxy(url, init),
       proxyBinary: url => ctx.net.proxyBinary(url),
@@ -65,11 +109,14 @@ export default class WebClipper {
       return parentId;
     };
 
+    const text = makeText(ctx.api?.host?.locale);
+
     const host: ClipHost = {
       ctx: parserCtx,
       createNote: input => ctx.nodes.create({ ...input, role: 3 }),
       ensureFolder,
       notify: (message, opts) => ctx.ui.notice(message, opts),
+      text: (key, vars) => text(key as ClipTextKey, vars),
     };
     this.host = host;
     this.ctxRef = ctx;
@@ -101,15 +148,11 @@ export default class WebClipper {
       // One toast updated in place: percent rolls, then flips to the final
       // state. Without opts.id each stage would stack its own toast.
       const toastId = 'clip-progress';
-      // Backend stages arrive as keys; the clipper owns the wording.
-      const STAGE_ZH: Record<string, string> = {
-        connecting: '连接浏览器会话',
-        rendering: '渲染页面',
-        extracted: '提取正文',
-      };
+      // The host renders the stage label in the UI language (older hosts
+      // without `label` fall back to the raw stage key).
       let lastLabel = '';
-      const onProgress = (p: { percent: number; stage: string }) => {
-        const label = `剪藏中 — ${p.percent}% ：${STAGE_ZH[p.stage] ?? p.stage}`;
+      const onProgress = (p: { percent: number; stage: string; label?: string }) => {
+        const label = p.label ?? p.stage;
         if (label !== lastLabel) {
           lastLabel = label;
           ctx.ui.notice(label, { timeout: 300000, id: toastId });
@@ -124,11 +167,11 @@ export default class WebClipper {
           onProgress,
         });
         activeProgress = undefined;
-        ctx.ui.notice(`剪藏完成：${outcome.title}`, { type: 'success', timeout: 4000, id: toastId });
+        ctx.ui.notice(text('done', { title: outcome.title }), { type: 'success', timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`剪藏失败：${message}`, { type: 'error', timeout: 8000, id: toastId });
+        ctx.ui.notice(text('failed', { message }), { type: 'error', timeout: 8000, id: toastId });
       }
     };
 
@@ -140,12 +183,12 @@ export default class WebClipper {
     });
 
     ctx.ui.command('clip-from-clipboard', 'Web clipper: clip from clipboard', async () => {
-      const text = await navigator.clipboard.readText().catch(() => '');
-      if (!text.trim()) {
-        ctx.ui.notice('剪贴板中没有链接', { type: 'warning' });
+      const clipboard = await navigator.clipboard.readText().catch(() => '');
+      if (!clipboard.trim()) {
+        ctx.ui.notice(text('clipboardEmpty'), { type: 'warning' });
         return;
       }
-      await askAndClip(text.trim());
+      await askAndClip(clipboard.trim());
     });
 
     ctx.ui.command('clip-batch', 'Web clipper: clip every URL in the clipboard', async () => {

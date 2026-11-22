@@ -37,6 +37,24 @@ export default defineNuxtPlugin(async nuxtApp => {
 
   const notifications = useNotifications();
   const userStore = useUserStore();
+  // i18n composable (useI18nT) asserts a setup context and throws inside an
+  // async boot plugin — take the app-level instance instead.
+  const i18n = nuxtApp.$i18n as
+    | { t: (key: string, params?: Record<string, unknown>) => string; locale: string }
+    | undefined;
+
+  /** Render-stage wording in the UI language (backend sends stage keys only). */
+  const formatClipProgress = (percent: number, stage: string) => {
+    const stageKeys: Record<string, string> = {
+      queued: 'stageQueued',
+      connecting: 'stageConnecting',
+      rendering: 'stageRendering',
+      extracted: 'stageExtracted',
+    };
+    const stageKey = stageKeys[stage];
+    const stageLabel = stageKey ? i18n?.t(`settings.plugins.clip.${stageKey}`) ?? stage : stage;
+    return i18n ? i18n.t('settings.plugins.clip.progress', { percent, stage: stageLabel }) : `${stageLabel} ${percent}%`;
+  };
 
   const progressToasts = new Map<string, number>();
   const host: PluginHost = createPluginHost({
@@ -44,10 +62,12 @@ export default defineNuxtPlugin(async nuxtApp => {
       name: 'Pergame',
       version: String(config.public.appVersion ?? '0.0.0'),
       client: 'web',
+      locale: String(i18n?.locale ?? 'en'),
     },
     async request(route, method, body) {
       return await makeRequest(route, method, (body ?? {}) as object);
     },
+    formatClipProgress,
     notify: (message, opts) => {
       const payload = { title: message, type: opts?.type ?? 'info', timeout: opts?.timeout };
       if (opts?.id) {

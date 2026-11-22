@@ -864,23 +864,23 @@ pub async fn render_page(
     // Engine choice: explicit render_engine setting, else auto — external
     // MCP when camoufox_url is configured, builtin cli when a local
     // camoufox-cli is on PATH (dev setup, 2026-11-21 user decision).
-    let engine = map
+    // `auto` (the settings default) must be expanded here: a literal "auto"
+    // used to fall through to the external branch and panic the render task.
+    let engine_setting = map
         .get("render_engine")
         .and_then(|v| v.as_str())
-        .map(str::to_string)
-        .or_else(|| {
-            if map
-                .get("camoufox_url")
-                .and_then(|v| v.as_str())
-                .map(|s| !s.trim().is_empty())
-                == Some(true)
-            {
-                Some("external_mcp".into())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "builtin".into());
+        .unwrap_or("auto");
+    let endpoint_set = map
+        .get("camoufox_url")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.trim().is_empty())
+        == Some(true);
+    let engine = match engine_setting {
+        "external_mcp" => "external_mcp".to_string(),
+        "builtin" => "builtin".to_string(),
+        _ if endpoint_set => "external_mcp".to_string(),
+        _ => "builtin".to_string(),
+    };
     let external_config = if engine == "external_mcp" {
         Some(crate::plugins_render::CamoufoxConfig::from_kv(&map).ok_or_else(|| {
             ApiError::BadRequest(
@@ -910,6 +910,9 @@ pub async fn render_page(
     }
     let job_key = job_id.clone();
     let url = body.url.trim().to_string();
+    let plugin_id = id.clone();
+    let user_id = auth.user_id();
+    let state_ref = state.clone();
     tokio::spawn(async move {
         let progress = |percent: u8, stage: &str| {
             // Fire-and-forget: the poller reads whatever stage is current.
@@ -948,7 +951,13 @@ pub async fn render_page(
                 tokio::time::timeout(std::time::Duration::from_secs(budget), fut).await
             }
             _ => {
-                let config = external_config.expect("resolved before spawn");
+                // Engine is normalized above, so external_config is always
+                // Some here; unwrap_or_else keeps a hostile KV value from
+                // panicking the render task instead of failing the job.
+                let config = external_config.unwrap_or_else(|| {
+                    crate::plugins_render::CamoufoxConfig::from_kv(&map)
+                        .expect("external engine selected but camoufox_url missing")
+                });
                 let budget = wait_seconds + 240;
                 let fut = crate::plugins_render::render_page(
                     config,
@@ -968,7 +977,14 @@ pub async fn render_page(
                 Ok(Ok(page)) => {
                     job.percent = 100;
                     job.stage = "done".into();
-                    job.result = Some(page);
+                    job.result = Some(page.clone());
+                    crate::mcp::audit(
+                        &state_ref.db,
+                        Some(user_id),
+                        "plugin.render",
+                        &format!("plugin {plugin_id} rendered {url} ({} bytes)", page.html.len()),
+                    )
+                    .await;
                 }
                 Ok(Err(err)) => {
                     job.percent = 100;

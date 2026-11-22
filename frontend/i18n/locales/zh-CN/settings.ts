@@ -294,6 +294,13 @@ export default {
 
   plugins: {
     capabilities: '权限',
+    clip: {
+      progress: '剪藏中 — {percent}% ：{stage}',
+      stageConnecting: '连接浏览器会话',
+      stageExtracted: '提取正文',
+      stageQueued: '排队中',
+      stageRendering: '渲染页面',
+    },
     disabled: '已被管理员停用。',
     empty: '还没有安装插件。',
     install: '安装插件',

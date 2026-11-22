@@ -297,6 +297,13 @@ export default {
 
   plugins: {
     capabilities: 'Capacità',
+    clip: {
+      progress: 'Clipping — {percent}%: {stage}',
+      stageConnecting: 'connessione alla sessione del browser',
+      stageExtracted: 'estrazione del contenuto',
+      stageQueued: 'in coda',
+      stageRendering: 'rendering della pagina',
+    },
     disabled: 'Disattivato da un amministratore.',
     empty: 'Nessun plugin installato.',
     install: 'Installa un plugin',

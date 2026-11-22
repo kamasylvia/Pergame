@@ -2935,6 +2935,7 @@ var SETTING_TYPES = [
   "text"
 ];
 var DEFAULT_SLUGS = {
+  zhihu: "Zhihu",
   youtube: "YouTube",
   bilibili: "Bilibili",
   vimeo: "Vimeo",
@@ -2948,6 +2949,7 @@ var DEFAULT_SLUGS = {
   text: "Snippets"
 };
 var DEFAULT_TITLES = {
+  zhihu: "{{ title }}",
   youtube: "{{ title }}",
   bilibili: "{{ title }}",
   vimeo: "{{ title }}",
@@ -3089,7 +3091,7 @@ async function clipBatch(host, text, overrides = {}) {
   const delimiter = await host.ctx.setting(SETTINGS.batchDelimiter) || "newline";
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
-    host.notify("剪贴板中没有链接", { type: "warning" });
+    host.notify(host.text("clipboardEmpty"), { type: "warning" });
     return { ok: 0, failed: 0 };
   }
   let ok = 0;
@@ -3101,14 +3103,51 @@ async function clipBatch(host, text, overrides = {}) {
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`剪藏失败：${url} — ${reason}`, { type: "error", timeout: 6000 });
+      host.notify(host.text("clipFailed", { url, reason }), { type: "error", timeout: 6000 });
     }
   }
-  host.notify(`批量剪藏完成:${ok}/${urls.length}${failed ? `(失败 ${failed})` : ""}`, { type: failed ? "warning" : "success" });
+  const summary = host.text("batchDone", { ok, total: urls.length }) + (failed ? host.text("batchFailedPart", { count: failed }) : "");
+  host.notify(summary, { type: failed ? "warning" : "success" });
   return { ok, failed };
 }
 
 // src/main.ts
+var TEXTS = {
+  "zh-CN": {
+    done: "剪藏完成：{title}",
+    failed: "剪藏失败：{message}",
+    clipFailed: "剪藏失败：{url} — {reason}",
+    batchDone: "批量剪藏完成：{ok}/{total}",
+    batchFailedPart: "(失败 {count})",
+    clipboardEmpty: "剪贴板中没有链接"
+  },
+  "zh-TW": {
+    done: "剪藏完成：{title}",
+    failed: "剪藏失敗：{message}",
+    clipFailed: "剪藏失敗：{url} — {reason}",
+    batchDone: "批次剪藏完成：{ok}/{total}",
+    batchFailedPart: "(失敗 {count})",
+    clipboardEmpty: "剪貼簿中沒有連結"
+  },
+  en: {
+    done: "Clipped: {title}",
+    failed: "Clip failed: {message}",
+    clipFailed: "Clip failed: {url} — {reason}",
+    batchDone: "Batch clip finished: {ok}/{total}",
+    batchFailedPart: " ({count} failed)",
+    clipboardEmpty: "No link found in the clipboard"
+  }
+};
+function makeText(locale) {
+  const dict = TEXTS[locale] ?? TEXTS.en;
+  return (key, vars = {}) => {
+    let out = dict[key];
+    for (const [k, v] of Object.entries(vars))
+      out = out.replaceAll(`{${k}}`, String(v));
+    return out;
+  };
+}
+
 class WebClipper {
   host;
   ctxRef;
@@ -3140,11 +3179,13 @@ class WebClipper {
       }
       return parentId;
     };
+    const text = makeText(ctx.api?.host?.locale);
     const host = {
       ctx: parserCtx,
       createNote: (input) => ctx.nodes.create({ ...input, role: 3 }),
       ensureFolder,
-      notify: (message, opts) => ctx.ui.notice(message, opts)
+      notify: (message, opts) => ctx.ui.notice(message, opts),
+      text: (key, vars) => text(key, vars)
     };
     this.host = host;
     this.ctxRef = ctx;
@@ -3167,14 +3208,9 @@ class WebClipper {
       if (!result)
         return;
       const toastId = "clip-progress";
-      const STAGE_ZH = {
-        connecting: "连接浏览器会话",
-        rendering: "渲染页面",
-        extracted: "提取正文"
-      };
       let lastLabel = "";
       const onProgress = (p) => {
-        const label = `剪藏中 — ${p.percent}% ：${STAGE_ZH[p.stage] ?? p.stage}`;
+        const label = p.label ?? p.stage;
         if (label !== lastLabel) {
           lastLabel = label;
           ctx.ui.notice(label, { timeout: 300000, id: toastId });
@@ -3189,27 +3225,27 @@ class WebClipper {
           onProgress
         });
         activeProgress = undefined;
-        ctx.ui.notice(`剪藏完成：${outcome.title}`, { type: "success", timeout: 4000, id: toastId });
+        ctx.ui.notice(text("done", { title: outcome.title }), { type: "success", timeout: 4000, id: toastId });
       } catch (err) {
         activeProgress = undefined;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.ui.notice(`剪藏失败：${message}`, { type: "error", timeout: 8000, id: toastId });
+        ctx.ui.notice(text("failed", { message }), { type: "error", timeout: 8000, id: toastId });
       }
     };
     ctx.ui.command("clip", "Web clipper: clip a URL", async () => {
       await askAndClip("");
     });
     ctx.ui.command("clip-from-clipboard", "Web clipper: clip from clipboard", async () => {
-      const text = await navigator.clipboard.readText().catch(() => "");
-      if (!text.trim()) {
-        ctx.ui.notice("剪贴板中没有链接", { type: "warning" });
+      const clipboard = await navigator.clipboard.readText().catch(() => "");
+      if (!clipboard.trim()) {
+        ctx.ui.notice(text("clipboardEmpty"), { type: "warning" });
         return;
       }
-      await askAndClip(text.trim());
+      await askAndClip(clipboard.trim());
     });
     ctx.ui.command("clip-batch", "Web clipper: clip every URL in the clipboard", async () => {
-      const text = await navigator.clipboard.readText().catch(() => "");
-      await clipBatch(host, text);
+      const text2 = await navigator.clipboard.readText().catch(() => "");
+      await clipBatch(host, text2);
     });
     ctx.ui.ribbon("clip", "Web clipper", async () => {
       await askAndClip("");

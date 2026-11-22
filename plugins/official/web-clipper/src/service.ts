@@ -46,6 +46,7 @@ export const SETTING_TYPES: ContentType[] = [
 
 /** Default slug per type: the folder name and tag a clip of that type gets. */
 export const DEFAULT_SLUGS: Record<string, string> = {
+  zhihu: 'Zhihu',
   youtube: 'YouTube',
   bilibili: 'Bilibili',
   vimeo: 'Vimeo',
@@ -61,6 +62,7 @@ export const DEFAULT_SLUGS: Record<string, string> = {
 
 /** Default title templates. `date` is rendered with the date format setting. */
 export const DEFAULT_TITLES: Record<string, string> = {
+  zhihu: '{{ title }}',
   youtube: '{{ title }}',
   bilibili: '{{ title }}',
   vimeo: '{{ title }}',
@@ -103,6 +105,8 @@ export interface ClipHost {
    */
   ensureFolder(workspaceId: string | undefined, path: string[]): Promise<string | undefined>;
   notify(message: string, opts?: { type?: 'info' | 'success' | 'warning' | 'error'; timeout?: number }): void;
+  /** Locale-bound wording (`done`/`failed`/… keys) from the host UI language. */
+  text(key: string, vars?: Record<string, string | number>): string;
 }
 
 async function parseByType(url: string, type: string, ctx: ParserContext): Promise<ParsedContent> {
@@ -149,7 +153,7 @@ async function formatNow(ctx: ParserContext, key: string, fallback: string): Pro
 export async function clip(
   host: ClipHost,
   input: string,
-  overrides: { workspaceId?: string; tags?: string; title?: string; onProgress?: (p: { percent: number; stage: string }) => void } = {},
+  overrides: { workspaceId?: string; tags?: string; title?: string; onProgress?: (p: { percent: number; stage: string; label?: string }) => void } = {},
 ): Promise<ClipOutcome> {
   const { ctx } = host;
   const trimmed = input.trim();
@@ -214,7 +218,7 @@ export async function clipBatch(
   const delimiter = (await host.ctx.setting<string>(SETTINGS.batchDelimiter)) || 'newline';
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
-    host.notify('剪贴板中没有链接', { type: 'warning' });
+    host.notify(host.text('clipboardEmpty'), { type: 'warning' });
     return { ok: 0, failed: 0 };
   }
   let ok = 0;
@@ -226,9 +230,10 @@ export async function clipBatch(
     } catch (err) {
       failed += 1;
       const reason = err instanceof Error ? err.message : String(err);
-      host.notify(`剪藏失败：${url} — ${reason}`, { type: 'error', timeout: 6000 });
+      host.notify(host.text('clipFailed', { url, reason }), { type: 'error', timeout: 6000 });
     }
   }
-  host.notify(`批量剪藏完成:${ok}/${urls.length}${failed ? `(失败 ${failed})` : ''}`, { type: failed ? 'warning' : 'success' });
+  const summary = host.text('batchDone', { ok, total: urls.length }) + (failed ? host.text('batchFailedPart', { count: failed }) : '');
+  host.notify(summary, { type: failed ? 'warning' : 'success' });
   return { ok, failed };
 }

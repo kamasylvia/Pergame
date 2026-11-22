@@ -294,6 +294,13 @@ export default {
 
   plugins: {
     capabilities: '權限',
+    clip: {
+      progress: '剪藏中 — {percent}% ：{stage}',
+      stageConnecting: '連接瀏覽器會話',
+      stageExtracted: '提取正文',
+      stageQueued: '排隊中',
+      stageRendering: '渲染頁面',
+    },
     disabled: '已被管理員停用。',
     empty: '尚未安裝任何外掛。',
     install: '安裝外掛',

@@ -294,6 +294,13 @@ export default {
 
   plugins: {
     capabilities: '권한',
+    clip: {
+      progress: '클리핑 중 — {percent}%: {stage}',
+      stageConnecting: '브라우저 세션 연결 중',
+      stageExtracted: '내용 추출 중',
+      stageQueued: '대기 중',
+      stageRendering: '페이지 렌더링 중',
+    },
     disabled: '관리자가 비활성화했습니다.',
     empty: '아직 설치된 플러그인이 없습니다.',
     install: '플러그인 설치',

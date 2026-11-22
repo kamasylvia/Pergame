@@ -164,7 +164,8 @@ export interface NetClient {
   render(
     url: string,
     opts?: { waitSelector?: string; htmlSelector?: string },
-    onProgress?: (p: { percent: number; stage: string }) => void,
+    /** `label` is the stage wording in the UI language, built by the host. */
+    onProgress?: (p: { percent: number; stage: string; label?: string }) => void,
   ): Promise<{
     html: string;
     title: string;
