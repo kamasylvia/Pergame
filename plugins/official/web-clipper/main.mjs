@@ -3217,7 +3217,7 @@ class WebClipper {
       });
       const result = await ctx.ui.modal({
         title: "Clip to note",
-        description: "Paste a URL, or any text to save it as a note. The folder comes from the content-type and inbox path templates in settings.",
+        description: "Paste a URL — or multiple URLs (newline/comma separated) to clip them in batch. The folder comes from the content-type and inbox path templates in settings.",
         fields: [
           { key: "url", label: "URL or text", type: "textarea", value: initialUrl, required: true },
           { key: "title", label: "Title (optional)", type: "text", placeholder: "Use the title template" },
@@ -3228,6 +3228,7 @@ class WebClipper {
       });
       if (!result)
         return;
+      const batchUrls = splitBatch(String(result.url ?? ""), String(await ctx.settings.get(SETTINGS.batchDelimiter) || "auto"));
       const toastId = "clip-progress";
       let lastLabel = "";
       const onProgress = (p) => {
@@ -3238,6 +3239,28 @@ class WebClipper {
         }
       };
       activeProgress = onProgress;
+      if (batchUrls.length > 1) {
+        try {
+          const { ok, failed } = await clipBatch(host, String(result.url ?? ""), {
+            workspaceId: String(result.workspace ?? "") || undefined,
+            tags: String(result.tags ?? "") || undefined,
+            onProgress
+          });
+          activeProgress = undefined;
+          ctx.ui.notice(text("batchDone", { ok, total: batchUrls.length }), {
+            type: failed ? "warning" : "success",
+            timeout: 6000,
+            id: toastId
+          });
+          if (failed)
+            ctx.ui.notice(text("failed", { message: `${failed} of ${batchUrls.length} URLs failed — see earlier notices` }), { type: "error", timeout: 8000 });
+        } catch (err) {
+          activeProgress = undefined;
+          const message = err instanceof Error ? err.message : String(err);
+          ctx.ui.notice(text("failed", { message }), { type: "error", timeout: 8000, id: toastId });
+        }
+        return;
+      }
       try {
         const outcome = await clip(host, String(result.url ?? ""), {
           workspaceId: String(result.workspace ?? "") || undefined,

@@ -7,6 +7,7 @@
  * login uses the user's own cookie or a paste.
  */
 import { clip, clipBatch, DEFAULT_TEMPLATES, SETTING_TYPES, SETTINGS, type ClipHost } from './service';
+import { splitBatch } from './detect';
 import type { ParserContext } from './types';
 
 /** A container choice for the save dialog. */
@@ -133,7 +134,7 @@ export default class WebClipper {
       const result = await ctx.ui.modal({
         title: 'Clip to note',
         description:
-          'Paste a URL, or any text to save it as a note. The folder comes from the content-type and inbox path templates in settings.',
+          'Paste a URL — or multiple URLs (newline/comma separated) to clip them in batch. The folder comes from the content-type and inbox path templates in settings.',
         fields: [
           { key: 'url', label: 'URL or text', type: 'textarea', value: initialUrl, required: true },
           { key: 'title', label: 'Title (optional)', type: 'text', placeholder: 'Use the title template' },
@@ -143,6 +144,12 @@ export default class WebClipper {
         submitLabel: 'Clip',
       });
       if (!result) return;
+      // Multiple URLs in the field -> batch flow (mirrors the clipboard batch
+      // command); a single URL keeps the single-clip path with its templates.
+      const batchUrls = splitBatch(
+        String(result.url ?? ''),
+        String((await ctx.settings.get<string>(SETTINGS.batchDelimiter)) || 'auto'),
+      );
       // Rendering runs a real browser (tens of seconds); say so up front or
       // the dialog closure reads as a silent hang.
       // One toast updated in place: percent rolls, then flips to the final
@@ -159,6 +166,27 @@ export default class WebClipper {
         }
       };
       activeProgress = onProgress;
+      if (batchUrls.length > 1) {
+        try {
+          const { ok, failed } = await clipBatch(host, String(result.url ?? ''), {
+            workspaceId: String(result.workspace ?? '') || undefined,
+            tags: String(result.tags ?? '') || undefined,
+            onProgress,
+          });
+          activeProgress = undefined;
+          ctx.ui.notice(text('batchDone', { ok, total: batchUrls.length }), {
+            type: failed ? 'warning' : 'success',
+            timeout: 6000,
+            id: toastId,
+          });
+          if (failed) ctx.ui.notice(text('failed', { message: `${failed} of ${batchUrls.length} URLs failed — see earlier notices` }), { type: 'error', timeout: 8000 });
+        } catch (err) {
+          activeProgress = undefined;
+          const message = err instanceof Error ? err.message : String(err);
+          ctx.ui.notice(text('failed', { message }), { type: 'error', timeout: 8000, id: toastId });
+        }
+        return;
+      }
       try {
         const outcome = await clip(host, String(result.url ?? ''), {
           workspaceId: String(result.workspace ?? '') || undefined,
