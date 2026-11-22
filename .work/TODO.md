@@ -2,8 +2,41 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 思源 readitlater 剪藏 404/文案修复(2026-11-22 用户报告,0.13.2)
+
+- [x] **0.13.6 文档批次(2026-11-23 用户验收通过后)**:README×2 与源码注释的 camofox-mcp 表述全量换成 camofox-browser(项目地址 `redf0x1/camofox-browser`,camoufox 的 Docker 镜像;端口 9377,docker 网络/宿主映射两种示例;零 MCP 残留)。plugin.json 集市描述此前已为「自建浏览器服务」无 MCP。`c4b0451`。用户验收:剪藏成功、中文单条 toast、标题=文章名。
+
+
+- [x] **0.13.5:toast 堆叠/标题仍点号(2026-11-23 用户复验)**:①「进度提示和正在剪藏不消失 + 三条阶段堆叠」根因 = `showClippingProgress` 从未存 showMessage 返回值,`clippingToastId` 恒 null → hide 永远 no-op;修 = **固定 messageId**(`showMessage(text, 0, 'info', id)` 同 id 原地更新,`hideMessage(id)` 成功/失败 finally 清)。②标题仍兜底名:用户跑的已是 0.13.4(兜底名格式证明),但 `.Post-Title` **元素出现≠文本就绪**(知乎 CSR 挂空壳后 hydration 填充)——waitSelector 升级为「元素存在**且 textContent 非空**」才放行。部署 0.13.5(`5729742`)。**0.13.6 终修(Playwright 端到端复现抓出)**:`evaluateJs` 返回整个 `{ok,result,…}` 响应而非 result 值 → ZhihuParser 的 `typeof title==='string'` 恒 false → 标题静默空(正文正常因 getPageHtml 自解 `.result`);解包一次并适配三调用点(waitForSelector/getPageHtml/expressions)+ navigate 间歇 500 重试 ×3。**Playwright 端到端实测(0.13.6)**:单条中文 toast 原地滚动(剪藏中… → 10% 启动浏览器会话 → 60% 提取正文)、标题=文章名「癸酉本石头记后28回,在线阅读及PDF/EPUB下载」、created successfully。**另:i18n 双源陷阱实锤**——0.13.0 的 8 个新键只写进 `i18n.json` 模板,四个运行时语言文件全漏(阶段 toast 显示键名的根因),已补齐并对齐 clippingInProgress;以后加 i18n 键必须四份+i18n.json 五处同批。**客户端架构确认:桌面壳连远程内核(NAS),插件加载源=NAS 卷,生效方式=退出重开客户端**。遗留:内核 serve /plugins/** 无 Cache-Control(fork 源码已有 no-store 测试但部署的 3.8.10.5 未含)——浏览器可能缓存旧 bundle,验证前必须 Cmd+Shift+R;根治待内核发版。**架构确认:用户「客户端」= 桌面壳连远程内核(NAS),插件加载源即 NAS 卷(data/plugins 本地为空、NAS 卷无 Zhihu clip 文档但截图笔记在客户端打开→文档落云端库);客户端生效 = 完全退出重开(比禁用/启用彻底)。**
+
+
+- [x] **0.13.4:剪藏成功后两收尾(2026-11-23)**:①**标题「.」竞态**——知乎 SPA 在路由稳定后才写 document.title,waitSelector 等 body 元素先过 → evaluate 拿到 '.';修 = waitSelector 改**标题元素**(.Post-Title/.QuestionHeader-title,SSR 渲染、出现即有文本),title/questionTitle 表达式元素优先,文件名渲染出 '.'/空白时兜底 questionTitle → 'Zhihu clip <date>'(safeName 同步喂 assetsDir);②设置页示例端口改 **9377**(用户手改值)+ 全文无 MCP 字眼。实测:活页签 navigate 专栏后 .Post-Title/h1/title 三源同值。部署 0.13.4 全量(index.js/plugin.json/i18n×4)。
+
+
+- [x] **0.13.3:两处 REST-vs-内核分叉根修 + 端口误改回滚(2026-11-22 深夜)**:①用户澄清 **9377 是他手动从 3000 改的**(camofox-browser REST 端口)——0.13.2 里我 sed 改 8080 是误判,**已回滚 9377**;实测 9377 上就是 camofox-browser v2.4.5 REST(health/tabs/toggle 全通)。②真 404 之后的连锁:**思源内核 forwardProxy 在 `payloadEncoding:"text"` 时损坏 POST body**(JSON 到达变带引号字符串 → camofox 400 'headless must be a boolean';省略该字段即逐字转发,200)——插件已去掉该字段;③camofox-browser ≥2.4.5 `POST /tabs` 要求 **sessionKey**(只给 userId 报 'userId and sessionKey required'),固定 `sessionKey:'main'` 顺带让浏览器 profile 持久(zhihuCookie 桥接受益)。组件级全链经 forwardProxy 实测 200(toggle/createTab(sessionKey)/health)。**与 pergame 的关系澄清**:调用序列同源(virtual display + REST 同款端点),但传输层不同——pergame 生产 external 走 camofox-mcp(MCP 协议,camofox-mcp 容器仍 Up),思源走 REST 直连 camofox-browser(0.13.0 用户拍板「不走 mcp」);两层 bug 均为思源内核/REST 层特有,pergame 直连不受影响。仓 0.13.3 = `a1c2140`(此前一次 blanket git add -A 把 node_modules/.work 拽进提交,已 reset 重做,tracked 78 不变)。
+
+
+- [x] **设置页 MCP 旧文案 + 端口错**:剪藏报 `POST /sessions/default/toggle-display: HTTP 404`、toast 停「正在剪藏,请稍候...」。定案:用户装的是 0.13.1(REST 版),但 i18n 文案还是 MCP 方言(「MCP 服务地址」「自动拼 /mcp」),用户照旧拼了 `http://camofox-browser:9377`——REST API 在 **8080**,9377 不是。修 = ①四份 i18n(en_US/en/zh_CN/zh-CN)四键 REST 化(「Camoufox 浏览器服务地址」,示例 docker `camofox-browser:8080`/宿主映射端口,不拼 /mcp);②camoufox.ts 404 报错附「wrong port? REST API listens on 8080」提示;③0.13.2 build。**已直改 NAS 容器思源**:部署新产物到 `/share/.../siyuan/_data/data/plugins/siyuan-read-it-later/`(v0.13.2)+ sed 修正 petal settings 里 `camoufoxApiUrl` 9377→8080。用户生效步骤:禁用→启用稍后读插件 + 硬刷新。仓 commit `edd7e79`(顺带清了 .DS_Store/上轮遗留 .bak 出提交)。
+
+- [x] **0.13.3 终修(同日,用户仍报失败后定位)**:复现链暴露两处深坑:①`POST /tabs` 带 URL 会**同步等页面加载**,知乎超过 125s 超时,且 camofox 在请求方断开后清 tab → 旧「tab 列表恢复」拿不到;②内核 forwardProxy timeout 之前手动测 20s 太短误判。**照搬 pergame 空开+navigate**:空开 `{userId, sessionKey:'main'}` 秒回 → `POST /tabs/{id}/navigate {url, userId}`(navigate/evaluate 都要 userId,400 教训)→ waitForSelector 轮询接管等待。实测:空开秒回、navigate 知乎 10.9s、evaluate 拿到真实标题(癸酉本问题)、`.RichContent` 存在(waitSelector 将通过)、close 200。部署 index.js(0.13.3,commit `c3a9890`)。⚠️ camofox-browser 闲置断连后首次 toggle/create 要重拉浏览器(~20-90s),插件 135s 预算内。另:IAB UA 含 Electron 触发思源「桌面分支」启动假崩溃(require is not defined),仅自动化浏览器特有,用户浏览器无碍。
+
+## 思源迁移笔记图片不显示(2026-11-22 用户报告)
+
+- [x] **微信防盗链占位图 → referrer meta 改 no-referrer**:思源 `20261105131931-275rmiu` 能显示图片、pergame 同文(`01a1ea19-08fc…`)全占位。MCP 双向对比定案:**数据层一字不差**(10 张图全是 `mmbiz.qpic.cn` 外链,迁移「外链保留原样」没毛病),差异在渲染层——qpic 防盗链对**任何非空 Referer**(含 localhost/127.0.0.1)返回 2KB 占位图,空 Referer 返回真图(285KB,curl 实证);思源 index.html 是 `no-referrer` 所以能显示,pergame 是 `strict-origin-when-cross-origin` → 带 origin Referer → 占位。修 = nuxt.config.ts referrer meta → `no-referrer`(知识库场景标准做法)。实测:文档页 10 张 qpic 图 10 张真图加载(1080x679 等),0 占位。⚠️ 生产随下次发版。
+
+## 右键菜单 Move to(2026-11-22 用户指令)
+
+- [x] **Clone/Move 目标选择器加搜索(2026-11-22 用户反馈)**:弹窗顶部加搜索框,输入即平铺匹配(名称子串、大小写不敏感),行显 `workspace / … / folder` 全路径,点击即选;无输入保留树浏览。自/子孙目标在结果中置灰禁用。**附带根修上游缺陷:`useNodesTree` 的 `globalTree` computed 无响应式依赖(TreeBuilder 首建时固化 `toRaw(store.nodes)`)——首建时机若 store 还空,树永远空(侧栏满、弹窗空的间歇性分裂)**;修 = computed 内读 store 并按数组引用变化重建 builder。搜索初版曾恒 0 匹配:pickRoots 元素是 TreeItem(字段 label/parentId)而非 Node(name),过滤字段已改。实测:q=hexo → 精确 1 条全路径,移动 Zhihu→Hexo→Inbox 往返成功,子文档随行、树实时刷新。
+
+
+- [x] **Move to… 菜单项 + Clone to… 改名**:右键菜单原无移动入口(上游仅拖拽),加 `Move to…`——复用 CloneTo 树选择弹窗(加 `mode: 'clone'|'move'` prop,move 分支 = `store.update({...node, parent_id})` 全字段 PUT,防呆沿用 isDisabled 排除自身/子孙成环);「Clone to folder…」文案去 folder 改「Clone to…」。i18n 8 语言落位(common.actions.cloneTo/moveTo + nodes.modals.delete.movePick/moveTitle,perfectionist 字母序)。浏览器实测:右键菜单双项显示、Zhihu 目录 Inbox→Memos→Inbox 移动往返成功,子文档随行、树实时刷新。
+
 ## Web clipper v0.5.0(2026-11-20 批次)
 
+- [x] **剪藏文案 i18n 化(2026-11-22,v0.8.1)**:用户报「英文界面提示『剪藏中』」。三层修复:①宿主 `formatClipProgress`($i18n.t,**不能在 async boot plugin 用 useI18nT**——setup 上下文断言抛错把整个 dashboard 打成 500,必须走 `nuxtApp.$i18n`)按 UI 语言拼进度 label,经 `net.render` onProgress 传 `{percent, stage, label}` 给插件;②插件删硬编码 STAGE_ZH,进度用 `p.label`、完成/失败/批量文案按 `ctx.api.host.locale` 自带 zh-CN/zh-TW/en 字典;③i18n 键 `settings.plugins.clip.*` 八语言落位(perfectionist 强制字母序:clip 块在 capabilities 后、内部键 progress<stageC<E<Q<R)。宿主 PluginHostInfo 新增 `locale`。浏览器实测 done toast「Clipped: Example Domain」(en 界面);API 实测 render 阶段流转 10 connecting→60 extracted→done(401KB)。
+- [x] **🔴 render engine `auto` panic 根修(2026-11-22)**:KV `render_engine: "auto"` 被原样传给 `match engine.as_str()` → 落进 external 分支的 `expect("resolved before spawn")` → **tokio 任务 panic,job 卡 percent=5,前端静默无 toast 无笔记**(日志 `plugins.rs:954 panicked`)。修 = 解析时展开 auto(url 配了→external,否则 builtin)+ external 分支 expect 改 unwrap_or_else 兜底。API 实测修复后 auto→builtin 全链成功。**教训:设置默认值("auto")必须在服务端展开,不能信任它恰好匹配 match 分支**。附带:clippy 2 个既存 deny 已清(用户指令)——`mcp/server.rs` 的 `ApiError::from(e)` 恒等转换改 `map_err(mcp_error)`、`imgbed.rs` 的 `path_segments().last()` 改 `next_back()`(Split 双端迭代器,顺带 rustfmt 该文件两处既存格式债);行为等价零功能差异,`cargo clippy --all-targets` 0 error。
+
+- [x] **设置弹窗四项瑕疵根修(2026-11-22)**:根因 = `PluginSettingsModal` 的 `watch(open)` 只挂在「关→开」变化,而父组件 `settingsFor`+`settingsOpen` 同 tick 置位 → 组件挂载时 open 已 true,加载器**从未运行**(workspace 恒空、select 恒 '--'、模板恒空白四项瑕疵同源)。修:`{ immediate: true }`(挂载即加载)+ 空 stored('') 回落 manifest 默认 + 动态 choices 到位后 select 空值自动选首项。manifest 补知乎组(slug='Zhihu'/title/body 模板)并 v0.8.0;DEFAULT_SLUGS/TITLES 补 zhihu。浏览器实测:workspace 下拉 6 项默认选首项(Archive)、冲突策略=Keep both、分隔符=Auto、引擎=Auto、知乎/YouTube 模板默认值全非空。附带:**SSR 500 修复**——`SidebarWorkspaces` 的 `watch(immediate)` 在服务端跑 `localForage.getItem` → 直连任意 `/dashboard/*` 路由 500(上游 #551 存量),加 `import.meta.client` 守卫。dev 插件已重装 v0.8.0(旧 bundle 的 `template_defaults` KV 键清除,grants 五项全授)。
 - [x] **插件设置界面** ✅:manifest 可声明 `settings`(group 折叠分组),设置页齿轮按钮打开表单,值存插件 KV(`ctx.settings` 同源)。43 项设置对齐 SiYuan ReadItLater 构造:General 7(workspace 下拉/路径模板/日期格式/重名策略/批量分隔符/知乎 cookie)+ Browser rendering 4 + 11 内容类型 × 3(slug/标题/正文模板)。
 - [x] **每类型模板生效 + 自动建 folder** ✅:`<type>_slug` 作文件夹名与标签,`inbox_dir` 路径模板渲染后逐级 ensure folder;`render` 服务经后端 MCP 客户端(camoufox)出真实浏览器页,30s create 上限走空开页签+navigate 流程,3 轮指纹重试,signin 落地检测。
 - [x] **camoufox 通道** ✅(D' 方案):后端 `POST /api/plugins/:id/render`,URL/token 从插件 KV 读(用户自建服务=信任决策,免 SSRF 校验);超时用户可配(`camoufox_wait_seconds`,驱动 wait_for_selector + 后端 HTTP + 外层预算)。

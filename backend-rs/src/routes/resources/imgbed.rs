@@ -172,7 +172,12 @@ pub async fn migrate_local(
         node_repo::update(
             &state.db,
             node.id,
-            &write_from(&node, metadata, node.content.clone(), node.content_compiled.clone()),
+            &write_from(
+                &node,
+                metadata,
+                node.content.clone(),
+                node.content_compiled.clone(),
+            ),
             node_repo::now_ms(),
         )
         .await
@@ -301,7 +306,12 @@ pub async fn import_external(
         node_repo::update(
             &state.db,
             node.id,
-            &write_from(&node, node.metadata.clone().unwrap_or(json!({})), Some(next), compiled),
+            &write_from(
+                &node,
+                node.metadata.clone().unwrap_or(json!({})),
+                Some(next),
+                compiled,
+            ),
             node_repo::now_ms(),
         )
         .await
@@ -353,7 +363,7 @@ async fn download_and_upload(
     }
     let filename = parsed
         .path_segments()
-        .and_then(|s| s.last())
+        .and_then(|mut s| s.next_back())
         .filter(|s| !s.is_empty())
         .unwrap_or("external");
     bed.upload(&bytes, filename, &mime)

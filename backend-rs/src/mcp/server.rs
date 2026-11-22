@@ -363,7 +363,9 @@ impl PergameMcp {
                 storage.get_user_object(actor.user_id, &key).await
             }
         }
-        .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
+        // Storage errors are already ApiError; wrapping them again is a no-op
+        // conversion and clippy denies it.
+        .map_err(mcp_error)?;
         if bytes.len() > MAX_TEXT_BYTES {
             return Err(McpError::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
