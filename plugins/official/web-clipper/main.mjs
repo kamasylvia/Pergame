@@ -2535,6 +2535,7 @@ function gfm(turndownService) {
 
 // src/parsers/website.ts
 var MAX_IMAGES = 40;
+var BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 function turndown() {
   const service = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", hr: "---" });
   service.use(gfm);
@@ -2583,12 +2584,32 @@ async function rewriteImages(html, pageUrl, ctx) {
   }
   return { html: doc.body.innerHTML, images };
 }
+function applyWeChatFixes(document2) {
+  document2.body.querySelector(".rich_media_content")?.removeAttribute("style");
+  document2.body.querySelectorAll(".rich_media_content img[data-src]").forEach((img) => {
+    if (!img.getAttribute("src"))
+      img.setAttribute("src", img.getAttribute("data-src") ?? "");
+  });
+  document2.body.querySelectorAll("div > figure").forEach((figure) => {
+    figure.parentElement?.before(figure);
+  });
+}
 async function parseWebsite(url, ctx) {
-  const response = await ctx.proxy(url);
+  const response = await ctx.proxy(url, {
+    headers: {
+      "user-agent": BROWSER_UA,
+      accept: "text/html,application/xhtml+xml",
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8"
+    }
+  });
   if (response.status >= 400) {
     throw new Error(`page answered ${response.status}`);
   }
+  if (response.body.includes("wappoc_appmsgcaptcha")) {
+    throw new Error("WeChat blocked the plain fetch with its captcha wall; retry later");
+  }
   const document2 = new DOMParser().parseFromString(response.body, "text/html");
+  applyWeChatFixes(document2);
   const article = new import_readability.Readability(document2, { charThreshold: 120 }).parse();
   if (!article?.content) {
     return {

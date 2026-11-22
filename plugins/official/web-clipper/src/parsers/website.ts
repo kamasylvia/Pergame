@@ -6,6 +6,11 @@ import type { ParsedContent, ParserContext } from '../types';
 
 const MAX_IMAGES = 40;
 
+/** Real-browser UA: hotlink walls (WeChat mp.weixin.qq.com) 302-redirect
+ * UA-less fetches to a captcha page instead of the article. */
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
 function turndown(): TurndownService {
   const service = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', hr: '---' });
   service.use(gfm);
@@ -63,13 +68,43 @@ async function rewriteImages(
   return { html: doc.body.innerHTML, images };
 }
 
+/**
+ * WeChat article fixes (mirrors the Obsidian/SiYuan parser, issue #187):
+ * the content container ships `visibility: hidden` inline styles and images
+ * are lazy-loaded via `data-src` with an empty `src` — without this both
+ * Readability and the image downloader come up empty.
+ */
+function applyWeChatFixes(document: Document): void {
+  document.body.querySelector('.rich_media_content')?.removeAttribute('style');
+  document.body
+    .querySelectorAll('.rich_media_content img[data-src]')
+    .forEach((img) => {
+      if (!img.getAttribute('src')) img.setAttribute('src', img.getAttribute('data-src') ?? '');
+    });
+  document.body.querySelectorAll('div > figure').forEach((figure) => {
+    figure.parentElement?.before(figure);
+  });
+}
+
 /** Parse one web page into markdown. */
 export async function parseWebsite(url: string, ctx: ParserContext): Promise<ParsedContent> {
-  const response = await ctx.proxy(url);
+  const response = await ctx.proxy(url, {
+    headers: {
+      'user-agent': BROWSER_UA,
+      accept: 'text/html,application/xhtml+xml',
+      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    },
+  });
   if (response.status >= 400) {
     throw new Error(`page answered ${response.status}`);
   }
+  // WeChat serves a tiny captcha page (title 未知错误) instead of the article
+  // when the fetch still looks automated.
+  if (response.body.includes('wappoc_appmsgcaptcha')) {
+    throw new Error('WeChat blocked the plain fetch with its captcha wall; retry later');
+  }
   const document = new DOMParser().parseFromString(response.body, 'text/html');
+  applyWeChatFixes(document);
   const article = new Readability(document, { charThreshold: 120 }).parse();
   if (!article?.content) {
     // Unreadable page: keep the link so the note is still useful.

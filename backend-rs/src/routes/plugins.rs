@@ -723,6 +723,19 @@ pub async fn proxy_fetch(
             .map_err(|_| ApiError::BadRequest(format!("invalid value for header '{name}'")))?;
         request = request.header(header_name, header_value);
     }
+    // Default to a real browser UA: hotlink walls (WeChat mp.weixin.qq.com)
+    // 302-redirect UA-less fetches to a captcha page instead of the article.
+    let has_ua = body
+        .headers
+        .iter()
+        .flatten()
+        .any(|(name, _)| name.eq_ignore_ascii_case("user-agent"));
+    if !has_ua {
+        request = request.header(
+            reqwest::header::USER_AGENT,
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+        );
+    }
     let response = request
         .send()
         .await
