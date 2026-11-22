@@ -2,6 +2,11 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 生产 v0.0.13 发布 + 库/桶统一(2026-11-23)
+
+- [x] **生产 v0.0.13 上线**:release v0.0.13(target main)触发 build ✓ → Portainer API(stack 42)PUT 更新(镜像 v0.0.13 + 显式 S3_BUCKET)→ 双容器重建。验证:health ok、生产 JWT 打开迁移文档页 **10/10 微信外链真图**(no-referrer 生效)、containers/note API 200。issue #19 已关。
+- [x] **库/桶统一(用户指令)**:旧生产库 `pergame` DROP(先 pg_dump 备份 186KB → `.work/pergame-backup-20261123.sql`,仓库内),`pergame_dev` RENAME → `pergame`;生产 backend 容器先停(断连接)。S3 桶对齐:旧 `pergame` 桶 103 对象清空(旧生产无主数据),`pergame-dev` 229 对象(595MB)server-side copy → `pergame` 桶(parity 校验 missing=0/sizediff=0;31 个 0 字节用户目录占位为 QuObjects 自动生成,无害)。**两环境配置统一**:生产 stack 显式 `S3_BUCKET: "pergame"`;本地 local.env `DATABASE_NAME=pergame`(原 pergame_dev)、`S3_BUCKET=pergame`。本地后端重启验证 174 containers/笔记 200。⚠️ 历史教训:换库/桶时 DATABASE_NAME/S3_BUCKET 两个 local.env 键都要改,只改一个会静默连旧库。
+
 ## 思源 readitlater 剪藏 404/文案修复(2026-11-22 用户报告,0.13.2)
 
 - [x] **0.13.6 文档批次(2026-11-23 用户验收通过后)**:README×2 与源码注释的 camofox-mcp 表述全量换成 camofox-browser(项目地址 `redf0x1/camofox-browser`,camoufox 的 Docker 镜像;端口 9377,docker 网络/宿主映射两种示例;零 MCP 残留)。plugin.json 集市描述此前已为「自建浏览器服务」无 MCP。`c4b0451`。用户验收:剪藏成功、中文单条 toast、标题=文章名。
