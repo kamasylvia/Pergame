@@ -3,7 +3,8 @@ export default {
     assign: 'Assigner',
     cancel: 'Annuler',
     clear: 'Effacer',
-    cloneTo: 'Cloner vers un dossier…',
+    cloneTo: 'Cloner vers…',
+
     close: 'Fermer',
     confirm: 'Confirmer',
     copy: 'Copier',
@@ -16,6 +17,7 @@ export default {
     edit: 'Modifier',
     export: 'Exporter',
     import: 'Importer',
+    moveTo: 'Déplacer vers…',
     new: 'Nouveau',
     newDocument: 'Nouveau document',
     newFolder: 'Nouveau dossier',

@@ -23,6 +23,7 @@
 
     <div class="menu-group">
       <button class="menu-item" @click="action('cloneTo')"><Icon name="duplicate" />{{ t('common.actions.cloneTo') }}</button>
+      <button class="menu-item" @click="action('moveTo')"><Icon name="location" />{{ t('common.actions.moveTo') }}</button>
       <button v-if="props.linkId" class="menu-item" @click="action('removeLink')"><Icon name="link_off" />{{ t('common.actions.removeLink') }}</button>
       <button class="menu-item" @click="action('duplicate')"><Icon name="duplicate" />{{ t('common.actions.duplicate') }}<kbd>Ctrl+D</kbd></button>
       <div class="menu-item has-submenu" @mouseenter="positionSubmenu">
@@ -102,6 +103,9 @@ async function action(name: string) {
       break;
     case 'cloneTo':
       modals.add(new Modal(shallowRef(NodeCloneModal), { props: { node: props.node }, size: 'small' }));
+      break;
+    case 'moveTo':
+      modals.add(new Modal(shallowRef(NodeCloneModal), { props: { node: props.node, mode: 'move' }, size: 'small' }));
       break;
     case 'removeLink':
       if (props.linkId) {

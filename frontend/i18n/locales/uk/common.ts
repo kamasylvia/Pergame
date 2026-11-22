@@ -3,7 +3,8 @@ export default {
     assign: 'Призначити',
     cancel: 'Скасувати',
     clear: 'Очистити',
-    cloneTo: 'Клонувати до теки…',
+    cloneTo: 'Клонувати до…',
+
     close: 'Закрити',
     confirm: 'Підтвердити',
     copy: 'Копіювати',
@@ -16,6 +17,7 @@ export default {
     edit: 'Редагувати',
     export: 'Експорт',
     import: 'Імпорт',
+    moveTo: 'Перемістити до…',
     new: 'Новий',
     newDocument: 'Новий документ',
     newFolder: 'Нова тека',

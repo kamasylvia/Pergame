@@ -3,7 +3,8 @@ export default {
     assign: 'Assegna',
     cancel: 'Annulla',
     clear: 'Svuota',
-    cloneTo: 'Clona nella cartella…',
+    cloneTo: 'Clona in…',
+
     close: 'Chiudi',
     confirm: 'Conferma',
     copy: 'Copia',
@@ -16,6 +17,7 @@ export default {
     edit: 'Modifica',
     export: 'Esporta',
     import: 'Importa',
+    moveTo: 'Sposta in…',
     new: 'Nuovo',
     newDocument: 'Nuovo documento',
     newFolder: 'Nuova cartella',

@@ -3,7 +3,8 @@ export default {
     assign: '할당',
     cancel: '취소',
     clear: '지우기',
-    cloneTo: '폴더로 복제…',
+    cloneTo: '복제…',
+
     close: '닫기',
     confirm: '확인',
     copy: '복사',
@@ -16,6 +17,7 @@ export default {
     edit: '편집',
     export: '내보내기',
     import: '가져오기',
+    moveTo: '이동…',
     new: '새로 만들기',
     newDocument: '새 문서',
     newFolder: '새 폴더',

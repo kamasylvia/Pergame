@@ -3,7 +3,8 @@ export default {
     assign: '分配',
     cancel: '取消',
     clear: '清除',
-    cloneTo: '克隆到目錄…',
+    cloneTo: '克隆到…',
+
     close: '關閉',
     confirm: '確認',
     copy: '複製',
@@ -16,6 +17,7 @@ export default {
     edit: '編輯',
     export: '匯出',
     import: '匯入',
+    moveTo: '移動到…',
     new: '新增',
     newDocument: '新建文件',
     newFolder: '新建資料夾',
