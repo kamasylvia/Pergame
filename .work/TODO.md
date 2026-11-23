@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 单剪阶段进度修复(web-clipper 0.8.6,2026-11-23)
+
+- [x] **单剪过程零提示(用户报:剪藏成功了,但过程中依然没提示,只有成功时有)**:0.8.4 只修了批量 tick;单剪 proxy 路径 `clip()` 的 `onProgress` 参数从未被调用(死参,进度只走知乎 render),微信文章 10 秒静默。修 = `clip()` 对 URL 加两阶段 tick(解析前 `正在抓取：短链接` 5% → 建笔记前 `正在保存…` 80%,纯文本秒完不打扰),TEXTS `stageFetching/stageSaving` ×3 语言;批量内单剪 tick 与 i/n 逐条交错,同 toast 原地滚。harness 加场景 D(单剪三 toast 顺序)后四场景 18 断言全绿;重建产物 + 同批同步 plugin-packs;0.8.6 已装 live env(registry+entry 包双验,临时提权号删,ADMIN_ACCOUNTS 恢复 laniakea 单列)。用户侧硬刷重剪即见过程提示。
+
 ## web-clipper 0.8.5 装机 + ADMIN_ACCOUNTS 恢复(2026-11-23)
 
 - [x] **本地 dev 装 0.8.5(用户报:硬刷后剪藏仍失败)**:硬刷无用——运行包取自 S3 安装(0.8.3),非仓库。装机需 admin,但库里无 admin(local.env 丢了 `ADMIN_ACCOUNTS`,而 Go/Rust 启动对账"空名单即全员降权"是上游行为,之前本地重启已把管理员清零)。修 = 临时号提权装机(`POST /api/admin/plugins` 传 0.8.5 `package.zip`,registry 已是 0.8.5,entry 包验有 `slice(0, 50)`+batch 进度),临时号删;`local.env` 永久加回 `ADMIN_ACCOUNTS=<laniakea uuid>`(与 GOAL-STATE 记载惯例一致,防以后每次重启再降权),后果端重启确认无降权日志。用户侧只需硬刷重剪。注意:生产 stack 若同样没配 `ADMIN_ACCOUNTS`,其重启一样全员降权——待查。
