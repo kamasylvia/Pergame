@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 超长标题剪藏失败修复(web-clipper 0.8.5,2026-11-23)
+
+- [x] **微信文章剪藏不下来(用户报,思源 readitlater 可剪)**:`mp.weixin.qq.com/s/2GrO4J49SaedhN3ekimt0Q`(Day 17 频域分离,标题 51 字)。排查链:直抓 200/3.8MB 有正文 → 后端 proxy 同样 200 全文 → 真 `parseWebsite` 跑出标题+3156 字 → 全链 harness(真 `clip()` + 真 proxy/upload/建笔记,linkedom 垫 DOMParser)复现 `nodes POST: value too long for type character varying(50)`。根因:插件笔记名截 `slice(0, 60)`,DB `nodes.name VARCHAR(50)`(Go/Rust 两 schema 一致,文件夹早已按 50 截,唯笔记名漏网),51–60 字标题必死在 INSERT(后端报 500 Internal error,用户侧只见剪藏失败)。修 = 一行 `slice(0, 50)` + ceiling 注释;同 URL 全链复测绿(3 图附件入库,标题截 50 字)。测试号/笔记/附件已清(孤儿字节归零)。遗留:后端超长名报 500 应为 400(未动);前端改名无 50 上限,同坑。
+
 ## 批量剪藏进度与提示修复(web-clipper 0.8.4,2026-11-23)
 
 - [x] **批量无进度+提示错乱(用户报:批量剪藏正在进行,但没有进度条和成功提示)**:根因三件 — ①只有知乎走 `render` 才有进度事件,proxy 路径(`clip` 的 `onProgress` 传参从未被调用、`clipBatch` 签名里根本没有该参数)批量跑几分钟零反馈;②manifest 无 `batch_delimiter` 默认 → 对话框按 `auto` 拆、`clipBatch` 按 `newline` 重拆,逗号分隔单行批量拆出 0 URL(误报 clipboardEmpty + `0/2 success` 假成功);③对话框批量完成吐双 summary(文案还不一致)+ 一条冗余 error toast。修 = `clipBatch` 接 `onProgress`(逐 URL `正在剪藏 i/n：短链接` tick)+ `announceSummary` 开关(对话框/剪贴板命令各自复用自家进度 toast 收尾,剪贴板命令修顺手 shadow 掉 `text` 的旧错);两处分隔符默认统一 `auto`;summary 补失败段、删冗余 error toast;`trackProgress` 提公共 helper。headless harness(真 main.ts + mock ctx,oEmbed 路径零 DOM)三场景 14 断言全绿,运行包与源码 `cmp` 一致后才动手。`package.zip`→`plugin-packs` 同批同步(0.8.3 漏同步,本次补齐)。
