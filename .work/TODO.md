@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## web-clipper 0.8.5 装机 + ADMIN_ACCOUNTS 恢复(2026-11-23)
+
+- [x] **本地 dev 装 0.8.5(用户报:硬刷后剪藏仍失败)**:硬刷无用——运行包取自 S3 安装(0.8.3),非仓库。装机需 admin,但库里无 admin(local.env 丢了 `ADMIN_ACCOUNTS`,而 Go/Rust 启动对账"空名单即全员降权"是上游行为,之前本地重启已把管理员清零)。修 = 临时号提权装机(`POST /api/admin/plugins` 传 0.8.5 `package.zip`,registry 已是 0.8.5,entry 包验有 `slice(0, 50)`+batch 进度),临时号删;`local.env` 永久加回 `ADMIN_ACCOUNTS=<laniakea uuid>`(与 GOAL-STATE 记载惯例一致,防以后每次重启再降权),后果端重启确认无降权日志。用户侧只需硬刷重剪。注意:生产 stack 若同样没配 `ADMIN_ACCOUNTS`,其重启一样全员降权——待查。
+
 ## 节点名长度校验补齐(后端 400 + 前端 maxlength,2026-11-23)
 
 - [x] **超长名 500 改 400 + 前端改名 50 上限(0.8.5 遗留,用户指令"修")**:后端 `NodeInput::validate_lengths`(name≤50/description≤250/tags≤250,按字符数)挂 POST/PUT 两入口,超限报 400 `Key: 'Node.Name' Error: ... 'max' tag`(对齐 Go `binding:"required,max=50"` 族报文,不再是 driver 500);上传文件名早已截 50,故仅此一处缺口,无 PATCH 旁路。前端 8 处节点名 input 加 `maxlength="50"`(编辑器标题/新建分类/元数据/分类编辑/资源改名/流程图/团队设置/admin 文档)+ 3 处 description `maxlength="250"` + admin tags 明文框 `maxlength="250"`;AppTagInput 两处未动(组件内逻辑,后端 400 兜底)。验证:`cargo test` 新单测(含 50/51 边界 + 多字节计数)绿 + clippy/rustfmt 干净 + eslint 8 文件过 + 活后端 POST-51/PUT-51/PUT-desc251 均为 HTTP 400 明文、50 字边界 200 建功;dev 后端已重启生效。测试号/节点已清。注意:库里有个非本次建的 `tmpv` 号,未动。
