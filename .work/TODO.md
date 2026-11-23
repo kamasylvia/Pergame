@@ -1,5 +1,8 @@
 # TODO
 
+> **SiYuan ReadItLater 插件**(0.13.0–0.13.7:camofox-browser REST 集成、标题/粘贴/微信/i18n 修复、发布):记录已迁移至插件仓 GitHub issues —— kamasylvia/SiYuan-ReadItLater,Ledger = #20(pinned),相关 issue #14–#19。本文件不再记录该插件。
+
+
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
 ## 文件树打开定位(2026-11-23 新功能)
@@ -38,35 +41,6 @@
 
 - [x] **生产 v0.0.13 上线**:release v0.0.13(target main)触发 build ✓ → Portainer API(stack 42)PUT 更新(镜像 v0.0.13 + 显式 S3_BUCKET)→ 双容器重建。验证:health ok、生产 JWT 打开迁移文档页 **10/10 微信外链真图**(no-referrer 生效)、containers/note API 200。issue #19 已关。
 - [x] **库/桶统一(用户指令)**:旧生产库 `pergame` DROP(先 pg_dump 备份 186KB → `.work/pergame-backup-20261123.sql`,仓库内),`pergame_dev` RENAME → `pergame`;生产 backend 容器先停(断连接)。S3 桶对齐:旧 `pergame` 桶 103 对象清空(旧生产无主数据),`pergame-dev` 229 对象(595MB)server-side copy → `pergame` 桶(parity 校验 missing=0/sizediff=0;31 个 0 字节用户目录占位为 QuObjects 自动生成,无害)。**两环境配置统一**:生产 stack 显式 `S3_BUCKET: "pergame"`;本地 local.env `DATABASE_NAME=pergame`(原 pergame_dev)、`S3_BUCKET=pergame`。本地后端重启验证 174 containers/笔记 200。⚠️ 历史教训:换库/桶时 DATABASE_NAME/S3_BUCKET 两个 local.env 键都要改,只改一个会静默连旧库。
-
-## 思源 readitlater 剪藏 404/文案修复(2026-11-22 用户报告,0.13.2)
-
-- [x] **0.13.6 文档批次(2026-11-23 用户验收通过后)**:README×2 与源码注释的 camofox-mcp 表述全量换成 camofox-browser(项目地址 `redf0x1/camofox-browser`,camoufox 的 Docker 镜像;端口 9377,docker 网络/宿主映射两种示例;零 MCP 残留)。plugin.json 集市描述此前已为「自建浏览器服务」无 MCP。`c4b0451`。用户验收:剪藏成功、中文单条 toast、标题=文章名。
-
-
-- [x] **0.13.5:toast 堆叠/标题仍点号(2026-11-23 用户复验)**:①「进度提示和正在剪藏不消失 + 三条阶段堆叠」根因 = `showClippingProgress` 从未存 showMessage 返回值,`clippingToastId` 恒 null → hide 永远 no-op;修 = **固定 messageId**(`showMessage(text, 0, 'info', id)` 同 id 原地更新,`hideMessage(id)` 成功/失败 finally 清)。②标题仍兜底名:用户跑的已是 0.13.4(兜底名格式证明),但 `.Post-Title` **元素出现≠文本就绪**(知乎 CSR 挂空壳后 hydration 填充)——waitSelector 升级为「元素存在**且 textContent 非空**」才放行。部署 0.13.5(`5729742`)。**0.13.6 终修(Playwright 端到端复现抓出)**:`evaluateJs` 返回整个 `{ok,result,…}` 响应而非 result 值 → ZhihuParser 的 `typeof title==='string'` 恒 false → 标题静默空(正文正常因 getPageHtml 自解 `.result`);解包一次并适配三调用点(waitForSelector/getPageHtml/expressions)+ navigate 间歇 500 重试 ×3。**Playwright 端到端实测(0.13.6)**:单条中文 toast 原地滚动(剪藏中… → 10% 启动浏览器会话 → 60% 提取正文)、标题=文章名「癸酉本石头记后28回,在线阅读及PDF/EPUB下载」、created successfully。**另:i18n 双源陷阱实锤**——0.13.0 的 8 个新键只写进 `i18n.json` 模板,四个运行时语言文件全漏(阶段 toast 显示键名的根因),已补齐并对齐 clippingInProgress;以后加 i18n 键必须四份+i18n.json 五处同批。**客户端架构确认:桌面壳连远程内核(NAS),插件加载源=NAS 卷,生效方式=退出重开客户端**。遗留:内核 serve /plugins/** 无 Cache-Control(fork 源码已有 no-store 测试但部署的 3.8.10.5 未含)——浏览器可能缓存旧 bundle,验证前必须 Cmd+Shift+R;根治待内核发版。**架构确认:用户「客户端」= 桌面壳连远程内核(NAS),插件加载源即 NAS 卷(data/plugins 本地为空、NAS 卷无 Zhihu clip 文档但截图笔记在客户端打开→文档落云端库);客户端生效 = 完全退出重开(比禁用/启用彻底)。**
-
-
-- [x] **0.13.4:剪藏成功后两收尾(2026-11-23)**:①**标题「.」竞态**——知乎 SPA 在路由稳定后才写 document.title,waitSelector 等 body 元素先过 → evaluate 拿到 '.';修 = waitSelector 改**标题元素**(.Post-Title/.QuestionHeader-title,SSR 渲染、出现即有文本),title/questionTitle 表达式元素优先,文件名渲染出 '.'/空白时兜底 questionTitle → 'Zhihu clip <date>'(safeName 同步喂 assetsDir);②设置页示例端口改 **9377**(用户手改值)+ 全文无 MCP 字眼。实测:活页签 navigate 专栏后 .Post-Title/h1/title 三源同值。部署 0.13.4 全量(index.js/plugin.json/i18n×4)。
-
-
-- [x] **0.13.3:两处 REST-vs-内核分叉根修 + 端口误改回滚(2026-11-22 深夜)**:①用户澄清 **9377 是他手动从 3000 改的**(camofox-browser REST 端口)——0.13.2 里我 sed 改 8080 是误判,**已回滚 9377**;实测 9377 上就是 camofox-browser v2.4.5 REST(health/tabs/toggle 全通)。②真 404 之后的连锁:**思源内核 forwardProxy 在 `payloadEncoding:"text"` 时损坏 POST body**(JSON 到达变带引号字符串 → camofox 400 'headless must be a boolean';省略该字段即逐字转发,200)——插件已去掉该字段;③camofox-browser ≥2.4.5 `POST /tabs` 要求 **sessionKey**(只给 userId 报 'userId and sessionKey required'),固定 `sessionKey:'main'` 顺带让浏览器 profile 持久(zhihuCookie 桥接受益)。组件级全链经 forwardProxy 实测 200(toggle/createTab(sessionKey)/health)。**与 pergame 的关系澄清**:调用序列同源(virtual display + REST 同款端点),但传输层不同——pergame 生产 external 走 camofox-mcp(MCP 协议,camofox-mcp 容器仍 Up),思源走 REST 直连 camofox-browser(0.13.0 用户拍板「不走 mcp」);两层 bug 均为思源内核/REST 层特有,pergame 直连不受影响。仓 0.13.3 = `a1c2140`(此前一次 blanket git add -A 把 node_modules/.work 拽进提交,已 reset 重做,tracked 78 不变)。
-
-
-- [x] **设置页 MCP 旧文案 + 端口错**:剪藏报 `POST /sessions/default/toggle-display: HTTP 404`、toast 停「正在剪藏,请稍候...」。定案:用户装的是 0.13.1(REST 版),但 i18n 文案还是 MCP 方言(「MCP 服务地址」「自动拼 /mcp」),用户照旧拼了 `http://camofox-browser:9377`——REST API 在 **8080**,9377 不是。修 = ①四份 i18n(en_US/en/zh_CN/zh-CN)四键 REST 化(「Camoufox 浏览器服务地址」,示例 docker `camofox-browser:8080`/宿主映射端口,不拼 /mcp);②camoufox.ts 404 报错附「wrong port? REST API listens on 8080」提示;③0.13.2 build。**已直改 NAS 容器思源**:部署新产物到 `/share/.../siyuan/_data/data/plugins/siyuan-read-it-later/`(v0.13.2)+ sed 修正 petal settings 里 `camoufoxApiUrl` 9377→8080。用户生效步骤:禁用→启用稍后读插件 + 硬刷新。仓 commit `edd7e79`(顺带清了 .DS_Store/上轮遗留 .bak 出提交)。
-
-- [x] **0.13.3 终修(同日,用户仍报失败后定位)**:复现链暴露两处深坑:①`POST /tabs` 带 URL 会**同步等页面加载**,知乎超过 125s 超时,且 camofox 在请求方断开后清 tab → 旧「tab 列表恢复」拿不到;②内核 forwardProxy timeout 之前手动测 20s 太短误判。**照搬 pergame 空开+navigate**:空开 `{userId, sessionKey:'main'}` 秒回 → `POST /tabs/{id}/navigate {url, userId}`(navigate/evaluate 都要 userId,400 教训)→ waitForSelector 轮询接管等待。实测:空开秒回、navigate 知乎 10.9s、evaluate 拿到真实标题(癸酉本问题)、`.RichContent` 存在(waitSelector 将通过)、close 200。部署 index.js(0.13.3,commit `c3a9890`)。⚠️ camofox-browser 闲置断连后首次 toggle/create 要重拉浏览器(~20-90s),插件 135s 预算内。另:IAB UA 含 Electron 触发思源「桌面分支」启动假崩溃(require is not defined),仅自动化浏览器特有,用户浏览器无碍。
-
-## 思源迁移笔记图片不显示(2026-11-22 用户报告)
-
-- [x] **微信防盗链占位图 → referrer meta 改 no-referrer**:思源 `20261105131931-275rmiu` 能显示图片、pergame 同文(`01a1ea19-08fc…`)全占位。MCP 双向对比定案:**数据层一字不差**(10 张图全是 `mmbiz.qpic.cn` 外链,迁移「外链保留原样」没毛病),差异在渲染层——qpic 防盗链对**任何非空 Referer**(含 localhost/127.0.0.1)返回 2KB 占位图,空 Referer 返回真图(285KB,curl 实证);思源 index.html 是 `no-referrer` 所以能显示,pergame 是 `strict-origin-when-cross-origin` → 带 origin Referer → 占位。修 = nuxt.config.ts referrer meta → `no-referrer`(知识库场景标准做法)。实测:文档页 10 张 qpic 图 10 张真图加载(1080x679 等),0 占位。⚠️ 生产随下次发版。
-
-## 右键菜单 Move to(2026-11-22 用户指令)
-
-- [x] **Clone/Move 目标选择器加搜索(2026-11-22 用户反馈)**:弹窗顶部加搜索框,输入即平铺匹配(名称子串、大小写不敏感),行显 `workspace / … / folder` 全路径,点击即选;无输入保留树浏览。自/子孙目标在结果中置灰禁用。**附带根修上游缺陷:`useNodesTree` 的 `globalTree` computed 无响应式依赖(TreeBuilder 首建时固化 `toRaw(store.nodes)`)——首建时机若 store 还空,树永远空(侧栏满、弹窗空的间歇性分裂)**;修 = computed 内读 store 并按数组引用变化重建 builder。搜索初版曾恒 0 匹配:pickRoots 元素是 TreeItem(字段 label/parentId)而非 Node(name),过滤字段已改。实测:q=hexo → 精确 1 条全路径,移动 Zhihu→Hexo→Inbox 往返成功,子文档随行、树实时刷新。
-
-
-- [x] **Move to… 菜单项 + Clone to… 改名**:右键菜单原无移动入口(上游仅拖拽),加 `Move to…`——复用 CloneTo 树选择弹窗(加 `mode: 'clone'|'move'` prop,move 分支 = `store.update({...node, parent_id})` 全字段 PUT,防呆沿用 isDisabled 排除自身/子孙成环);「Clone to folder…」文案去 folder 改「Clone to…」。i18n 8 语言落位(common.actions.cloneTo/moveTo + nodes.modals.delete.movePick/moveTitle,perfectionist 字母序)。浏览器实测:右键菜单双项显示、Zhihu 目录 Inbox→Memos→Inbox 移动往返成功,子文档随行、树实时刷新。
 
 ## Web clipper v0.5.0(2026-11-20 批次)
 
