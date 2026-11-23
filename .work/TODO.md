@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 批量剪藏进度与提示修复(web-clipper 0.8.4,2026-11-23)
+
+- [x] **批量无进度+提示错乱(用户报:批量剪藏正在进行,但没有进度条和成功提示)**:根因三件 — ①只有知乎走 `render` 才有进度事件,proxy 路径(`clip` 的 `onProgress` 传参从未被调用、`clipBatch` 签名里根本没有该参数)批量跑几分钟零反馈;②manifest 无 `batch_delimiter` 默认 → 对话框按 `auto` 拆、`clipBatch` 按 `newline` 重拆,逗号分隔单行批量拆出 0 URL(误报 clipboardEmpty + `0/2 success` 假成功);③对话框批量完成吐双 summary(文案还不一致)+ 一条冗余 error toast。修 = `clipBatch` 接 `onProgress`(逐 URL `正在剪藏 i/n：短链接` tick)+ `announceSummary` 开关(对话框/剪贴板命令各自复用自家进度 toast 收尾,剪贴板命令修顺手 shadow 掉 `text` 的旧错);两处分隔符默认统一 `auto`;summary 补失败段、删冗余 error toast;`trackProgress` 提公共 helper。headless harness(真 main.ts + mock ctx,oEmbed 路径零 DOM)三场景 14 断言全绿,运行包与源码 `cmp` 一致后才动手。`package.zip`→`plugin-packs` 同批同步(0.8.3 漏同步,本次补齐)。
+
 ## 批量剪藏同步(web-clipper 0.8.3,2026-11-23)
 
 - [x] **对话框批量剪藏(用户报:pergame 完全不支持批量,与思源不同步)**:剪藏对话框提交路径现在按 `batch_delimiter` 设置切分字段(auto/newline/comma/semicolon),多 URL 自动走 clipBatch(与剪贴板批量命令同流程:逐 URL clip → 汇总 `Batch clip finished: ok/total(失败 N)`);单 URL 保持原单剪路径。对话框描述注明多 URL 批量。splitBatch 单测级验证(auto/newline/comma/semicolon 五例)+ 0.8.3 已装本地与生产。`17e004d9`。
