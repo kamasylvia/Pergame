@@ -186,7 +186,9 @@ export async function clip(
 
   const body = renderTemplate(bodyTemplate, vars);
   const renderedTitle = renderTemplate(titleTemplate, vars).trim();
-  const name = (overrides.title || renderedTitle || parsed.title || 'Clipped note').slice(0, 60);
+  // Ceiling is the `nodes.name VARCHAR(50)` column (same 50 as folder
+  // segments in main.ts): a 51-char title otherwise dies in the INSERT.
+  const name = (overrides.title || renderedTitle || parsed.title || 'Clipped note').slice(0, 50);
 
   // Folder: workspace / <inbox template rendered with contentType + date>.
   // `{{contentType}}` is the slug above, so thirteen kinds can each land in

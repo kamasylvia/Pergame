@@ -3098,7 +3098,7 @@ async function clip(host, input, overrides = {}) {
   };
   const body = renderTemplate(bodyTemplate, vars);
   const renderedTitle = renderTemplate(titleTemplate, vars).trim();
-  const name = (overrides.title || renderedTitle || parsed.title || "Clipped note").slice(0, 60);
+  const name = (overrides.title || renderedTitle || parsed.title || "Clipped note").slice(0, 50);
   const workspaceId = overrides.workspaceId || await ctx.setting(SETTINGS.workspaceId) || undefined;
   const inboxTemplate = await ctx.setting(SETTINGS.inboxDir) || "{{contentType}}";
   const inboxPath = renderTemplate(inboxTemplate, vars).split("/").map((segment) => segment.trim()).filter(Boolean);
