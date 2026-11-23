@@ -27,6 +27,7 @@ const TEXTS = {
     failed: '剪藏失败：{message}',
     clipFailed: '剪藏失败：{url} — {reason}',
     batchDone: '批量剪藏完成：{ok}/{total}',
+    batchItem: '正在剪藏 {i}/{total}：{url}',
     batchFailedPart: '(失败 {count})',
     clipboardEmpty: '剪贴板中没有链接',
   },
@@ -35,6 +36,7 @@ const TEXTS = {
     failed: '剪藏失敗：{message}',
     clipFailed: '剪藏失敗：{url} — {reason}',
     batchDone: '批次剪藏完成：{ok}/{total}',
+    batchItem: '正在剪藏 {i}/{total}：{url}',
     batchFailedPart: '(失敗 {count})',
     clipboardEmpty: '剪貼簿中沒有連結',
   },
@@ -43,6 +45,7 @@ const TEXTS = {
     failed: 'Clip failed: {message}',
     clipFailed: 'Clip failed: {url} — {reason}',
     batchDone: 'Batch clip finished: {ok}/{total}',
+    batchItem: 'Clipping {i}/{total}: {url}',
     batchFailedPart: ' ({count} failed)',
     clipboardEmpty: 'No link found in the clipboard',
   },
@@ -123,6 +126,26 @@ export default class WebClipper {
     this.ctxRef = ctx;
 
 
+    /**
+     * One toast updated in place: percent rolls, then flips to the final
+     * state. Without opts.id each stage would stack its own toast.
+     * The host renders the stage label in the UI language (older hosts
+     * without `label` fall back to the raw stage key). Also arms the
+     * parser render sink so browser-render stages join the same toast.
+     */
+    const trackProgress = (toastId: string) => {
+      let lastLabel = '';
+      const onProgress = (p: { percent: number; stage: string; label?: string }) => {
+        const label = p.label ?? p.stage;
+        if (label !== lastLabel) {
+          lastLabel = label;
+          ctx.ui.notice(label, { timeout: 300000, id: toastId });
+        }
+      };
+      activeProgress = onProgress;
+      return onProgress;
+    };
+
     const askAndClip = async (initialUrl: string) => {
       const saved = await ctx.settings.get<string>(SETTINGS.workspaceId);
       // Kick the listing off first, then open the dialog without awaiting it:
@@ -152,34 +175,24 @@ export default class WebClipper {
       );
       // Rendering runs a real browser (tens of seconds); say so up front or
       // the dialog closure reads as a silent hang.
-      // One toast updated in place: percent rolls, then flips to the final
-      // state. Without opts.id each stage would stack its own toast.
       const toastId = 'clip-progress';
-      // The host renders the stage label in the UI language (older hosts
-      // without `label` fall back to the raw stage key).
-      let lastLabel = '';
-      const onProgress = (p: { percent: number; stage: string; label?: string }) => {
-        const label = p.label ?? p.stage;
-        if (label !== lastLabel) {
-          lastLabel = label;
-          ctx.ui.notice(label, { timeout: 300000, id: toastId });
-        }
-      };
-      activeProgress = onProgress;
+      const onProgress = trackProgress(toastId);
       if (batchUrls.length > 1) {
         try {
           const { ok, failed } = await clipBatch(host, String(result.url ?? ''), {
             workspaceId: String(result.workspace ?? '') || undefined,
             tags: String(result.tags ?? '') || undefined,
             onProgress,
+            announceSummary: false,
           });
           activeProgress = undefined;
-          ctx.ui.notice(text('batchDone', { ok, total: batchUrls.length }), {
+          const doneSummary =
+            text('batchDone', { ok, total: batchUrls.length }) + (failed ? text('batchFailedPart', { count: failed }) : '');
+          ctx.ui.notice(doneSummary, {
             type: failed ? 'warning' : 'success',
             timeout: 6000,
             id: toastId,
           });
-          if (failed) ctx.ui.notice(text('failed', { message: `${failed} of ${batchUrls.length} URLs failed — see earlier notices` }), { type: 'error', timeout: 8000 });
         } catch (err) {
           activeProgress = undefined;
           const message = err instanceof Error ? err.message : String(err);
@@ -220,8 +233,18 @@ export default class WebClipper {
     });
 
     ctx.ui.command('clip-batch', 'Web clipper: clip every URL in the clipboard', async () => {
-      const text = await navigator.clipboard.readText().catch(() => '');
-      await clipBatch(host, text);
+      const clipboard = await navigator.clipboard.readText().catch(() => '');
+      const toastId = 'clip-batch-progress';
+      const onProgress = trackProgress(toastId);
+      try {
+        const { ok, failed } = await clipBatch(host, clipboard, { onProgress, announceSummary: false });
+        const total = ok + failed;
+        if (!total) return; // clipBatch already warned about the empty clipboard
+        const summary = text('batchDone', { ok, total }) + (failed ? text('batchFailedPart', { count: failed }) : '');
+        ctx.ui.notice(summary, { type: failed ? 'warning' : 'success', timeout: 6000, id: toastId });
+      } finally {
+        activeProgress = undefined;
+      }
     });
 
     ctx.ui.ribbon('clip', 'Web clipper', async () => {

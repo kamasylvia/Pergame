@@ -3109,7 +3109,7 @@ async function clip(host, input, overrides = {}) {
   return { type: kind, title: name, noteId: note.id, images: parsed.images ?? 0 };
 }
 async function clipBatch(host, text, overrides = {}) {
-  const delimiter = await host.ctx.setting(SETTINGS.batchDelimiter) || "newline";
+  const delimiter = await host.ctx.setting(SETTINGS.batchDelimiter) || "auto";
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
     host.notify(host.text("clipboardEmpty"), { type: "warning" });
@@ -3117,7 +3117,12 @@ async function clipBatch(host, text, overrides = {}) {
   }
   let ok = 0;
   let failed = 0;
-  for (const url of urls) {
+  for (const [index, url] of urls.entries()) {
+    overrides.onProgress?.({
+      percent: Math.round(index / urls.length * 100),
+      stage: "batch",
+      label: host.text("batchItem", { i: index + 1, total: urls.length, url: shortUrl(url) })
+    });
     try {
       await clip(host, url, overrides);
       ok += 1;
@@ -3127,9 +3132,15 @@ async function clipBatch(host, text, overrides = {}) {
       host.notify(host.text("clipFailed", { url, reason }), { type: "error", timeout: 6000 });
     }
   }
-  const summary = host.text("batchDone", { ok, total: urls.length }) + (failed ? host.text("batchFailedPart", { count: failed }) : "");
-  host.notify(summary, { type: failed ? "warning" : "success" });
+  if (overrides.announceSummary ?? true) {
+    const summary = host.text("batchDone", { ok, total: urls.length }) + (failed ? host.text("batchFailedPart", { count: failed }) : "");
+    host.notify(summary, { type: failed ? "warning" : "success" });
+  }
   return { ok, failed };
+}
+function shortUrl(url) {
+  const bare = url.replace(/^https?:\/\//, "");
+  return bare.length > 60 ? `${bare.slice(0, 57)}…` : bare;
 }
 
 // src/main.ts
@@ -3139,6 +3150,7 @@ var TEXTS = {
     failed: "剪藏失败：{message}",
     clipFailed: "剪藏失败：{url} — {reason}",
     batchDone: "批量剪藏完成：{ok}/{total}",
+    batchItem: "正在剪藏 {i}/{total}：{url}",
     batchFailedPart: "(失败 {count})",
     clipboardEmpty: "剪贴板中没有链接"
   },
@@ -3147,6 +3159,7 @@ var TEXTS = {
     failed: "剪藏失敗：{message}",
     clipFailed: "剪藏失敗：{url} — {reason}",
     batchDone: "批次剪藏完成：{ok}/{total}",
+    batchItem: "正在剪藏 {i}/{total}：{url}",
     batchFailedPart: "(失敗 {count})",
     clipboardEmpty: "剪貼簿中沒有連結"
   },
@@ -3155,6 +3168,7 @@ var TEXTS = {
     failed: "Clip failed: {message}",
     clipFailed: "Clip failed: {url} — {reason}",
     batchDone: "Batch clip finished: {ok}/{total}",
+    batchItem: "Clipping {i}/{total}: {url}",
     batchFailedPart: " ({count} failed)",
     clipboardEmpty: "No link found in the clipboard"
   }
@@ -3210,6 +3224,18 @@ class WebClipper {
     };
     this.host = host;
     this.ctxRef = ctx;
+    const trackProgress = (toastId) => {
+      let lastLabel = "";
+      const onProgress = (p) => {
+        const label = p.label ?? p.stage;
+        if (label !== lastLabel) {
+          lastLabel = label;
+          ctx.ui.notice(label, { timeout: 300000, id: toastId });
+        }
+      };
+      activeProgress = onProgress;
+      return onProgress;
+    };
     const askAndClip = async (initialUrl) => {
       const saved = await ctx.settings.get(SETTINGS.workspaceId);
       loadWorkspaces().then((choices) => ctx.ui.patchModalChoices("workspace", choices)).catch(() => {
@@ -3230,30 +3256,22 @@ class WebClipper {
         return;
       const batchUrls = splitBatch(String(result.url ?? ""), String(await ctx.settings.get(SETTINGS.batchDelimiter) || "auto"));
       const toastId = "clip-progress";
-      let lastLabel = "";
-      const onProgress = (p) => {
-        const label = p.label ?? p.stage;
-        if (label !== lastLabel) {
-          lastLabel = label;
-          ctx.ui.notice(label, { timeout: 300000, id: toastId });
-        }
-      };
-      activeProgress = onProgress;
+      const onProgress = trackProgress(toastId);
       if (batchUrls.length > 1) {
         try {
           const { ok, failed } = await clipBatch(host, String(result.url ?? ""), {
             workspaceId: String(result.workspace ?? "") || undefined,
             tags: String(result.tags ?? "") || undefined,
-            onProgress
+            onProgress,
+            announceSummary: false
           });
           activeProgress = undefined;
-          ctx.ui.notice(text("batchDone", { ok, total: batchUrls.length }), {
+          const doneSummary = text("batchDone", { ok, total: batchUrls.length }) + (failed ? text("batchFailedPart", { count: failed }) : "");
+          ctx.ui.notice(doneSummary, {
             type: failed ? "warning" : "success",
             timeout: 6000,
             id: toastId
           });
-          if (failed)
-            ctx.ui.notice(text("failed", { message: `${failed} of ${batchUrls.length} URLs failed — see earlier notices` }), { type: "error", timeout: 8000 });
         } catch (err) {
           activeProgress = undefined;
           const message = err instanceof Error ? err.message : String(err);
@@ -3288,8 +3306,19 @@ class WebClipper {
       await askAndClip(clipboard.trim());
     });
     ctx.ui.command("clip-batch", "Web clipper: clip every URL in the clipboard", async () => {
-      const text2 = await navigator.clipboard.readText().catch(() => "");
-      await clipBatch(host, text2);
+      const clipboard = await navigator.clipboard.readText().catch(() => "");
+      const toastId = "clip-batch-progress";
+      const onProgress = trackProgress(toastId);
+      try {
+        const { ok, failed } = await clipBatch(host, clipboard, { onProgress, announceSummary: false });
+        const total = ok + failed;
+        if (!total)
+          return;
+        const summary = text("batchDone", { ok, total }) + (failed ? text("batchFailedPart", { count: failed }) : "");
+        ctx.ui.notice(summary, { type: failed ? "warning" : "success", timeout: 6000, id: toastId });
+      } finally {
+        activeProgress = undefined;
+      }
     });
     ctx.ui.ribbon("clip", "Web clipper", async () => {
       await askAndClip("");

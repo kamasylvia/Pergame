@@ -213,9 +213,15 @@ export async function clip(
 export async function clipBatch(
   host: ClipHost,
   text: string,
-  overrides: { workspaceId?: string; tags?: string } = {},
+  overrides: {
+    workspaceId?: string;
+    tags?: string;
+    onProgress?: (p: { percent: number; stage: string; label?: string }) => void;
+    /** False when the caller announces completion itself (dialog batch reuses the progress toast). */
+    announceSummary?: boolean;
+  } = {},
 ): Promise<{ ok: number; failed: number }> {
-  const delimiter = (await host.ctx.setting<string>(SETTINGS.batchDelimiter)) || 'newline';
+  const delimiter = (await host.ctx.setting<string>(SETTINGS.batchDelimiter)) || 'auto';
   const urls = splitBatch(text, delimiter);
   if (!urls.length) {
     host.notify(host.text('clipboardEmpty'), { type: 'warning' });
@@ -223,7 +229,14 @@ export async function clipBatch(
   }
   let ok = 0;
   let failed = 0;
-  for (const url of urls) {
+  for (const [index, url] of urls.entries()) {
+    // Proxy-path clips emit no render progress of their own; without this
+    // tick a batch of plain pages runs minutes in total silence.
+    overrides.onProgress?.({
+      percent: Math.round((index / urls.length) * 100),
+      stage: 'batch',
+      label: host.text('batchItem', { i: index + 1, total: urls.length, url: shortUrl(url) }),
+    });
     try {
       await clip(host, url, overrides);
       ok += 1;
@@ -233,7 +246,15 @@ export async function clipBatch(
       host.notify(host.text('clipFailed', { url, reason }), { type: 'error', timeout: 6000 });
     }
   }
-  const summary = host.text('batchDone', { ok, total: urls.length }) + (failed ? host.text('batchFailedPart', { count: failed }) : '');
-  host.notify(summary, { type: failed ? 'warning' : 'success' });
+  if (overrides.announceSummary ?? true) {
+    const summary = host.text('batchDone', { ok, total: urls.length }) + (failed ? host.text('batchFailedPart', { count: failed }) : '');
+    host.notify(summary, { type: failed ? 'warning' : 'success' });
+  }
   return { ok, failed };
+}
+
+/** Toast-sized URL: host plus a trimmed path, so the batch tick fits one line. */
+function shortUrl(url: string): string {
+  const bare = url.replace(/^https?:\/\//, '');
+  return bare.length > 60 ? `${bare.slice(0, 57)}…` : bare;
 }
