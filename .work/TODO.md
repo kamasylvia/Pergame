@@ -2,9 +2,13 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 节点名长度校验补齐(后端 400 + 前端 maxlength,2026-11-23)
+
+- [x] **超长名 500 改 400 + 前端改名 50 上限(0.8.5 遗留,用户指令"修")**:后端 `NodeInput::validate_lengths`(name≤50/description≤250/tags≤250,按字符数)挂 POST/PUT 两入口,超限报 400 `Key: 'Node.Name' Error: ... 'max' tag`(对齐 Go `binding:"required,max=50"` 族报文,不再是 driver 500);上传文件名早已截 50,故仅此一处缺口,无 PATCH 旁路。前端 8 处节点名 input 加 `maxlength="50"`(编辑器标题/新建分类/元数据/分类编辑/资源改名/流程图/团队设置/admin 文档)+ 3 处 description `maxlength="250"` + admin tags 明文框 `maxlength="250"`;AppTagInput 两处未动(组件内逻辑,后端 400 兜底)。验证:`cargo test` 新单测(含 50/51 边界 + 多字节计数)绿 + clippy/rustfmt 干净 + eslint 8 文件过 + 活后端 POST-51/PUT-51/PUT-desc251 均为 HTTP 400 明文、50 字边界 200 建功;dev 后端已重启生效。测试号/节点已清。注意:库里有个非本次建的 `tmpv` 号,未动。
+
 ## 超长标题剪藏失败修复(web-clipper 0.8.5,2026-11-23)
 
-- [x] **微信文章剪藏不下来(用户报,思源 readitlater 可剪)**:`mp.weixin.qq.com/s/2GrO4J49SaedhN3ekimt0Q`(Day 17 频域分离,标题 51 字)。排查链:直抓 200/3.8MB 有正文 → 后端 proxy 同样 200 全文 → 真 `parseWebsite` 跑出标题+3156 字 → 全链 harness(真 `clip()` + 真 proxy/upload/建笔记,linkedom 垫 DOMParser)复现 `nodes POST: value too long for type character varying(50)`。根因:插件笔记名截 `slice(0, 60)`,DB `nodes.name VARCHAR(50)`(Go/Rust 两 schema 一致,文件夹早已按 50 截,唯笔记名漏网),51–60 字标题必死在 INSERT(后端报 500 Internal error,用户侧只见剪藏失败)。修 = 一行 `slice(0, 50)` + ceiling 注释;同 URL 全链复测绿(3 图附件入库,标题截 50 字)。测试号/笔记/附件已清(孤儿字节归零)。遗留:后端超长名报 500 应为 400(未动);前端改名无 50 上限,同坑。
+- [x] **微信文章剪藏不下来(用户报,思源 readitlater 可剪)**:`mp.weixin.qq.com/s/2GrO4J49SaedhN3ekimt0Q`(Day 17 频域分离,标题 51 字)。排查链:直抓 200/3.8MB 有正文 → 后端 proxy 同样 200 全文 → 真 `parseWebsite` 跑出标题+3156 字 → 全链 harness(真 `clip()` + 真 proxy/upload/建笔记,linkedom 垫 DOMParser)复现 `nodes POST: value too long for type character varying(50)`。根因:插件笔记名截 `slice(0, 60)`,DB `nodes.name VARCHAR(50)`(Go/Rust 两 schema 一致,文件夹早已按 50 截,唯笔记名漏网),51–60 字标题必死在 INSERT(后端报 500 Internal error,用户侧只见剪藏失败)。修 = 一行 `slice(0, 50)` + ceiling 注释;同 URL 全链复测绿(3 图附件入库,标题截 50 字)。测试号/笔记/附件已清(孤儿字节归零)。遗留已消(见上条:后端 400 + 前端 maxlength)。
 
 ## 批量剪藏进度与提示修复(web-clipper 0.8.4,2026-11-23)
 
