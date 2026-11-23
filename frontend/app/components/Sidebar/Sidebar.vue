@@ -47,12 +47,14 @@
       <CollapseItem v-for="item in navigationItems(sidebarItemsPrefs)" :key="item.id" :item="item" :root="true" />
       <hr style="width: 100%; margin: 5px 0" />
 
-      <template v-if="tree.length">
-        <CollapseItem v-for="item in tree" :key="item.id" :item="item" :root="true" />
-      </template>
-      <template v-else>
-        <SidebarSkeleton :is-loading="isLoading" />
-      </template>
+      <div ref="treeRoot">
+        <template v-if="tree.length">
+          <CollapseItem v-for="item in tree" :key="item.id" :item="item" :root="true" />
+        </template>
+        <template v-else>
+          <SidebarSkeleton :is-loading="isLoading" />
+        </template>
+      </div>
     </div>
   </Resizable>
 </template>
@@ -80,7 +82,8 @@ const modals = useModal();
 
 const viewDock = preferences.get('view_dock');
 const compactMode = preferences.get('compactMode');
-const sidebarItemsPrefs = preferences.get('sidebarItems');
+const route = useRoute();
+const treeRoot = ref<HTMLElement | null>(null);
 
 const filter = ref<string>('');
 
@@ -101,6 +104,45 @@ const isLoading = computed(() => nodesStore.isFetching);
 const tree = computed(() => {
   if (!filter.value.trim()) return filtered.value;
   return filterTreeByLabel(filtered.value, filter.value);
+});
+
+/**
+ * Reveal the opened note in the tree: notes are often opened outside the
+ * tree (search, links, tabs), leaving it collapsed elsewhere. Expands the
+ * ancestor chain and scrolls the active row into view. Runs on route change
+ * and retries as the tree populates (initial load fetches async); skips
+ * silently when the node is not in the current workspace view.
+ */
+const routeNodeId = computed((): string | null => {
+  const id = route.params.id;
+  if (typeof id !== 'string') return null;
+  if (route.path.startsWith('/dashboard/docs/') || route.path.startsWith('/dashboard/categories/')) return id;
+  return null;
+});
+let revealedFor: string | null = null;
+const revealInTree = async (nodeId: string | null) => {
+  if (!nodeId || nodeId === revealedFor) return;
+  // getAncestors returns [self … root]; the node itself needs no expansion.
+  const chain = nodesTree.getAncestors(nodeId);
+  if (!chain.length) return;
+  for (const item of chain.slice(1)) nodesTree.setExpanded(item.id, true);
+  await nextTick();
+  // Row links carry router-link-exact-active; the categories edit page only
+  // prefix-matches its row, hence the non-exact fallback (.nav icon-links
+  // excluded in both). block:'nearest' is a no-op when already visible.
+  const row =
+    treeRoot.value?.querySelector('.router-link-exact-active:not(.nav)') ??
+    treeRoot.value?.querySelector('.router-link-active:not(.nav)');
+  if (!row) return;
+  row.scrollIntoView({ block: 'nearest' });
+  revealedFor = nodeId;
+};
+watch(routeNodeId, id => {
+  revealedFor = null;
+  void revealInTree(id);
+}, { immediate: true });
+watch(() => tree.value.length, () => {
+  void revealInTree(routeNodeId.value);
 });
 
 // Actions
