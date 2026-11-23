@@ -2,6 +2,10 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 文件树打开定位(2026-11-23 新功能)
+
+- [x] **开笔记自动展开定位(用户需求:非树打开时树还折叠着)**:`Sidebar.vue` 监听 docs/categories 路由 id → `getAncestors` 展开祖先链(`setExpanded`,持久化复用) → `nextTick` 后把 exact-active 行 `scrollIntoView({block:'nearest'})`(已在视口则不动);categories 编辑页用非 exact 回退(`.nav` 图标链排除)。`revealedFor` 守卫防后台刷新乱滚;树异步加载期由 tree watcher 重试;跨 workspace/过滤态无行则静默跳过(不切 workspace)。验证:隔离浏览器登录临时号(工作区>文件夹>笔记三层)——页内折叠文件夹后直链开笔记,断言祖先展开 + 唯一定位行 exact-active + in-viewport,REVEAL OK;eslint 过。测试号/节点已清。
+
 ## 单剪阶段进度修复(web-clipper 0.8.6,2026-11-23)
 
 - [x] **单剪过程零提示(用户报:剪藏成功了,但过程中依然没提示,只有成功时有)**:0.8.4 只修了批量 tick;单剪 proxy 路径 `clip()` 的 `onProgress` 参数从未被调用(死参,进度只走知乎 render),微信文章 10 秒静默。修 = `clip()` 对 URL 加两阶段 tick(解析前 `正在抓取：短链接` 5% → 建笔记前 `正在保存…` 80%,纯文本秒完不打扰),TEXTS `stageFetching/stageSaving` ×3 语言;批量内单剪 tick 与 i/n 逐条交错,同 toast 原地滚。harness 加场景 D(单剪三 toast 顺序)后四场景 18 断言全绿;重建产物 + 同批同步 plugin-packs;0.8.6 已装 live env(registry+entry 包双验,临时提权号删,ADMIN_ACCOUNTS 恢复 laniakea 单列)。用户侧硬刷重剪即见过程提示。
