@@ -1,9 +1,10 @@
 //! MCP tool surface (spec `.work/features/mcp-server.md` § 工具集).
 //!
-//! Seven tools, all acting as the token owner through the normal permission
+//! Nine tools, all acting as the token owner through the normal permission
 //! layer (`auth::guard`) — MCP is a second *entrance*, never a second policy:
 //! - reads: `search_notes`, `list_children`, `read_note`, `read_resource`
-//! - writes: `create_note`, `update_note`, `move_node`, `delete_node`
+//! - writes: `create_note`, `create_folder`, `update_note`, `move_node`,
+//!   `delete_node`, `upload_resource`
 //!
 //! Writes reuse the REST semantics verbatim: creation validates the parent
 //! with an Update check (falling back to the root), `delete_node` soft-deletes
@@ -25,8 +26,7 @@ use crate::repo::nodes as node_repo;
 
 use super::{McpActor, actor_of, audit, locked_error, mcp_error};
 
-#[derive(Clone)]
-/// MCP tool server (rmcp `ServerHandler`): 7 tools over the REST permission layer.
+/// MCP tool server (rmcp `ServerHandler`): 9 tools over the REST permission layer.
 pub struct PergameMcp {
     state: AppState,
 }
@@ -100,6 +100,29 @@ pub struct DeleteNodeArgs {
 pub struct ReadResourceArgs {
     /// Resource (uploaded file) id.
     pub id: String,
+}
+
+#[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `create_folder`.
+pub struct CreateFolderArgs {
+    /// Parent folder id. Omit (or an unwritable id) to create at the top level.
+    pub folder_id: Option<String>,
+    /// Folder name.
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
+/// Arguments for `upload_resource`.
+pub struct UploadResourceArgs {
+    /// Parent folder id. Omit (or an unwritable id) to upload at the top level.
+    pub folder_id: Option<String>,
+    /// File name with extension (drives text/code detection, same list as
+    /// `read_resource`).
+    pub filename: String,
+    /// File content as UTF-8 text (no MCP-side size cap; quota gates apply).
+    pub content: String,
+    /// MIME type hint (default `application/octet-stream`).
+    pub content_type: Option<String>,
 }
 
 // ---------------------------------------------------------------- helpers
@@ -456,6 +479,72 @@ impl PergameMcp {
             "created_timestamp": now,
         }))
     }
+    #[tool(
+        description = "Create a folder (category) inside a folder; folder_id may be omitted for the top level."
+    )]
+    async fn create_folder(
+        &self,
+        Parameters(args): Parameters<CreateFolderArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let (mcp, actor) = self.actor(&ctx)?;
+        self.ensure_writable().await?;
+
+        let name = args.name.trim().to_string();
+        if name.is_empty() {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "name must not be empty",
+                None,
+            ));
+        }
+        let parent = match args.folder_id.as_deref() {
+            Some(raw) if !raw.trim().is_empty() => {
+                self.safe_parent(&actor, Some(parse_id(raw)?)).await
+            }
+            _ => None,
+        };
+
+        let id = crate::types::new_id();
+        let now = node_repo::now_ms();
+        let write = node_repo::NodeWrite {
+            parent_id: parent,
+            name: name.clone(),
+            description: None,
+            tags: None,
+            role: 2, // folder
+            color: None,
+            icon: None,
+            thumbnail: None,
+            theme: None,
+            accessibility: None,
+            access: 0,
+            display: None,
+            node_order: None,
+            content: None,
+            content_compiled: None,
+            size: None,
+            metadata: None,
+        };
+        node_repo::insert(&self.state.db, id, actor.user_id, &write, now)
+            .await
+            .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
+        audit(
+            &self.state.db,
+            Some(actor.user_id),
+            "mcp.tool.create_folder",
+            &format!("created folder {id} (token {})", mcp.token_id),
+        )
+        .await;
+
+        text(&serde_json::json!({
+            "id": id,
+            "name": name,
+            "parent_id": parent,
+            "created_timestamp": now,
+        }))
+    }
+
 
     #[tool(
         description = "Update a document's markdown content and/or title. Omitted fields stay unchanged. Requires write access."
@@ -599,6 +688,139 @@ impl PergameMcp {
     }
 
     #[tool(
+        description = "Upload a UTF-8 text/code file as a resource (role-4 node) under a folder. The filename extension must be a known code/text type (same list as read_resource); binaries are refused. Returns the resource id and its markdown embed URL."
+    )]
+    async fn upload_resource(
+        &self,
+        Parameters(args): Parameters<UploadResourceArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let (mcp, actor) = self.actor(&ctx)?;
+        self.ensure_writable().await?;
+
+        let filename = args.filename.trim().to_string();
+        if filename.is_empty() || filename.len() > 255 {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "filename must be 1-255 characters",
+                None,
+            ));
+        }
+        let mime = args
+            .content_type
+            .unwrap_or_else(|| "application/octet-stream".to_string());
+        if !crate::utils::is_text_resource(&filename, &mime) {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!(
+                    "{filename} is not a text/code file (known extension or text/* mime required)"
+                ),
+                None,
+            ));
+        }
+        let bytes = args.content.as_bytes();
+        let storage = self.state.storage.clone().ok_or_else(|| {
+            McpError::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                "storage not configured",
+                None,
+            )
+        })?;
+        // Quota gates mirror POST /api/resources.
+        let quota = crate::quota::for_user(&self.state.db, actor.user_id, actor.role).await;
+        if let Some(max_file) = quota.max_file
+            && bytes.len() as u64 > max_file
+        {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "file too large or failed to get file",
+                None,
+            ));
+        }
+        if let Some(max_total) = quota.max_total {
+            let total = node_repo::uploads_size(&self.state.db, actor.user_id)
+                .await
+                .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
+            if total as u64 + bytes.len() as u64 > max_total {
+                return Err(McpError::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "total size of uploads exceeds the limit",
+                    None,
+                ));
+            }
+        }
+
+        let parent = match args.folder_id.as_deref() {
+            Some(raw) if !raw.trim().is_empty() => {
+                self.safe_parent(&actor, Some(parse_id(raw)?)).await
+            }
+            _ => None,
+        };
+
+        // Node + blob layout mirrors POST /api/resources (code files never
+        // take the imgbed branch, so no remote_url handling here).
+        let id = crate::types::new_id();
+        let ext: String = filename
+            .rsplit_once('.')
+            .map(|(_, e)| format!(".{e}"))
+            .unwrap_or_default();
+        let transformed_path = format!("{id}{ext}");
+        let sha = crate::blobs::acquire(&self.state.db, &storage, bytes)
+            .await
+            .map_err(mcp_error)?;
+        let metadata = serde_json::json!({
+            "filetype": mime,
+            "original_path": filename,
+            "transformed_path": transformed_path,
+            "content_sha256": sha,
+        });
+        let mut name = filename.clone();
+        if name.len() > 50 {
+            // Byte-boundary parity with REST, then trim to a char edge.
+            name = name.chars().take(50).collect();
+        }
+        let write = node_repo::NodeWrite {
+            parent_id: parent,
+            name: name.clone(),
+            description: None,
+            tags: None,
+            role: 4, // resource
+            color: None,
+            icon: None,
+            thumbnail: None,
+            theme: None,
+            accessibility: Some(1),
+            access: 0,
+            display: None,
+            node_order: None,
+            content: Some(filename.clone()),
+            content_compiled: Some(transformed_path.clone()),
+            size: Some(bytes.len() as i64),
+            metadata: Some(metadata),
+        };
+        let now = node_repo::now_ms();
+        node_repo::insert(&self.state.db, id, actor.user_id, &write, now)
+            .await
+            .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
+        audit(
+            &self.state.db,
+            Some(actor.user_id),
+            "mcp.tool.upload_resource",
+            &format!("uploaded resource {id} ({filename}, token {})", mcp.token_id),
+        )
+        .await;
+
+        text(&serde_json::json!({
+            "id": id,
+            "name": name,
+            "filename": filename,
+            "parent_id": parent,
+            "size": bytes.len(),
+            "embed_url": format!("/api/resources/{id}/file/{filename}"),
+        }))
+    }
+
+    #[tool(
         description = "Delete a node and its subtree. This is a soft delete: everything lands in the trash and can be restored."
     )]
     async fn delete_node(
@@ -640,10 +862,10 @@ impl ServerHandler for PergameMcp {
                 env!("CARGO_PKG_VERSION"),
             ))
             .with_instructions(
-                "Pergame notes over MCP. Reads: search_notes, list_children, read_note. \
+                "Pergame notes over MCP. Reads: search_notes, list_children, read_note, read_resource. \
              Writes (resolve to the API token's user under the normal permission rules): \
-             create_note, update_note, move_node, delete_node. Deletion is a soft delete \
-             into the trash."
+             create_note, create_folder, update_note, move_node, delete_node, upload_resource. \
+             Deletion is a soft delete into the trash."
                     .to_string(),
             )
     }

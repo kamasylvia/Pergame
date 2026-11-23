@@ -27,7 +27,7 @@ const isPdfFile = (filetype: string): boolean => filetype.startsWith('applicatio
 
 /** Source-code / text extensions rendered as code blocks when embedded.
  * Backend mirror: `backend-rs/src/utils.rs` (`CODE_EXTS`) — keep in sync. */
-const CODE_EXTS = ['py', 'rs', 'go', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'rb', 'php', 'sh', 'bash', 'zsh', 'fish', 'sql', 'r', 'swift', 'kt', 'scala', 'pl', 'lua', 'toml', 'yaml', 'yml', 'json', 'xml', 'ini', 'md', 'markdown', 'txt', 'csv', 'diff', 'log', 'dockerfile', 'makefile', 'bat', 'ps1', 'vim', 'el'];
+const CODE_EXTS = ['py', 'rs', 'go', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'rb', 'php', 'sh', 'bash', 'zsh', 'fish', 'sql', 'r', 'swift', 'kt', 'scala', 'pl', 'lua', 'toml', 'yaml', 'yml', 'json', 'xml', 'xsd', 'ini', 'md', 'markdown', 'txt', 'csv', 'diff', 'log', 'dockerfile', 'makefile', 'bat', 'ps1', 'vim', 'el'];
 
 /** Lowercased extension of a filename (without the dot), '' when none. */
 const fileExt = (filename: string): string => {
@@ -48,7 +48,7 @@ const codeLanguage = (filename: string): string => {
     ts: 'typescript', tsx: 'typescript', jsx: 'javascript', java: 'java', cs: 'csharp',
     rb: 'ruby', php: 'php', sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash', bat: 'batch',
     ps1: 'powershell', kt: 'kotlin', swift: 'swift', scala: 'scala', pl: 'perl', r: 'r',
-    md: 'markdown', markdown: 'markdown', yml: 'yaml', toml: 'toml', ini: 'ini',
+    md: 'markdown', markdown: 'markdown', yml: 'yaml', toml: 'toml', ini: 'ini', xsd: 'xml',
     dockerfile: 'dockerfile', makefile: 'makefile', h: 'c', hpp: 'cpp', cpp: 'cpp',
   };
   return map[ext] || ext;

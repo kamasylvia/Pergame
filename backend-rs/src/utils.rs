@@ -252,6 +252,7 @@ pub const CODE_EXTS: &[&str] = &[
     "yml",
     "json",
     "xml",
+    "xsd",
     "ini",
     "md",
     "markdown",
