@@ -160,7 +160,15 @@ export async function clip(
   if (!trimmed) throw new Error('nothing to clip');
 
   const type = isUrl(trimmed) ? detectType(trimmed) : 'text';
+  // Text snippets finish instantly; URL clips fetch + download images for
+  // seconds with no render progress of their own, so announce the stages.
+  if (isUrl(trimmed)) {
+    overrides.onProgress?.({ percent: 5, stage: 'fetch', label: host.text('stageFetching', { url: shortUrl(trimmed) }) });
+  }
   const parsed = isUrl(trimmed) ? await parseByType(trimmed, type, ctx) : parseText(trimmed);
+  if (isUrl(trimmed)) {
+    overrides.onProgress?.({ percent: 80, stage: 'save', label: host.text('stageSaving') });
+  }
 
   // The settings key follows the *detected* type, so each content kind can
   // carry its own slug, title template and body template.

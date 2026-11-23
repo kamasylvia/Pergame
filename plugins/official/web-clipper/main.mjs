@@ -3078,7 +3078,13 @@ async function clip(host, input, overrides = {}) {
   if (!trimmed)
     throw new Error("nothing to clip");
   const type = isUrl(trimmed) ? detectType(trimmed) : "text";
+  if (isUrl(trimmed)) {
+    overrides.onProgress?.({ percent: 5, stage: "fetch", label: host.text("stageFetching", { url: shortUrl(trimmed) }) });
+  }
   const parsed = isUrl(trimmed) ? await parseByType(trimmed, type, ctx) : parseText(trimmed);
+  if (isUrl(trimmed)) {
+    overrides.onProgress?.({ percent: 80, stage: "save", label: host.text("stageSaving") });
+  }
   const kind = parsed.type;
   const slug = await ctx.setting(`${kind}${SETTINGS.slugSuffix}`) || DEFAULT_SLUGS[kind] || "";
   const titleTemplate = await ctx.setting(`${kind}${SETTINGS.titleSuffix}`) || DEFAULT_TITLES[kind] || "{{ title }}";
@@ -3151,6 +3157,8 @@ var TEXTS = {
     clipFailed: "剪藏失败：{url} — {reason}",
     batchDone: "批量剪藏完成：{ok}/{total}",
     batchItem: "正在剪藏 {i}/{total}：{url}",
+    stageFetching: "正在抓取：{url}",
+    stageSaving: "正在保存…",
     batchFailedPart: "(失败 {count})",
     clipboardEmpty: "剪贴板中没有链接"
   },
@@ -3160,6 +3168,8 @@ var TEXTS = {
     clipFailed: "剪藏失敗：{url} — {reason}",
     batchDone: "批次剪藏完成：{ok}/{total}",
     batchItem: "正在剪藏 {i}/{total}：{url}",
+    stageFetching: "正在抓取：{url}",
+    stageSaving: "正在儲存…",
     batchFailedPart: "(失敗 {count})",
     clipboardEmpty: "剪貼簿中沒有連結"
   },
@@ -3169,6 +3179,8 @@ var TEXTS = {
     clipFailed: "Clip failed: {url} — {reason}",
     batchDone: "Batch clip finished: {ok}/{total}",
     batchItem: "Clipping {i}/{total}: {url}",
+    stageFetching: "Fetching: {url}",
+    stageSaving: "Saving…",
     batchFailedPart: " ({count} failed)",
     clipboardEmpty: "No link found in the clipboard"
   }
