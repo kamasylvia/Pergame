@@ -153,7 +153,7 @@ pub async fn get_public_node(
     })))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 /// POST/PUT /nodes body (create or full replace).
 pub struct NodeInput {
     #[serde(default)]
@@ -193,6 +193,25 @@ pub struct NodeInput {
 }
 
 impl NodeInput {
+    /// VARCHAR ceilings from `migrations/0001_init.sql`, mirroring the Go
+    /// model's `binding:"required,max=50"` / `omitempty,max=250` tags.
+    /// Without this the INSERT/UPDATE dies in the driver and surfaces as an
+    /// opaque 500 (seen live: a 51-char clip title).
+    fn validate_lengths(&self) -> Result<(), ApiError> {
+        for (field, value, max) in [
+            ("Name", Some(self.name.as_str()), 50),
+            ("Description", self.description.as_deref(), 250),
+            ("Tags", self.tags.as_deref(), 250),
+        ] {
+            if value.map(|v| v.chars().count()).unwrap_or(0) > max {
+                return Err(ApiError::BadRequest(format!(
+                    "Key: 'Node.{field}' Error: field validation for '{field}' failed on the 'max' tag"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn into_write(self) -> node_repo::NodeWrite {
         node_repo::NodeWrite {
             parent_id: self.parent_id,
@@ -265,6 +284,7 @@ pub async fn create_node(
             "Key: 'Node.Name' Error: field validation failed".into(),
         ));
     }
+    input.validate_lengths()?;
 
     let mut safe_parent = input.parent_id;
     if let Some(pid) = safe_parent {
@@ -306,9 +326,9 @@ pub async fn update_node(
     Path(node_id): Path<String>,
     Json(input): Json<NodeInput>,
 ) -> Result<impl IntoResponse, ApiError> {
+    input.validate_lengths()?;
     let actor: Actor = auth.into();
     let id = resolve_id(&node_id)?;
-
     let db_node = node_repo::get_by_id(&state.db, id)
         .await
         .map_err(ApiError::from)?
@@ -407,6 +427,52 @@ mod tests {
             Some(5)
         );
         assert_eq!(node_size(3, None, &None, &None), Some(0));
+    }
+
+    #[test]
+    fn length_ceilings_match_varchar() {
+        let ok = NodeInput {
+            name: "n".repeat(50),
+            description: Some("d".repeat(250)),
+            tags: Some("t".repeat(250)),
+            ..Default::default()
+        };
+        assert!(ok.validate_lengths().is_ok());
+        for (input, field) in [
+            (
+                NodeInput {
+                    name: "n".repeat(51),
+                    ..Default::default()
+                },
+                "Node.Name",
+            ),
+            (
+                NodeInput {
+                    name: "n".into(),
+                    description: Some("d".repeat(251)),
+                    ..Default::default()
+                },
+                "Node.Description",
+            ),
+            (
+                NodeInput {
+                    name: "n".into(),
+                    tags: Some("t".repeat(251)),
+                    ..Default::default()
+                },
+                "Node.Tags",
+            ),
+        ] {
+            let err = input.validate_lengths().unwrap_err().to_string();
+            assert!(err.contains(field), "missing {field} in: {err}");
+            assert!(err.contains("'max'"), "missing 'max' in: {err}");
+        }
+        // Multi-byte chars count as one (postgres varchar semantics).
+        let wide = NodeInput {
+            name: "密".repeat(50),
+            ..Default::default()
+        };
+        assert!(wide.validate_lengths().is_ok());
     }
 
     #[test]

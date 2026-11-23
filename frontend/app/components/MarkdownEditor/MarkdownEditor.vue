@@ -18,12 +18,14 @@
             :placeholder="t('components.editor.placeholder.title')"
             class="meta-title"
             required
+            maxlength="50"
             @input="autoSaveConditional"
           />
           <input
             v-model="document.description"
             :placeholder="t('components.editor.placeholder.description')"
             class="meta-description"
+            maxlength="250"
             @input="autoSaveConditional"
           />
         </div>

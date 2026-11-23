@@ -19,7 +19,7 @@
         </div>
       </div>
       <label>{{ t('common.labels.name') }}</label>
-      <input id="name" v-model="resource.name" type="text" required />
+      <input id="name" v-model="resource.name" type="text" required maxlength="50" />
       <label style="display: flex; align-items: center">{{ t('common.labels.parent') }} <AppHint text="To organize your uploads" /></label>
       <AppSelect v-model="resource.parent_id" nullable :items="nodesTree" placeholder="Select a resource parent" />
       <label>{{ t('common.labels.type') }}</label>

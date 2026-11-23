@@ -2,7 +2,7 @@
   <div class="drawio-editor-modal">
     <Teleport to="#navbar-title">{{ t('cdn.diagram') }}</Teleport>
     <aside>
-      <input v-model="node.name" type="text" :placeholder="t('common.labels.name')" />
+      <input v-model="node.name" type="text" maxlength="50" :placeholder="t('common.labels.name')" />
       <Teleport to="#navbar-actions">
         <AppBtnIcon nav icon="save" :tooltip="t('common.actions.save')" @click="requestSaveDiagram" />
       </Teleport>

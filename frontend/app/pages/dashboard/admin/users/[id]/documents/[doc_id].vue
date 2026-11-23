@@ -21,14 +21,14 @@
         </div>
       </div>
       <label for="name">Name</label>
-      <input id="name" v-model="document.name" />
+      <input id="name" v-model="document.name" maxlength="50" />
 
       <label for="description">Description</label>
-      <input id="description" v-model="document.description" />
+      <input id="description" v-model="document.description" maxlength="250" />
       <div class="columns">
         <div class="column">
           <label for="tags">Tags</label>
-          <input id="tags" v-model="document.tags" />
+          <input id="tags" v-model="document.tags" maxlength="250" />
         </div>
         <div class="column">
           <label for="theme">Theme</label>

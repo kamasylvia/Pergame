@@ -8,12 +8,12 @@
       </Teleport>
       <div class="form-row">
         <label>{{ t('common.labels.name') }}</label>
-        <input id="name" v-model="node.name" type="text" required />
+        <input id="name" v-model="node.name" type="text" required maxlength="50" />
       </div>
 
       <div class="form-row">
         <label>{{ t('common.labels.description') }}</label>
-        <input id="description" v-model="node.description" type="text" />
+        <input id="description" v-model="node.description" type="text" maxlength="250" />
       </div>
 
       <div class="form-row">
