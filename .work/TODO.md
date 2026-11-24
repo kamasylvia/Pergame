@@ -5,6 +5,16 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 懒加载消费者迁移 P3a–P3f(2026-11-24)
+
+- [x] **P3a 后端补齐**:neighbors role 过滤断言 + flat/meta/stats/activity/tags/roots?role(随 `a4203431`/`1c658f24` 进仓)。
+- [x] **P3b store 链路**:`ensureAncestors`(面包屑/权限/定位),server prev/next,深链 fetch-on-miss(`c4ede2a5`)。
+- [x] **P3c 搜索面**:palette Quick/Advanced 走 meta,home 聚合 + stats,侧栏过滤改服务端平铺(`498acb4e`)。
+- [x] **P3d 列表页**:docs/分类子树/团队节点走 flat(上限 1000 + `shown/total` 诚实显示),Stats/CDN/卡片/TOC/Footer/详情页 fetch-on-miss(`4ea88911`)。
+- [x] **P3e 选择器**:14 处 `getTreeUpToRole` 改 `fetchFolderTree` 异步骨架(上限 2000/role),CloneTo 后代集 + 服务端防环,编辑器 `#` 联想异步 + 内链 fetch-on-miss 重绘,init 拉服务端 tags(`16e32e25`)。
+- [x] **P3f 翻转**:init 只拉 roots 页,`fetch()` 改 id-only,`seedDirStates`/`recomputeTags` 退役;`refreshDir`/`refreshLoadedDirs` 保写后可见;switcher/团队页/图片选择/权限 scope/删确认计数/reveal 补齐;MCP `list_children` 分页,activity 加 root/created(`83f42100`)。
+- [x] **大库回归(tmpbiglib,1200 文档,已清)**:home 计 1200,启动 0 全量;侧栏展开 + 滚动泵拉齐 12 页(offset 0→1100);docs 页显 `1000/1200`;palette `Zebra` 命中 2。另复用号验过:冷深链、创建即见、删确认计 2、CDN 父列、TOC/footer、团队 insights、MCP 三式(top/parent/limit1)。后端 `cargo test --lib` 160 绿;integration 17 绿,2 失败为 HEAD 既有(trash_lifecycle 计 3vs2、mcp_token 工具表 7vs10,stash 对照确认),另 3 备份类需 `TARGET_TEST_BUCKET=pergame-tgt-test` 才跑(已补跑绿)。
+
 ## 侧栏树虚拟滚动+多选(抄思源 DocTreeController,2026-11-24)
 
 - [x] **虚拟化(用户指令"抄思源的虚拟滚动")**:新 `VirtualTree.vue` 替换树区递归——定高实测行高 + 展开感知 flat rows + 开窗(overscan 8)+ 前后 spacer(思源 `getDocTreeWindow` 同式);滚动 rAF 节流,ResizeObserver 跟视口;行渲染复用 `SidebarItem`(拖拽/菜单/图标全保留),缩进改 flat `paddingLeft`,chevron 样式自带(备注 CollapseItem 同源)。另抄:展开入场 fade(仅 transform/opacity,不碰行高数学;`prefers-reduced-motion` 跳过)+ ctrl/shift 多选(位置键,视觉 `selection-color`,Delete/Backspace 调现成批量删 modal,Esc 清空,跨变更自动剪枝,输入框/编辑器/弹窗内不劫持)。不抄:异步分批(思源按需翻页内核数据,pergame 全量已在内存,无事可做)+ 键盘导航。reveal 联动改 `ensureVisible`(按位滚+nearest 抛光);修 reveal 时序真 bug(导航时 store 清空致单次尝试落空——改有界重试 30×200ms,旧 tree watcher 退役)。验证:隔离浏览器 150 节点——挂载 36 行 spacer 正确、滚底换窗、展开见 34 行 `.vt-enter`、ctrl×2+shift 范围精确+URL 不变、批量删 modal 走取消/确认双路、折叠后直链 reveal 回归绿;eslint 过。附带发现:`.sidebar` 嵌套了两层(Resizable 外壳 + 真滚动容器),测试选择器须取内层。

@@ -228,3 +228,11 @@
 - **`cargo check --lib` 不覆盖 bin**:只 check lib 会漏掉 `main.rs` 的引用错误;改到 state/模块导出时同时 `cargo check --bin pergame-rs`。
 - **`immutable`/长 `max-age` 只对「URL 随内容变」的资源安全**:Pergame 附件 URL 稳定(`/api/resources/:id/file`,重传后 id 不变),`max-age=31536000, immutable` 让浏览器 HTTP cache 在新鲜期内直接回旧字节、连条件请求都不发;前端 SW 失效只清 Cache Storage,救不了底下 `fetch()` 继续命中 HTTP cache,旧字节还会被重新写回 SW 缓存。判据:URL 含内容指纹(sha/版本参数)→ 可 `immutable`;URL 稳定 → `no-cache` + ETag,把省请求的职责交给 SW 缓存层(Cache API 不看 Cache-Control)。思源侧 `immutable` 安全正是因为资产 URL 即文件名,内容变名字变。
 - **拼文件路径前校验字符集,长度检查挡不住穿越**:`blobs/{sha}` 只查 `len()==64`,`../`×21+1 字符恰好 64 长即可构造 `root/blobs/../../…`;DB sourced 字段也不免检(插件/hook 生态在扩写入面)。`bytes().all(is_ascii_hexdigit)` 一行封死。
+
+## 2026-11-24 懒加载 P3 批次
+
+- **节点 PUT 是全量替换,部分字段 curl 必炸行**:`PUT /api/nodes/:id` 缺字段按零值写(实测只传 `parent_id` 把资源洗成 role=0 空名)。程序化改名/挂 parent 必须 GET 全行 → 改 → PUT 回;前端 `nodeStore.update` 一直传全行故无事。
+- **缓存命中判断必须区分「缺失」与「未过期」**:`if (!get(id)?.partial) return cached` 把缺失(undefined)也当命中,深链静默 404 且零网络请求,极难察觉。写成 `const c = get(id); if (c && !c.partial) return c`。
+- **integration 备份类用例要 `TARGET_TEST_BUCKET`**:`backup_zip_contains_links`/`snapshot_*`/`trash_lifecycle` 等无该 env 直接 `NotPresent` 失败;scratch 桶 `pergame-tgt-test` 已存在(非空也可用,断言不依赖空桶)。另 `trash_lifecycle`(3vs2)与 `mcp_token`(工具表 7vs10)在 HEAD 已失败,非回归。
+- **浏览器回归撞 HMR 陈旧先整页重载**:Delete modal 修后仍报旧错,reload 即好。过渡态报错先 reload 再定 bug。
+- **`.sidebar` 嵌套两层,滚动测试须取内层**:`querySelector('.sidebar')` 命中 Resizable 外壳(不可滚);真滚动容器是内层 `ref=scroller` 的 div(已有 TODO 前例)。按 `scrollHeight > clientHeight` 选。
