@@ -4,6 +4,7 @@
 
 pub mod trash;
 pub mod tree;
+pub mod lists;
 
 pub use self::trash::{
     list_trash, purge_subtree, restore_subtree, soft_delete_subtree, subtree_ids, trash_roots,

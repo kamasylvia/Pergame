@@ -2811,6 +2811,64 @@ async fn paged_tree_reads() {
         .collect();
     assert_eq!(chain, vec!["N-deep", "SF", "F1", "W"]);
 
+    // Flat lists: role + subtree scoping with paging.
+    let (status, r) = get(&client, "/nodes/flat?role=3&limit=10").await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(5));
+    let (status, r) = get(
+        &client,
+        &format!("/nodes/flat?role=3&root={f1}&limit=2&offset=2"),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(4));
+    assert_eq!(r.result["rows"].as_array().unwrap().len(), 2);
+    let (status, r) = get(&client, &format!("/nodes/flat?role=2&root={f1}&limit=10")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(1));
+
+    // Stats + activity + tags aggregates.
+    let (status, r) = get(&client, "/nodes/stats").await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["documents"], json!(5));
+    assert_eq!(r.result["folders"], json!(3));
+    let (status, r) = get(&client, &format!("/nodes/stats?root={f1}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(5));
+    let (status, r) = get(&client, "/nodes/activity?limit=7").await;
+    assert_eq!(status, 200);
+    assert!(!r.result.as_array().unwrap().is_empty());
+    let (status, r) = get(&client, "/nodes/tags").await;
+    assert_eq!(status, 200);
+    assert!(r.result.as_array().is_some());
+
+    // Neighbors under the same ordering (pinned N-b anchors the run).
+    let (status, r) = get(&client, &format!("/nodes/{na}/neighbors")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["prev"]["id"], json!(nb));
+    assert_eq!(r.result["next"]["name"], json!("N-c"));
+
+    // Meta substring search (single char included).
+    let (status, r) = get(&client, "/nodes/search/meta?q=N-&role=3&limit=10").await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 5);
+    let (status, r) = get(&client, "/nodes/search/meta?q=F1").await;
+    assert_eq!(status, 200);
+    assert!(
+        r.result
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["id"] == json!(f1))
+    );
+
+    // Role narrowing on tree endpoints.
+    let (status, r) = get(&client, &format!("/nodes/{f1}/children?role=3&limit=10")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(3));
+    let (status, _) = get(&client, &format!("/nodes/{w}/children?role=9")).await;
+    assert_eq!(status, 400);
+
     // Move cycle guard (frontend checks go blind under lazy loading).
     let (status, r) = put_json(
         &client,

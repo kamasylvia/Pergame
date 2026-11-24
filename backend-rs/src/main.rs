@@ -317,7 +317,13 @@ async fn main() {
         .route("/api/nodes/roots", get(routes::nodes::list_roots))
         .route("/api/nodes/{nodeId}/children", get(routes::nodes::list_children))
         .route("/api/nodes/{nodeId}/ancestors", get(routes::nodes::list_ancestors))
+        .route("/api/nodes/{nodeId}/neighbors", get(routes::nodes::list_neighbors))
+        .route("/api/nodes/flat", get(routes::nodes::list_flat))
+        .route("/api/nodes/stats", get(routes::nodes::node_stats))
+        .route("/api/nodes/activity", get(routes::nodes::node_activity))
+        .route("/api/nodes/tags", get(routes::nodes::node_tags))
         .route("/api/nodes/search", get(routes::nodes::search))
+        .route("/api/nodes/search/meta", get(routes::nodes::meta_search))
         .route("/api/nodes/query", post(routes::dql::query))
         // Plugin registry (PS-D): installs are admin-only, everything else is
         // per-user (list/grants/settings + the served module).

@@ -108,6 +108,23 @@ pub fn order_clause(key: TreeSortKey, dir: SortDir) -> &'static str {
     }
 }
 
+/// Same ordering against a live table alias (flat lists join extra CTEs,
+/// so every column is qualified). `alias` must be a static table alias.
+pub fn order_clause_on(key: TreeSortKey, dir: SortDir, alias: &str) -> String {
+    debug_assert!(alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+    let (col, d) = match (key, dir) {
+        (TreeSortKey::Name, SortDir::Asc) => ("name", "ASC"),
+        (TreeSortKey::Name, SortDir::Desc) => ("name", "DESC"),
+        (TreeSortKey::Created, SortDir::Asc) => ("created_timestamp", "ASC"),
+        (TreeSortKey::Created, SortDir::Desc) => ("created_timestamp", "DESC"),
+        (TreeSortKey::Modified, SortDir::Asc) => ("updated_timestamp", "ASC"),
+        (TreeSortKey::Modified, SortDir::Desc) => ("updated_timestamp", "DESC"),
+    };
+    format!(
+        "{alias}.role DESC, COALESCE({alias}.\"order\", 0) ASC, {alias}.{col} {d}, {alias}.id ASC"
+    )
+}
+
 /// Column list mirroring `list_all` (no content columns), qualified per
 /// UNION branch. `$a` is the branch table alias.
 macro_rules! child_cols {
@@ -160,10 +177,12 @@ macro_rules! child_cols {
 /// One page of a directory: canonical children visible to the caller.
 /// Clone positions stay out (served by the small global links set, as
 /// before) so page accounting never mixes the two sources.
+#[allow(clippy::too_many_arguments)]
 pub async fn children_page(
     pool: &PgPool,
     user_id: Uuid,
     parent_id: Uuid,
+    role: Option<i32>,
     offset: i64,
     limit: i64,
     key: TreeSortKey,
@@ -187,6 +206,7 @@ pub async fn children_page(
         kids AS (
             SELECT {} FROM nodes c
             WHERE c.parent_id = $1 AND c.deleted_at IS NULL
+              AND ($5::int IS NULL OR c.role = $5)
               AND (c.user_id = $2
                 OR EXISTS (SELECT 1 FROM permissions p WHERE p.node_id = c.id AND p.user_id = $2 AND p.permission >= 1)
                 OR EXISTS (SELECT 1 FROM chain_open))
@@ -207,6 +227,7 @@ pub async fn children_page(
         .bind(user_id)
         .bind(limit)
         .bind(offset)
+        .bind(role)
         .fetch_all(pool)
         .await?;
     let total = rows.first().map(|r| r.total).unwrap_or(0);
@@ -220,6 +241,7 @@ pub async fn children_page(
 pub async fn roots_page(
     pool: &PgPool,
     user_id: Uuid,
+    role: Option<i32>,
     offset: i64,
     limit: i64,
     key: TreeSortKey,
@@ -243,6 +265,7 @@ pub async fn roots_page(
             (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = roots.id AND k.deleted_at IS NULL)
              OR EXISTS (SELECT 1 FROM node_links nl WHERE nl.parent_id = roots.id)) AS has_children
         FROM roots
+        WHERE $4::int IS NULL OR role = $4
         ORDER BY {order_by}
         LIMIT $2 OFFSET $3"#,
         child_cols!("n"),
@@ -254,6 +277,7 @@ pub async fn roots_page(
         .bind(user_id)
         .bind(limit)
         .bind(offset)
+        .bind(role)
         .fetch_all(pool)
         .await?;
     let total = rows.first().map(|r| r.total).unwrap_or(0);
@@ -334,6 +358,15 @@ mod tests {
         assert!(order_clause(TreeSortKey::Created, SortDir::Asc).contains("created_timestamp ASC"));
         assert!(
             order_clause(TreeSortKey::Modified, SortDir::Desc).contains("updated_timestamp DESC")
+        );
+    }
+
+    #[test]
+    fn order_clause_on_qualifies_every_column() {
+        let clause = order_clause_on(TreeSortKey::Modified, SortDir::Desc, "n");
+        assert_eq!(
+            clause,
+            "n.role DESC, COALESCE(n.\"order\", 0) ASC, n.updated_timestamp DESC, n.id ASC"
         );
     }
 }

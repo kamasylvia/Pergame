@@ -60,8 +60,9 @@ pub async fn list_containers(
 }
 
 #[derive(Debug, Deserialize)]
-/// GET /nodes/roots + /nodes/:id/children paging (`offset`/`limit`) and
-/// tree sort (`sort=name|created|modified`, `order=asc|desc`, preference parity).
+/// GET /nodes/roots + /nodes/:id/children paging (`offset`/`limit`), tree
+/// sort (`sort=name|created|modified`, `order=asc|desc`, preference parity)
+/// and optional single-role narrowing (`role=0..4`).
 pub struct ChildrenQuery {
     #[serde(default)]
     pub offset: Option<i64>,
@@ -71,6 +72,16 @@ pub struct ChildrenQuery {
     pub sort: Option<String>,
     #[serde(default)]
     pub order: Option<String>,
+    #[serde(default)]
+    pub role: Option<i32>,
+}
+
+fn parse_role(role: Option<i32>) -> Result<Option<i32>, ApiError> {
+    match role {
+        None => Ok(None),
+        Some(r) if (0..=4).contains(&r) => Ok(Some(r)),
+        Some(_) => Err(ApiError::BadRequest("role must be 0..4".into())),
+    }
 }
 
 fn parse_page(
@@ -95,15 +106,17 @@ fn parse_page(
 
 /// GET /nodes/roots — top-level rows for lazy tree bootstrap (owned
 /// workspaces/teams and parentless nodes, plus directly granted nodes the
-/// frontend roots when their parent is not loaded).
+/// frontend roots when their parent is not loaded). Optional `role` narrows
+/// to one role (workspace switchers call `role=1`).
 pub async fn list_roots(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ChildrenQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     let (offset, limit, key, dir) = parse_page(&q)?;
+    let role = parse_role(q.role)?;
     let (rows, total) =
-        node_repo::tree::roots_page(&state.db, auth.user_id(), offset, limit, key, dir)
+        node_repo::tree::roots_page(&state.db, auth.user_id(), role, offset, limit, key, dir)
             .await
             .map_err(ApiError::from)?;
     Ok(ApiOk::ok(
@@ -112,8 +125,9 @@ pub async fn list_roots(
 }
 
 /// GET /nodes/:id/children — one visible directory page (canonical children
-/// plus clone positions, `has_children` per row so chevrons render without
-/// fetching). Read access on the parent is required.
+/// only; clone positions stay on the links set), `has_children` per row so
+/// chevrons render without fetching. Optional `role` narrows. Read access
+/// on the parent is required.
 pub async fn list_children(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -124,8 +138,9 @@ pub async fn list_children(
     let id = resolve_id(&node_id)?;
     guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
     let (offset, limit, key, dir) = parse_page(&q)?;
+    let role = parse_role(q.role)?;
     let (rows, total) =
-        node_repo::tree::children_page(&state.db, actor.user_id, id, offset, limit, key, dir)
+        node_repo::tree::children_page(&state.db, actor.user_id, id, role, offset, limit, key, dir)
             .await
             .map_err(ApiError::from)?;
     Ok(ApiOk::ok(
@@ -147,6 +162,149 @@ pub async fn list_ancestors(
         .await
         .map_err(ApiError::from)?;
     Ok(ApiOk::ok(chain))
+}
+
+#[derive(Debug, Deserialize)]
+/// GET /nodes/flat paging + filters (`role`, `root` subtree id, `pinned`).
+pub struct FlatQuery {
+    #[serde(default)]
+    pub offset: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub sort: Option<String>,
+    #[serde(default)]
+    pub order: Option<String>,
+    #[serde(default)]
+    pub role: Option<i32>,
+    #[serde(default)]
+    pub root: Option<String>,
+    #[serde(default)]
+    pub pinned: Option<bool>,
+}
+
+/// GET /nodes/flat — paged flat list over visible rows (index pages, CDN
+/// listings, cards), optionally scoped to one role and/or one subtree.
+pub async fn list_flat(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FlatQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let page = ChildrenQuery {
+        offset: q.offset,
+        limit: q.limit,
+        sort: q.sort.clone(),
+        order: q.order.clone(),
+        role: q.role,
+    };
+    let (offset, limit, key, dir) = parse_page(&page)?;
+    let role = parse_role(q.role)?;
+    let root = match q.root.as_deref() {
+        None => None,
+        Some(raw) => Some(resolve_id(raw)?),
+    };
+    let (rows, total) = node_repo::lists::flat_page(
+        &state.db,
+        auth.user_id(),
+        role,
+        root,
+        q.pinned.unwrap_or(false),
+        offset,
+        limit,
+        key,
+        dir,
+    )
+    .await
+    .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(
+        json!({ "rows": rows, "total": total, "offset": offset, "limit": limit }),
+    ))
+}
+
+/// GET /nodes/stats — counts for stats cards, globally or under one root.
+pub async fn node_stats(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FlatQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let root = match q.root.as_deref() {
+        None => None,
+        Some(raw) => Some(resolve_id(raw)?),
+    };
+    let stats = node_repo::lists::stats(&state.db, auth.user_id(), root)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(stats))
+}
+
+/// GET /nodes/activity — per-day live-node counts, newest first (home feed).
+pub async fn node_activity(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<ChildrenQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let limit = q.limit.unwrap_or(15).clamp(1, 90);
+    let days = node_repo::lists::activity(&state.db, auth.user_id(), limit)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(days))
+}
+
+/// GET /nodes/tags — distinct raw tag strings for suggesters.
+pub async fn node_tags(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let tags = node_repo::lists::distinct_tags(&state.db, auth.user_id())
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(tags))
+}
+
+/// GET /nodes/:id/neighbors — adjacent visible siblings under one ordering
+/// (prev/next navigation without loading the directory).
+pub async fn list_neighbors(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(node_id): Path<String>,
+    Query(q): Query<ChildrenQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let actor: Actor = auth.into();
+    let id = resolve_id(&node_id)?;
+    guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
+    let (_, _, key, dir) = parse_page(&q)?;
+    let (prev, next) = node_repo::lists::neighbors(&state.db, actor.user_id, id, key, dir)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(json!({ "prev": prev, "next": next })))
+}
+
+#[derive(Debug, Deserialize)]
+/// GET /nodes/search/meta query (substring over name/description/tags).
+pub struct MetaSearchQuery {
+    pub q: String,
+    #[serde(default)]
+    pub role: Option<i32>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
+/// GET /nodes/search/meta — literal substring search over metadata, any
+/// length (covers what FTS refuses). Shared-aware, newest first.
+pub async fn meta_search(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<MetaSearchQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    if q.q.trim().is_empty() {
+        return Err(ApiError::BadRequest("q must not be empty".into()));
+    }
+    let role = parse_role(q.role)?;
+    let limit = q.limit.unwrap_or(50).clamp(1, 100);
+    let rows = node_repo::lists::meta_search(&state.db, auth.user_id(), q.q.trim(), role, limit)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(rows))
 }
 
 /// GET /nodes/user/:userId — full tree (self or admin); "@me" = caller.
