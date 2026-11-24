@@ -2725,8 +2725,11 @@ async fn paged_tree_reads() {
     assert!(rows.iter().any(|x| x["id"] == json!(w)), "roots: {rows:?}");
     let wr = rows.iter().find(|x| x["id"] == json!(w)).unwrap();
     assert_eq!(wr["has_children"], json!(true));
-    assert!(wr["link_id"].is_null());
-    assert!(wr.get("content").is_none() && wr.get("content_compiled").is_none());
+    assert!(
+        wr.get("content").is_none()
+            && wr.get("content_compiled").is_none()
+            && wr.get("link_id").is_none()
+    );
 
     // Children order mirrors the frontend comparator: role DESC, pinned
     // (`order`) first, name ASC, with per-row chevron flags.
@@ -2779,13 +2782,22 @@ async fn paged_tree_reads() {
     let (_, bad) = get(&client, &format!("/nodes/{w}/children?sort=size")).await;
     assert_eq!(bad.status, "error");
 
-    // Link positions carry link_id and never double canonical rows.
+    // Clone positions stay out of children pages (served by the links set).
     let (status, r) = get(&client, &format!("/nodes/{f2}/children?limit=10")).await;
     assert_eq!(status, 200);
-    let rows = r.result["rows"].as_array().unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["id"], json!(deep));
-    assert!(rows[0]["link_id"].is_string());
+    assert_eq!(r.result["rows"].as_array().unwrap().len(), 0);
+    assert_eq!(r.result["total"], json!(0));
+    let (status, r) = get(&client, "/nodes/links").await;
+    assert_eq!(status, 200);
+    assert!(
+        r.result
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| l["node_id"] == json!(deep) && l["parent_id"] == json!(f2)),
+        "clone position missing: {:?}",
+        r.result
+    );
 
     // Ancestors leaf-first.
     let (status, r) = get(&client, &format!("/nodes/{deep}/ancestors")).await;

@@ -17,8 +17,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// One directory row: the `list_all` column set (no content columns) plus
-/// the tree extras. `total` repeats per row (`COUNT(*) OVER()`) and is
-/// stripped on the wire; the handler hoists it to the envelope.
+/// `has_children` for chevrons. `total` repeats per row (`COUNT(*) OVER()`)
+/// and is stripped on the wire; the handler hoists it to the envelope.
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
 pub struct ChildRow {
     pub id: Uuid,
@@ -41,7 +41,6 @@ pub struct ChildRow {
     pub created_timestamp: i64,
     pub updated_timestamp: i64,
     pub thumbnail: Option<String>,
-    pub link_id: Option<Uuid>,
     pub has_children: bool,
     #[serde(skip_serializing)]
     pub total: i64,
@@ -158,9 +157,9 @@ macro_rules! child_cols {
     };
 }
 
-/// One page of a directory: canonical children visible to the caller plus
-/// their clone positions under it (a node already canonical here never
-/// double-appears as a link, TreeBuilder parity).
+/// One page of a directory: canonical children visible to the caller.
+/// Clone positions stay out (served by the small global links set, as
+/// before) so page accounting never mixes the two sources.
 pub async fn children_page(
     pool: &PgPool,
     user_id: Uuid,
@@ -186,15 +185,11 @@ pub async fn children_page(
                OR EXISTS (SELECT 1 FROM chain WHERE user_id = $2)
         ),
         kids AS (
-            SELECT {}, NULL::uuid AS link_id FROM nodes c
+            SELECT {} FROM nodes c
             WHERE c.parent_id = $1 AND c.deleted_at IS NULL
               AND (c.user_id = $2
                 OR EXISTS (SELECT 1 FROM permissions p WHERE p.node_id = c.id AND p.user_id = $2 AND p.permission >= 1)
                 OR EXISTS (SELECT 1 FROM chain_open))
-            UNION ALL
-            SELECT {}, nl.id AS link_id FROM nodes c
-            JOIN node_links nl ON nl.node_id = c.id AND nl.parent_id = $1
-            WHERE c.deleted_at IS NULL AND c.parent_id IS DISTINCT FROM $1 AND c.user_id = $2
         )
         SELECT *, COUNT(*) OVER() AS total,
             (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = kids.id AND k.deleted_at IS NULL)
@@ -202,7 +197,6 @@ pub async fn children_page(
         FROM kids
         ORDER BY {order_by}
         LIMIT $3 OFFSET $4"#,
-        child_cols!("c"),
         child_cols!("c"),
         order_by = order_by,
     );
@@ -235,11 +229,11 @@ pub async fn roots_page(
     let sql = format!(
         r#"
         WITH roots AS (
-            SELECT {}, NULL::uuid AS link_id
+            SELECT {}
             FROM nodes n
             WHERE n.user_id = $1 AND n.deleted_at IS NULL AND (n.role <= 1 OR n.parent_id IS NULL)
             UNION ALL
-            SELECT {}, NULL::uuid AS link_id
+            SELECT {}
             FROM nodes n
             JOIN permissions p ON p.node_id = n.id
             WHERE p.user_id = $1 AND p.permission >= 1 AND n.deleted_at IS NULL
