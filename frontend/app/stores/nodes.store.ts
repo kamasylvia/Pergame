@@ -504,6 +504,11 @@ export const useNodesStore = defineStore('nodes', () => {
     return dirStates.value.get(parentId)?.loading ?? false;
   }
 
+  /** Server-known child total (-1 while never loaded). */
+  function dirTotal(parentId: string | null): number {
+    return dirStates.value.get(parentId)?.total ?? -1;
+  }
+
   interface DirPage {
     rows: (DB_Node & { has_children?: boolean })[];
     total: number;
@@ -853,6 +858,7 @@ export const useNodesStore = defineStore('nodes', () => {
     ensureChildren,
     loadMoreChildren,
     isDirComplete,
+    dirTotal,
     isDirLoading,
     invalidateDir,
     invalidateAllDirs,

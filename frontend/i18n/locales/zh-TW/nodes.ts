@@ -36,6 +36,11 @@ export default {
     title: '工作區與分類',
   },
 
+  directory: {
+    loadMore: '載入更多',
+    treeOrder: '文件樹順序',
+  },
+
   document: {
     childs: '子文件',
     editPage: '編輯頁面',

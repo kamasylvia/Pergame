@@ -36,6 +36,11 @@ export default {
     title: '工作区与分类',
   },
 
+  directory: {
+    loadMore: '加载更多',
+    treeOrder: '文档树顺序',
+  },
+
   document: {
     childs: '子文档',
     editPage: '编辑页面',

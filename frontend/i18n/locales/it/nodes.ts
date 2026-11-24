@@ -36,6 +36,11 @@ export default {
     title: 'Aree di lavoro e Categorie',
   },
 
+  directory: {
+    loadMore: 'Carica altri',
+    treeOrder: 'Ordine albero documenti',
+  },
+
   document: {
     childs: 'Documenti figli',
     editPage: 'Modifica pagina',

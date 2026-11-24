@@ -36,6 +36,11 @@ export default {
     title: 'Workspaces & Categories',
   },
 
+  directory: {
+    loadMore: 'Load more',
+    treeOrder: 'Document tree order',
+  },
+
   document: {
     childs: 'Child documents',
     editPage: 'Edit page',

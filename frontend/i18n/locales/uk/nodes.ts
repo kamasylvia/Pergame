@@ -36,6 +36,11 @@ export default {
     title: 'Простори та категорії',
   },
 
+  directory: {
+    loadMore: 'Завантажити ще',
+    treeOrder: 'Порядок дерева документів',
+  },
+
   document: {
     childs: 'Дочірні документи',
     editPage: 'Редагувати сторінку',

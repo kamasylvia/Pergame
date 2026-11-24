@@ -1,25 +1,6 @@
 <template>
   <div class="overview-tables">
-    <section>
-      <h2>目录</h2>
-      <table v-if="children.length" class="dataview-table">
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>创建时间</th>
-            <th>修改时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in children" :key="row.id">
-            <td><a href="#" @click.prevent="open(row)"><Icon :name="resolveIcon(row)" display="xsm" class="row-icon" style="display: inline-flex" />{{ indexRowLabel(row) }}</a></td>
-            <td>{{ dateCell(row.created_timestamp) }}</td>
-            <td>{{ dateCell(row.updated_timestamp) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <span v-else class="dataview-empty">{{ loading ? t('common.status.loading') : 'No results' }}</span>
-    </section>
+    <NodeDirectoryTree :container-id="props.containerId" />
     <section>
       <h2>最近浏览</h2>
       <table v-if="recent.length" class="dataview-table">
@@ -44,10 +25,9 @@
 </template>
 
 <script setup lang="ts">
-// Folder/workspace overview (index template v2 inlined): the same two
-// preset tables the folder index files rendered, resolved against the
-// container node directly instead of a stored markdown document.
-import { childrenSource, recentSource, runDqlQuery, indexRowLabel, dateCell, sortFoldersFirst, onlyViewed } from '~/helpers/dataview-render';
+// Folder/workspace overview: the interactive directory tree plus the
+// recent-documents table (the old flat children table retired with it).
+import { recentSource, runDqlQuery, dateCell, onlyViewed } from '~/helpers/dataview-render';
 import { resolveNodeLink, resolveIcon } from '~/helpers/node';
 import type { Node } from '~/stores';
 
@@ -57,7 +37,6 @@ const router = useRouter();
 const config = useRuntimeConfig();
 const { t } = useI18nT();
 
-const children = ref<Node[]>([]);
 const recent = ref<Node[]>([]);
 const loading = ref(true);
 
@@ -73,15 +52,14 @@ function open(row: Node) {
 
 onMounted(async () => {
   const apiBase = (config.public.baseApi as string) || '';
-  const results = await Promise.allSettled([
-    runDqlQuery(apiBase, childrenSource(props.containerId)),
-    runDqlQuery(apiBase, recentSource(props.containerId)),
-  ]);
-  if (results[0].status === 'fulfilled') children.value = sortFoldersFirst(results[0].value.rows);
-  if (results[1].status === 'fulfilled') recent.value = onlyViewed(results[1].value.rows);
+  try {
+    const result = await runDqlQuery(apiBase, recentSource(props.containerId));
+    recent.value = onlyViewed(result.rows);
+  } catch {
+    // Failed queries render as their empty state; a broken query must not
+    // break the whole container page.
+  }
   loading.value = false;
-  // Failed queries render as their empty state; a broken query must not
-  // break the whole container page.
 });
 </script>
 

@@ -36,6 +36,11 @@ export default {
     title: 'Arbeitsbereiche & Kategorien',
   },
 
+  directory: {
+    loadMore: 'Mehr laden',
+    treeOrder: 'Dokumentbaum-Reihenfolge',
+  },
+
   document: {
     childs: 'Untergeordnete Dokumente',
     editPage: 'Seite bearbeiten',

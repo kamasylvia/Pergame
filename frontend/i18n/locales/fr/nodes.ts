@@ -36,6 +36,11 @@ export default {
     title: 'Espaces de travail & Catégories',
   },
 
+  directory: {
+    loadMore: 'Charger plus',
+    treeOrder: "Ordre de l'arborescence",
+  },
+
   document: {
     childs: 'Documents enfants',
     editPage: 'Modifier la page',

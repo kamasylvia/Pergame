@@ -36,6 +36,11 @@ export default {
     title: '워크스페이스 및 카테고리',
   },
 
+  directory: {
+    loadMore: '더 보기',
+    treeOrder: '문서 트리 순서',
+  },
+
   document: {
     childs: '하위 문서',
     editPage: '페이지 편집',
