@@ -240,6 +240,7 @@ pub async fn neighbors(
     pool: &PgPool,
     user_id: Uuid,
     node_id: Uuid,
+    role: Option<i32>,
     key: TreeSortKey,
     dir: SortDir,
 ) -> Result<(Option<FlatRow>, Option<FlatRow>), sqlx::Error> {
@@ -265,6 +266,7 @@ pub async fn neighbors(
                 FROM nodes n
                 WHERE n.parent_id IS NOT DISTINCT FROM (SELECT parent_id FROM nodes WHERE id = $1)
                   AND n.deleted_at IS NULL
+                  AND ($4::int IS NULL OR n.role = $4)
                   AND (n.user_id = $2
                     OR EXISTS (SELECT 1 FROM permissions p WHERE p.node_id = n.id AND p.user_id = $2 AND p.permission >= 1)
                     OR EXISTS (SELECT 1 FROM chain_open))
@@ -283,6 +285,7 @@ pub async fn neighbors(
                 .bind(node_id)
                 .bind(user_id)
                 .bind(delta)
+                .bind(role)
                 .fetch_optional(pool)
                 .await
         }

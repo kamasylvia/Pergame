@@ -10,10 +10,14 @@ const ROUTE_ROLE_MAPPING: Record<NodeRole, string> = {
 
 export function useBreadcrumbs() {
   const nodesTree = useNodesTree();
+  const nodesStore = useNodesStore();
 
   function generateBreadcrumbsById(id: string) {
+    // Lazy fill: merge the ancestor chain on demand (no-op when complete);
+    // callers re-render reactively once it lands. This also feeds the
+    // permission-inheritance walks on the same pages.
+    void nodesStore.ensureAncestors(id);
     const nodes = nodesTree.getAncestors(id);
-
     return nodes
       .map(node => ({
         name: node.label,

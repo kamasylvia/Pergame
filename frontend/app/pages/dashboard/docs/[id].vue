@@ -34,7 +34,6 @@ const documentsStore = useNodesStore();
 const preferencesStore = usePreferencesStore();
 
 const devise = useDevice();
-const nodesTree = useNodesTree();
 const contextMenu = useContextMenu();
 const modals = useModal();
 const route = useRoute();
@@ -50,8 +49,24 @@ const error = ref<null | PergameError>(null);
 
 const documentId = computed(() => route.params.id as string);
 
-const next = computed(() => nodesTree.nextDocument(node.value?.id));
-const previous = computed(() => nodesTree.prevDocument(node.value?.id));
+// Prev/next doc navigation (server neighbors under the tree ordering —
+// memory siblings go blind under lazy loading). Re-fetch on id/sort moves.
+const sortKey = preferencesStore.get('sortKey');
+const sortOrder = preferencesStore.get('sortOrder');
+const neighborIds = ref<{ prev: string | null; next: string | null }>({ prev: null, next: null });
+watch([documentId, sortKey, sortOrder], async ([id]) => {
+  neighborIds.value = { prev: null, next: null };
+  if (!id) return;
+  try {
+    const { prev, next } = await documentsStore.fetchNeighbors(id, sortKey.value, sortOrder.value, 3);
+    if (documentId.value !== id) return;
+    neighborIds.value = { prev: prev?.id ?? null, next: next?.id ?? null };
+  } catch {
+    // Footer hides; same as missing neighbors.
+  }
+}, { immediate: true });
+const next = computed(() => (neighborIds.value.next ? documentsStore.getById(neighborIds.value.next) : undefined) ?? undefined);
+const previous = computed(() => (neighborIds.value.prev ? documentsStore.getById(neighborIds.value.prev) : undefined) ?? undefined);
 
 const node = computed<Node | undefined>(() => {
   if (!documentId.value) return undefined;
@@ -69,8 +84,17 @@ async function loadDocument(id: string) {
 
   if (documentsStore.isFetching) return;
 
-  const cached = documentsStore.getById(id);
+  let cached = documentsStore.getById(id);
 
+  // Lazy loading: a deep link can arrive before any directory load, so a
+  // cache miss means "fetch first", not 404.
+  if (!cached) {
+    try {
+      cached = await documentsStore.fetch({ id });
+    } catch {
+      cached = undefined;
+    }
+  }
   if (!cached) {
     error.value = {
       code: 404,

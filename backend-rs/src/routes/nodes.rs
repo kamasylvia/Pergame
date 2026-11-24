@@ -262,7 +262,8 @@ pub async fn node_tags(
 }
 
 /// GET /nodes/:id/neighbors — adjacent visible siblings under one ordering
-/// (prev/next navigation without loading the directory).
+/// (prev/next navigation without loading the directory). Optional `role`
+/// restricts the sibling run (doc pages pass `role=3`).
 pub async fn list_neighbors(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -273,7 +274,8 @@ pub async fn list_neighbors(
     let id = resolve_id(&node_id)?;
     guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
     let (_, _, key, dir) = parse_page(&q)?;
-    let (prev, next) = node_repo::lists::neighbors(&state.db, actor.user_id, id, key, dir)
+    let role = parse_role(q.role)?;
+    let (prev, next) = node_repo::lists::neighbors(&state.db, actor.user_id, id, role, key, dir)
         .await
         .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!({ "prev": prev, "next": next })))

@@ -599,6 +599,74 @@ export const useNodesStore = defineStore('nodes', () => {
     dirStates.value.clear();
   }
 
+  /** True when the upward chain from `id` resolves fully from memory. */
+  function isChainComplete(id: string): boolean {
+    let cur = nodes.value.get(id);
+    if (!cur) return false;
+    while (cur.parent_id) {
+      cur = nodes.value.get(cur.parent_id);
+      if (!cur) return false;
+    }
+    return true;
+  }
+
+  const ancestorInflight = new Set<string>();
+
+  /**
+   * Ensure the ancestor chain of `id` is merged (breadcrumbs, reveal,
+   * permission walks). Skips when the chain already resolves; merges only
+   * missing rows so full rows are never clobbered by partials.
+   */
+  async function ensureAncestors(id: string): Promise<void> {
+    if (!id || isChainComplete(id) || ancestorInflight.has(id)) return;
+    ancestorInflight.add(id);
+    try {
+      const res = await makeRequest<DB_Node[]>(`nodes/${id}/ancestors`, 'GET', {});
+      if (res.status !== 'success' || !res.result) return;
+      const me = userStore.user?.id;
+      nodes.value.startBulk();
+      for (const n of res.result) {
+        if (nodes.value.has(n.id)) continue;
+        nodes.value.set(n.id, { ...n, partial: true, synced: true, shared: n.user_id !== me, permissions: [] }, true);
+      }
+      nodes.value.endBulk();
+    } finally {
+      ancestorInflight.delete(id);
+    }
+  }
+
+  /**
+   * Adjacent visible siblings under an ordering (prev/next navigation).
+   * Merges full rows and returns live store nodes (or null past the ends).
+   */
+  async function fetchNeighbors(
+    id: string,
+    sortKey = 'name',
+    sortDir = 'asc',
+    role?: number,
+  ): Promise<{ prev: Node | null; next: Node | null }> {
+    const none = { prev: null, next: null };
+    if (!id) return none;
+    const params = new URLSearchParams({ sort: sortKey, order: sortDir });
+    if (role !== undefined) params.set('role', String(role));
+    const res = await makeRequest<{ prev: DB_Node | null; next: DB_Node | null }>(
+      `nodes/${id}/neighbors?${params.toString()}`,
+      'GET',
+      {},
+    );
+    if (res.status !== 'success' || !res.result) return none;
+    const me = userStore.user?.id;
+    const merge = (n: DB_Node | null): Node | null => {
+      if (!n) return null;
+      const ex = nodes.value.get(n.id);
+      if (ex) return ex;
+      const row = { ...n, partial: true, synced: true, shared: n.user_id !== me, permissions: [] };
+      nodes.value.set(n.id, row, true);
+      return row as Node;
+    };
+    return { prev: merge(res.result.prev), next: merge(res.result.next) };
+  }
+
   /**
    * Migration bridge: after a full load, mark every directory complete with
    * locally derived totals so the lazy layer stays idle. Retires when init()
@@ -642,6 +710,8 @@ export const useNodesStore = defineStore('nodes', () => {
     isDirLoading,
     invalidateDir,
     invalidateAllDirs,
+    ensureAncestors,
+    fetchNeighbors,
     hasChildren,
     getTotalUsedStorage,
     teams,
