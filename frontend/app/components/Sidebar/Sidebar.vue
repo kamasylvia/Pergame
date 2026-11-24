@@ -2,7 +2,7 @@
   <div :class="{ 'sidebar-mask': isMobile && isOpened }" />
   <Resizable>
     <Dock v-if="!isMobile && viewDock" />
-    <div class="sidebar" :class="{ compact: compactMode }">
+    <div ref="scroller" class="sidebar" :class="{ compact: compactMode }">
       <section class="header">
         <span class="name">
           <IconApp />
@@ -47,14 +47,8 @@
       <CollapseItem v-for="item in navigationItems(sidebarItemsPrefs)" :key="item.id" :item="item" :root="true" />
       <hr style="width: 100%; margin: 5px 0" />
 
-      <div ref="treeRoot">
-        <template v-if="tree.length">
-          <CollapseItem v-for="item in tree" :key="item.id" :item="item" :root="true" />
-        </template>
-        <template v-else>
-          <SidebarSkeleton :is-loading="isLoading" />
-        </template>
-      </div>
+      <VirtualTree v-if="tree.length" ref="virtualTree" :items="tree" :scroller="scroller" />
+      <SidebarSkeleton v-else :is-loading="isLoading" />
     </div>
   </Resizable>
 </template>
@@ -66,6 +60,7 @@ import NewCategoryModal from '~/components/Node/Modals/CreateCategory.vue';
 import SidebarSkeleton from './SidebarSkeleton.vue';
 import Dock from './Dock.vue';
 import CollapseItem from './CollapseItem.vue';
+import VirtualTree from './VirtualTree.vue';
 import SidebarWorkspaces from './SidebarWorkspaces.vue';
 import Resizable from './Resizable.vue';
 import IconClose from './IconClose.vue';
@@ -83,7 +78,8 @@ const modals = useModal();
 const viewDock = preferences.get('view_dock');
 const compactMode = preferences.get('compactMode');
 const route = useRoute();
-const treeRoot = ref<HTMLElement | null>(null);
+const scroller = ref<HTMLElement | null>(null);
+const virtualTree = ref<{ ensureVisible: (id: string) => Promise<boolean> } | null>(null);
 
 const filter = ref<string>('');
 
@@ -120,30 +116,35 @@ const routeNodeId = computed((): string | null => {
   return null;
 });
 let revealedFor: string | null = null;
-const revealInTree = async (nodeId: string | null) => {
-  if (!nodeId || nodeId === revealedFor) return;
-  // getAncestors returns [self … root]; the node itself needs no expansion.
-  const chain = nodesTree.getAncestors(nodeId);
-  if (!chain.length) return;
-  for (const item of chain.slice(1)) nodesTree.setExpanded(item.id, true);
-  await nextTick();
-  // Row links carry router-link-exact-active; the categories edit page only
-  // prefix-matches its row, hence the non-exact fallback (.nav icon-links
-  // excluded in both). block:'nearest' is a no-op when already visible.
-  const row =
-    treeRoot.value?.querySelector('.router-link-exact-active:not(.nav)') ??
-    treeRoot.value?.querySelector('.router-link-active:not(.nav)');
-  if (!row) return;
-  row.scrollIntoView({ block: 'nearest' });
-  revealedFor = nodeId;
+let revealToken = 0;
+/**
+ * Retry until revealed (bounded): the tree populates async and the virtual
+ * list mounts a flush behind it, so a single attempt routinely lands in the
+ * gap (empty tree, or list not yet mounted). Aborts when the route moves on.
+ */
+const revealWithRetry = async (nodeId: string, token: number) => {
+  for (let i = 0; i < 30 && token === revealToken; i++) {
+    if (nodeId === revealedFor) return;
+    // getAncestors returns [self … root]; the node itself needs no expansion.
+    const chain = nodesTree.getAncestors(nodeId);
+    if (chain.length && virtualTree.value) {
+      for (const item of chain.slice(1)) nodesTree.setExpanded(item.id, true);
+      // The tree is virtualized: rows outside the window are not mounted, so
+      // the list itself scrolls by index first, then polishes with a
+      // nearest-scroll.
+      if (await virtualTree.value.ensureVisible(nodeId)) {
+        revealedFor = nodeId;
+        return;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
 };
 watch(routeNodeId, id => {
   revealedFor = null;
-  void revealInTree(id);
+  revealToken++;
+  if (id) void revealWithRetry(id, revealToken);
 }, { immediate: true });
-watch(() => tree.value.length, () => {
-  void revealInTree(routeNodeId.value);
-});
 
 // Actions
 const toggleDock = () => preferences.set('view_dock', !preferences.get('view_dock').value);
