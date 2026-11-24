@@ -322,6 +322,8 @@ async fn main() {
         .route("/api/nodes/stats", get(routes::nodes::node_stats))
         .route("/api/nodes/activity", get(routes::nodes::node_activity))
         .route("/api/nodes/tags", get(routes::nodes::node_tags))
+        .route("/api/nodes/refs", get(routes::nodes::node_refs))
+        .route("/api/nodes/{nodeId}/refs", get(routes::nodes::node_refs_one))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/search/meta", get(routes::nodes::meta_search))
         .route("/api/nodes/query", post(routes::dql::query))

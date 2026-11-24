@@ -282,6 +282,51 @@ pub async fn node_tags(
     Ok(ApiOk::ok(tags))
 }
 
+#[derive(Debug, Deserialize)]
+/// GET /nodes/refs batch filter (`ids` comma list, max 100 anchors).
+pub struct RefsQuery {
+    #[serde(default)]
+    pub ids: Option<String>,
+}
+
+/// GET /nodes/refs — outgoing + incoming internal links for up to 100
+/// anchors in one round trip (directory rows resolve without N+1).
+pub async fn node_refs(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<RefsQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let raw = q.ids.as_deref().unwrap_or_default();
+    let mut ids = Vec::new();
+    for part in raw.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        ids.push(resolve_id(part)?);
+        if ids.len() >= 100 {
+            break;
+        }
+    }
+    let refs = node_repo::refs::refs_for(&state.db, auth.user_id(), &ids)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(refs))
+}
+
+/// GET /nodes/:id/refs — outgoing + incoming internal links for one node.
+pub async fn node_refs_one(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(node_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = resolve_id(&node_id)?;
+    let mut refs = node_repo::refs::refs_for(&state.db, auth.user_id(), &[id])
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(
+        refs
+            .remove(&id)
+            .unwrap_or_default(),
+    ))
+}
+
 /// GET /nodes/:id/neighbors — adjacent visible siblings under one ordering
 /// (prev/next navigation without loading the directory). Optional `role`
 /// restricts the sibling run (doc pages pass `role=3`).

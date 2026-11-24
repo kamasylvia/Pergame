@@ -338,6 +338,13 @@ pub async fn restore_from_zip(
         }
     }
 
+    // Link index for restored bodies (restore bypasses repo insert).
+    let restored: Vec<Uuid> = node_ids.iter().copied().collect();
+    crate::repo::nodes::refs::backfill_refs_for_ids(&mut *tx, &restored)
+        .await
+        .map_err(ApiError::from)
+        .map_err(|e| ApiError::Internal(Box::new(std::io::Error::other(e.to_string()))))?;
+
     tx.commit()
         .await
         .map_err(ApiError::from)

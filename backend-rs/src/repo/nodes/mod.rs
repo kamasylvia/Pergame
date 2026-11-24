@@ -5,6 +5,7 @@
 pub mod trash;
 pub mod tree;
 pub mod lists;
+pub mod refs;
 
 pub use self::trash::{
     list_trash, purge_subtree, restore_subtree, soft_delete_subtree, subtree_ids, trash_roots,
@@ -363,8 +364,9 @@ pub async fn insert(
     .bind(now)
     .bind(now)
     .execute(pool)
-    .await
-    .map(|_| ())
+    .await?;
+    self::refs::reconcile_refs(pool, id, n.role, n.content.as_deref()).await?;
+    Ok(())
 }
 
 /// Update a node row (all writable fields).
@@ -402,8 +404,9 @@ pub async fn update(
     .bind(updated)
     .bind(id)
     .execute(pool)
-    .await
-    .map(|_| ())
+    .await?;
+    self::refs::reconcile_refs(pool, id, n.role, n.content.as_deref()).await?;
+    Ok(())
 }
 
 /// Builds a 'simple'-dialect tsquery string of OR-ed tokens from the raw query

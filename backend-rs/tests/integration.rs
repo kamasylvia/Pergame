@@ -2938,3 +2938,72 @@ async fn paged_tree_reads() {
     cleanup_user(&user_a).await;
     cleanup_user(&user_b).await;
 }
+
+/// Internal-link index: `#<uuid>` in a body creates outgoing edges on the
+/// linker and backlinks on the target; edits reconcile, deletes cascade.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn refs_lifecycle() {
+    let client = Client::new();
+    let (user_id, suffix) = signup_and_login_tagged(&client, "refs").await;
+
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("target-{suffix}"), "role": 3, "content": "base"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let target = result_id_string(&r);
+
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": format!("linker-{suffix}"), "role": 3, "content": format!("see #{target} twice #{target}")}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let linker = result_id_string(&r);
+
+    // Outgoing on the linker, incoming on the target (deduped).
+    let (status, r) = get(&client, &format!("/nodes/{linker}/refs")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["outgoing"].as_array().unwrap().len(), 1);
+    assert_eq!(r.result["outgoing"][0]["id"], json!(target));
+    assert!(r.result["incoming"].as_array().unwrap().is_empty());
+
+    let (status, r) = get(&client, &format!("/nodes/{target}/refs")).await;
+    assert_eq!(status, 200);
+    assert!(r.result["outgoing"].as_array().unwrap().is_empty());
+    assert_eq!(r.result["incoming"].as_array().unwrap().len(), 1);
+    assert_eq!(r.result["incoming"][0]["id"], json!(linker));
+
+    // Batch endpoint serves both anchors in one round trip.
+    let (status, r) = get(&client, &format!("/nodes/refs?ids={target},{linker}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result[&linker]["outgoing"].as_array().unwrap().len(), 1);
+    assert_eq!(r.result[&target]["incoming"].as_array().unwrap().len(), 1);
+
+    // Unlink via full-object PUT (the update path is full-replace).
+    let (status, r) = get(&client, &format!("/nodes/{linker}")).await;
+    assert_eq!(status, 200);
+    let mut node = r.result["node"].clone();
+    node["content"] = json!("no links now");
+    let (status, _) = put_json(&client, &format!("/nodes/{linker}"), &node).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/nodes/{target}/refs")).await;
+    assert_eq!(status, 200);
+    assert!(r.result["incoming"].as_array().unwrap().is_empty());
+
+    // Relink, then delete the linker: the backlink cascades away.
+    node["content"] = json!(format!("again #{target}"));
+    let (status, _) = put_json(&client, &format!("/nodes/{linker}"), &node).await;
+    assert_eq!(status, 200);
+    let (status, _) = del(&client, &format!("/nodes/{linker}")).await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/nodes/{target}/refs")).await;
+    assert_eq!(status, 200);
+    assert!(r.result["incoming"].as_array().unwrap().is_empty());
+
+    cleanup_user(&user_id).await;
+}
