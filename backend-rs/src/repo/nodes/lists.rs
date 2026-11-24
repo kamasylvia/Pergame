@@ -234,21 +234,15 @@ pub async fn distinct_tags(pool: &PgPool, user_id: Uuid) -> Result<Vec<String>, 
 }
 
 /// Adjacent siblings of one node under an ordering (prev/next navigation):
-/// window functions over the visible, ordered sibling set — no full load.
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
-pub struct NeighborRow {
-    pub id: Uuid,
-    pub name: String,
-    pub role: i32,
-}
-
+/// full metadata rows so the frontend merges and displays them directly.
+/// Two indexed point queries (either side may be absent).
 pub async fn neighbors(
     pool: &PgPool,
     user_id: Uuid,
     node_id: Uuid,
     key: TreeSortKey,
     dir: SortDir,
-) -> Result<(Option<NeighborRow>, Option<NeighborRow>), sqlx::Error> {
+) -> Result<(Option<FlatRow>, Option<FlatRow>), sqlx::Error> {
     let order_by = super::tree::order_clause(key, dir);
     // Audited: static ORDER BY fragment; all values bound.
     let sql = format!(
@@ -265,9 +259,9 @@ pub async fn neighbors(
             WHERE EXISTS (SELECT 1 FROM permissions p JOIN chain c ON c.id = p.node_id WHERE p.user_id = $2 AND p.permission >= 1)
                OR EXISTS (SELECT 1 FROM chain WHERE user_id = $2)
         ),
-        sibs AS (
-            SELECT id, name, role, ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn FROM (
-                SELECT n.id, n.name, n.role, n."order" AS node_order, n.created_timestamp, n.updated_timestamp
+        ranked AS (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn FROM (
+                SELECT n.id, n."order" AS node_order, n.created_timestamp, n.updated_timestamp, n.role, n.name
                 FROM nodes n
                 WHERE n.parent_id IS NOT DISTINCT FROM (SELECT parent_id FROM nodes WHERE id = $1)
                   AND n.deleted_at IS NULL
@@ -276,29 +270,25 @@ pub async fn neighbors(
                     OR EXISTS (SELECT 1 FROM chain_open))
             ) s
         )
-        SELECT id, name, role, -1 AS side FROM sibs WHERE rn = (SELECT rn FROM sibs WHERE id = $1) - 1
-        UNION ALL
-        SELECT id, name, role, 1 AS side FROM sibs WHERE rn = (SELECT rn FROM sibs WHERE id = $1) + 1"#,
+        SELECT {cols}, 0::bigint AS total
+        FROM nodes n
+        WHERE n.id = (SELECT id FROM ranked WHERE rn = (SELECT rn FROM ranked WHERE id = $1) + $3)"#,
+        cols = "n.id, n.user_id, n.parent_id, n.name, n.description, n.tags, n.role, n.color, n.icon, n.theme, n.accessibility, n.access, n.display, n.\"order\" AS node_order, n.size, n.metadata, n.created_timestamp, n.updated_timestamp, n.thumbnail",
         order_by = order_by,
     );
-    let rows: Vec<(Uuid, String, i32, i32)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
-        .bind(node_id)
-        .bind(user_id)
-        .fetch_all(pool)
-        .await?;
-    let mut prev = None;
-    let mut next = None;
-    for (id, name, role, side) in rows {
-        let row = NeighborRow { id, name, role };
-        if side < 0 {
-            prev = Some(row);
-        } else {
-            next = Some(row);
+    let one = |delta: i32| {
+        let sql = sql.clone();
+        async move {
+            sqlx::query_as::<_, FlatRow>(sqlx::AssertSqlSafe(sql))
+                .bind(node_id)
+                .bind(user_id)
+                .bind(delta)
+                .fetch_optional(pool)
+                .await
         }
-    }
-    Ok((prev, next))
+    };
+    Ok((one(-1).await?, one(1).await?))
 }
-
 /// Substring search over name/description/tags (ILIKE, any length — covers
 /// the single-char queries FTS refuses). Shared-aware; newest first.
 pub async fn meta_search(
