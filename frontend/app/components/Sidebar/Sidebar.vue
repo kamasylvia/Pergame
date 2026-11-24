@@ -79,7 +79,11 @@ const viewDock = preferences.get('view_dock');
 const compactMode = preferences.get('compactMode');
 const route = useRoute();
 const scroller = ref<HTMLElement | null>(null);
-const virtualTree = ref<{ ensureVisible: (id: string) => Promise<boolean> } | null>(null);
+const virtualTree = ref<{
+  ensureVisible: (id: string) => Promise<boolean>;
+  isRowInViewport: (id: string) => boolean;
+  flatLength: ComputedRef<number>;
+} | null>(null);
 
 const filter = ref<string>('');
 
@@ -117,22 +121,27 @@ const routeNodeId = computed((): string | null => {
 });
 let revealedFor: string | null = null;
 let revealToken = 0;
+let lastNavAt = 0;
 /**
  * Retry until revealed (bounded): the tree populates async and the virtual
  * list mounts a flush behind it, so a single attempt routinely lands in the
  * gap (empty tree, or list not yet mounted). Aborts when the route moves on.
+ * Success means mounted AND in the viewport — rows merged later can push an
+ * early success out of view again (lazy cascade), which the length watcher
+ * below repairs within a bounded settle window.
  */
 const revealWithRetry = async (nodeId: string, token: number) => {
   for (let i = 0; i < 30 && token === revealToken; i++) {
     if (nodeId === revealedFor) return;
     // getAncestors returns [self … root]; the node itself needs no expansion.
     const chain = nodesTree.getAncestors(nodeId);
-    if (chain.length && virtualTree.value) {
+    const vt = virtualTree.value;
+    if (chain.length && vt) {
       for (const item of chain.slice(1)) nodesTree.setExpanded(item.id, true);
       // The tree is virtualized: rows outside the window are not mounted, so
       // the list itself scrolls by index first, then polishes with a
       // nearest-scroll.
-      if (await virtualTree.value.ensureVisible(nodeId)) {
+      if ((await vt.ensureVisible(nodeId)) && vt.isRowInViewport(nodeId)) {
         revealedFor = nodeId;
         return;
       }
@@ -143,8 +152,22 @@ const revealWithRetry = async (nodeId: string, token: number) => {
 watch(routeNodeId, id => {
   revealedFor = null;
   revealToken++;
+  lastNavAt = Date.now();
   if (id) void revealWithRetry(id, revealToken);
 }, { immediate: true });
+// Post-success repair: late-merging rows can push a revealed row back out
+// of view. Only within 10s of navigation and only when actually outside —
+// never yanks a settled view.
+watch(
+  // NOTE: ref() unwraps the nested computed, so this is already a number.
+  () => virtualTree.value?.flatLength,
+  () => {
+    const id = routeNodeId.value;
+    const vt = virtualTree.value;
+    if (!id || revealedFor !== id || !vt || Date.now() - lastNavAt > 10000) return;
+    if (!vt.isRowInViewport(id)) void vt.ensureVisible(id);
+  },
+);
 
 // Actions
 const toggleDock = () => preferences.set('view_dock', !preferences.get('view_dock').value);

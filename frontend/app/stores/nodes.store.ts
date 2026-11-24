@@ -35,6 +35,19 @@ export const useNodesStore = defineStore('nodes', () => {
   /** Soft-link positions (note-links spec): same note, extra tree locations. */
   const links = ref<DB_NodeLink[]>([]);
 
+  // ---- Lazy directory loading (SiYuan listDocTreeRange parity) ----
+  // One load unit per directory: which 100-row pages are merged. Roots use
+  // a null key. `hasChildren` feeds chevrons without fetching (kept outside
+  // the rows so single-node refetches never drop it).
+  interface DirState {
+    total: number;
+    pages: Set<number>;
+    loading: boolean;
+  }
+  const PAGE_SIZE = 100;
+  const dirStates = ref(new Map<string | null, DirState>());
+  const hasChildren = ref(new Map<string, boolean>());
+
   const getAll = computed(() => nodes.value);
   const getAllTags = computed(() => allTags.value);
   const getById = computed(() => (id: string) => nodes.value.get(id));
@@ -65,6 +78,7 @@ export const useNodesStore = defineStore('nodes', () => {
     nodes.value.startBulk();
     await Promise.all([syncLocalDeltas(), fetch(), fetchShared(), fetchLinks()]);
     nodes.value.endBulk();
+    seedDirStates();
     isFetching.value = false;
     if (import.meta.client) {
       window.addEventListener('online', () => {
@@ -105,16 +119,18 @@ export const useNodesStore = defineStore('nodes', () => {
       if (node.tags) {
         parseTags(node.tags).forEach(tag => tags.add(tag));
       }
-      if (node.parent_id && !nodes.value.get(node.parent_id)) {
-        nodes.value.set(node.id, { ...node, parent_id: '' });
-      }
+      // NOTE: no orphan-detach here anymore (lazy loading keeps parents
+      // unloaded routinely — detaching would corrupt them). Dangling rows
+      // float to the root in the tree builder without writes.
     });
 
     nodes.value.endBulk();
     allTags.value = Array.from(tags).sort();
   }
 
-  // Check if a node (descendantId) is a descendant of another node
+  // Check if a node (descendantId) is a descendant of another node.
+  // Partial-data blind spot (lazy loading): an unloaded ancestor reads as
+  // "not a descendant". UI guards only — the server rejects real cycles.
   const isDescendant = (parent: Node, descendantId: string): boolean => {
     let current = nodes.value.get(descendantId);
     while (current?.parent_id) {
@@ -213,11 +229,9 @@ export const useNodesStore = defineStore('nodes', () => {
       if (opts?.id) {
         const result = request.result as { node: DB_Node; permissions: Permission[] };
         const shared = nodes.value.get(opts.id)?.shared ?? false;
-        // Check for orphaned parent_id and detach if necessary
-        let finalParentId = result.node.parent_id;
-        if (finalParentId && !nodes.value.has(finalParentId)) {
-          finalParentId = '';
-        }
+        // Keep the server parent_id verbatim (lazy loading: an unloaded
+        // parent is routine, not corruption — never detach).
+        const finalParentId = result.node.parent_id;
 
         const updatedNode: Node = {
           ...(result.node as DB_Node),
@@ -237,6 +251,7 @@ export const useNodesStore = defineStore('nodes', () => {
         }
         nodes.value.endBulk();
         recomputeTags();
+        seedDirStates();
         return nodes.value as 'id' extends keyof T ? Node : IndexedCollection;
       }
     } else throw request.message;
@@ -267,6 +282,7 @@ export const useNodesStore = defineStore('nodes', () => {
     const row = request.result as DB_NodeLink;
     if (row && !links.value.some(l => l.id === row.id)) {
       links.value = [...links.value, row];
+      invalidateDir(parentId);
     }
   }
 
@@ -276,7 +292,9 @@ export const useNodesStore = defineStore('nodes', () => {
     if (request.status !== 'success') {
       throw new Error(request.message || 'remove link failed');
     }
+    const gone = links.value.find(l => l.id === linkId);
     links.value = links.value.filter(l => l.id !== linkId);
+    if (gone) invalidateDir(gone.parent_id);
   }
 
   async function fetchShared(): Promise<IndexedCollection> {
@@ -286,10 +304,8 @@ export const useNodesStore = defineStore('nodes', () => {
       if (!request.result) return nodes.value as IndexedCollection;
       nodes.value.startBulk();
       for (const node of request.result as DB_Node[]) {
-        let finalParentId = node.parent_id;
-        if (finalParentId && !nodes.value.has(finalParentId)) {
-          finalParentId = '';
-        }
+        // Keep the server parent_id verbatim (see fetch() — never detach).
+        const finalParentId = node.parent_id;
         if (!nodes.value.has(node.id))
           nodes.value.set(node.id, { ...node, parent_id: finalParentId, partial: true, synced: true, shared: true, permissions: node.permissions || [] });
         else {
@@ -340,6 +356,7 @@ export const useNodesStore = defineStore('nodes', () => {
       const payload = response.result!;
       const created = 'node' in payload ? payload.node : payload;
       nodes.value.set(created.id, { ...created, partial: false, synced: true, shared: false, permissions: [] }, true);
+      invalidateDir(created.parent_id ?? null);
       return created;
     } else if (isNetworkError(response)) {
       node.user_id = userStore.user?.id;
@@ -357,13 +374,17 @@ export const useNodesStore = defineStore('nodes', () => {
       if (!full_node) throw 'Node not found';
       node = mergeNode(node, full_node);
     }
+    const oldParent = nodes.value.get(node.id)?.parent_id ?? null;
     if (!node.parent_id) delete node.parent_id; // Ensure parent_id is not sent as empty string
     const response = await makeRequest(`nodes/${node.id}`, 'PUT', node);
     if (response.status == 'success') {
       node.updated_timestamp = Date.now(); // approximate update time for better UX & backups import
       node.synced = true;
-      if (node.parent_id && !nodes.value.has(node.parent_id)) node.parent_id = ''; // Check for orphaned parent_id and detach if necessary
+      // Never detach an unloaded parent (see fetch()); order/name edits
+      // re-sort the directory, moves touch two.
       nodes.value.set(node.id, node, true);
+      invalidateDir(oldParent);
+      invalidateDir(node.parent_id ?? null);
     } else if (isNetworkError(response)) {
       await LocalDbService.saveUpdateDelta(node);
       node.synced = false;
@@ -402,9 +423,11 @@ export const useNodesStore = defineStore('nodes', () => {
     } else if (isNetworkError(response)) {
       await LocalDbService.saveDeleteDelta(id);
     }
+    const parent = nodes.value.get(id)?.parent_id ?? null;
     const allChildrens = getDescendantIds(id);
     nodes.value.delete(id);
     allChildrens.forEach(childId => nodes.value.delete(childId));
+    invalidateDir(parent);
   }
 
   async function bulkDelete(toDelete: Node[]) {
@@ -428,6 +451,9 @@ export const useNodesStore = defineStore('nodes', () => {
       nodes.value.delete(id);
       allChildrens.forEach(childId => nodes.value.delete(childId));
     });
+    for (const node of toDelete) {
+      if (deletedIds.includes(node.id)) invalidateDir(node.parent_id ?? null);
+    }
     nodes.value.endBulk();
     return { deletedIds, failedIds };
   }
@@ -436,6 +462,8 @@ export const useNodesStore = defineStore('nodes', () => {
     nodes.value.clear();
     allTags.value = [];
     isFetching.value = false;
+    dirStates.value.clear();
+    hasChildren.value.clear();
   }
 
   // ------------------------------------------------------------- trash
@@ -471,6 +499,131 @@ export const useNodesStore = defineStore('nodes', () => {
     return request.status === 'success' ? (request.result?.purged ?? 0) : 0;
   }
 
+  // ---- Lazy directory loading ------------------------------------------------
+
+  function dirStateOf(parentId: string | null): DirState {
+    let st = dirStates.value.get(parentId);
+    if (!st) {
+      st = { total: -1, pages: new Set<number>(), loading: false };
+      dirStates.value.set(parentId, st);
+    }
+    return st;
+  }
+
+  function isDirComplete(parentId: string | null): boolean {
+    const st = dirStates.value.get(parentId);
+    if (!st || st.total < 0) return false;
+    const pages = Math.ceil(st.total / PAGE_SIZE);
+    for (let p = 0; p < pages; p++) if (!st.pages.has(p)) return false;
+    return true;
+  }
+
+  function isDirLoading(parentId: string | null): boolean {
+    return dirStates.value.get(parentId)?.loading ?? false;
+  }
+
+  interface DirPage {
+    rows: (DB_Node & { has_children?: boolean })[];
+    total: number;
+  }
+
+  async function loadDirPage(parentId: string | null, page: number, sortKey = 'name', sortDir = 'asc'): Promise<void> {
+    const st = dirStateOf(parentId);
+    if (st.loading || st.pages.has(page)) return;
+    st.loading = true;
+    try {
+      const route = parentId === null ? 'nodes/roots' : `nodes/${parentId}/children`;
+      const params = new URLSearchParams({
+        offset: String(page * PAGE_SIZE),
+        limit: String(PAGE_SIZE),
+        sort: sortKey,
+        order: sortDir,
+      });
+      const res = await makeRequest<DirPage>(`${route}?${params.toString()}`, 'GET', {});
+      if (res.status !== 'success' || !res.result) throw new Error(res.message || 'directory load failed');
+      const me = userStore.user?.id;
+      const tags = new Set(allTags.value);
+      nodes.value.startBulk();
+      for (const row of res.result.rows) {
+        nodes.value.set(
+          row.id,
+          {
+            ...row,
+            partial: true,
+            synced: true,
+            shared: row.user_id !== me,
+            permissions: nodes.value.get(row.id)?.permissions ?? [],
+          },
+          true,
+        );
+        if (typeof row.has_children === 'boolean') hasChildren.value.set(row.id, row.has_children);
+        if (row.tags) parseTags(row.tags).forEach(tag => tags.add(tag));
+      }
+      nodes.value.endBulk();
+      allTags.value = Array.from(tags).sort();
+      st.total = res.result.total;
+      st.pages.add(page);
+    } finally {
+      st.loading = false;
+    }
+  }
+
+  /** Load the first page unless this directory is already complete. */
+  async function ensureChildren(parentId: string | null, sortKey = 'name', sortDir = 'asc'): Promise<void> {
+    if (isDirComplete(parentId)) return;
+    await loadDirPage(parentId, 0, sortKey, sortDir);
+  }
+
+  /** Load the next missing page (scroll-driven); no-op when complete. */
+  async function loadMoreChildren(parentId: string | null, sortKey = 'name', sortDir = 'asc'): Promise<void> {
+    const st = dirStates.value.get(parentId);
+    if (!st || st.loading) {
+      if (!st) await loadDirPage(parentId, 0, sortKey, sortDir);
+      return;
+    }
+    if (isDirComplete(parentId)) return;
+    const pages = Math.ceil(Math.max(0, st.total) / PAGE_SIZE);
+    for (let p = 0; p < pages; p++) {
+      if (!st.pages.has(p)) {
+        await loadDirPage(parentId, p, sortKey, sortDir);
+        return;
+      }
+    }
+  }
+
+  function invalidateDir(parentId: string | null): void {
+    dirStates.value.delete(parentId);
+  }
+
+  function invalidateAllDirs(): void {
+    dirStates.value.clear();
+  }
+
+  /**
+   * Migration bridge: after a full load, mark every directory complete with
+   * locally derived totals so the lazy layer stays idle. Retires when init()
+   * flips to roots-only.
+   */
+  function seedDirStates(): void {
+    const counts = new Map<string | null, number>();
+    let roots = 0;
+    nodes.value.forEach(node => {
+      const key = node.parent_id ?? null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if ((node.role ?? 99) <= 1 || !node.parent_id || !nodes.value.has(node.parent_id)) roots++;
+      const kids = nodes.value.getChildrenIds(node.id).length > 0 || (linksByParent.value.get(node.id)?.length ?? 0) > 0;
+      hasChildren.value.set(node.id, kids);
+    });
+    counts.forEach((total, key) => {
+      const pages = new Set<number>();
+      for (let p = 0; p < Math.ceil(total / PAGE_SIZE); p++) pages.add(p);
+      dirStates.value.set(key, { total, pages, loading: false });
+    });
+    const rootPages = new Set<number>();
+    for (let p = 0; p < Math.ceil(roots / PAGE_SIZE); p++) rootPages.add(p);
+    dirStates.value.set(null, { total: roots, pages: rootPages, loading: false });
+  }
+
   return {
     nodes: skipHydrate(nodes),
     allTags,
@@ -483,6 +636,13 @@ export const useNodesStore = defineStore('nodes', () => {
     fetchLinks,
     cloneTo,
     removeLink,
+    ensureChildren,
+    loadMoreChildren,
+    isDirComplete,
+    isDirLoading,
+    invalidateDir,
+    invalidateAllDirs,
+    hasChildren,
     getTotalUsedStorage,
     teams,
     categories,
