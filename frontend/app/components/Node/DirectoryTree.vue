@@ -4,6 +4,9 @@
       <h2>目录</h2>
       <div class="header-actions" :title="t('nodes.directory.selected', { count: selection.size })">
         <AppCheck v-if="renderedIds.size" :model-value="allSelected" @change="toggleAll" />
+        <AppBtnIcon v-if="selection.size" icon="duplicate" :tooltip="t('common.actions.cloneTo')" @click="bulkClone" />
+        <AppBtnIcon v-if="selection.size" icon="location" :tooltip="t('common.actions.moveTo')" @click="bulkMove" />
+        <AppBtnIcon v-if="selection.size" icon="link" :tooltip="t('common.actions.copyLink')" @click="bulkCopyLink" />
         <AppButton v-if="selection.size" type="danger" small @click="deleteSelected">
           {{ t('nodes.directory.deleteSelected') }} ({{ selection.size }})
         </AppButton>
@@ -46,6 +49,7 @@
 
 <script setup lang="ts">
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
+import NodeCloneModal from '~/components/Node/Modals/CloneTo.vue';
 import { TREE_SORT, useDirectoryLevel, type DirectorySort } from '~/composables/useDirectoryLevel';
 import { resolveNodeLink } from '~/helpers/node';
 import type { Node, NodeRefs, RefNode } from '~/stores';
@@ -83,15 +87,37 @@ const { children, complete, loading, ensure, loadMore } = useDirectoryLevel(
 );
 
 // Multi-select (plugin parity): rows register while rendered; select-all
-// covers rendered rows only, never unloaded pages.
+// covers rendered rows only, never unloaded pages. Checking cascades down
+// to rendered descendants; unchecking cascades down and clears ancestors.
 const selection = ref<Set<string>>(new Set());
 const renderedIds = ref<Set<string>>(new Set());
 const allSelected = computed(() => renderedIds.value.size > 0 && selection.value.size >= renderedIds.value.size);
 
+const renderedChildrenOf = (id: string): string[] =>
+  nodesStore.nodes.getChildrenIds(id).filter(cid => renderedIds.value.has(cid));
+
 const toggle = (id: string) => {
   const next = new Set(selection.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
+  const node = nodesStore.getById(id);
+  if (next.has(id)) {
+    next.delete(id);
+    for (const d of nodesStore.getDescendantIds(id)) if (renderedIds.value.has(d)) next.delete(d);
+    let cur = node?.parent_id ? nodesStore.getById(node.parent_id) : undefined;
+    while (cur) {
+      next.delete(cur.id);
+      cur = cur.parent_id ? nodesStore.getById(cur.parent_id) : undefined;
+    }
+  } else {
+    next.add(id);
+    for (const d of nodesStore.getDescendantIds(id)) if (renderedIds.value.has(d)) next.add(d);
+    let cur = node?.parent_id ? nodesStore.getById(node.parent_id) : undefined;
+    while (cur && renderedIds.value.has(cur.id)) {
+      const sibs = renderedChildrenOf(cur.id);
+      if (sibs.length && sibs.every(s => next.has(s))) next.add(cur.id);
+      else break;
+      cur = cur.parent_id ? nodesStore.getById(cur.parent_id) : undefined;
+    }
+  }
   selection.value = next;
 };
 
@@ -99,21 +125,59 @@ const toggleAll = () => {
   selection.value = allSelected.value ? new Set() : new Set(renderedIds.value);
 };
 
-const deleteSelected = () => {
-  const nodes = [...selection.value]
+/** Drop selected nodes covered by a selected ancestor (best-effort on partial data). */
+const topmostSelection = (): Node[] => {
+  const set = selection.value;
+  return [...set]
     .map(id => nodesStore.getById(id))
-    .filter((n): n is Node => !!n);
+    .filter((n): n is Node => !!n)
+    .filter(n => {
+      let cur = n.parent_id ? nodesStore.getById(n.parent_id) : undefined;
+      while (cur) {
+        if (set.has(cur.id)) return false;
+        cur = cur.parent_id ? nodesStore.getById(cur.parent_id) : undefined;
+      }
+      return true;
+    });
+};
+
+const pruneSelection = () => {
+  selection.value = new Set([...selection.value].filter(id => nodesStore.getById(id)));
+};
+
+const deleteSelected = () => {
+  const nodes = topmostSelection();
   if (!nodes.length) return;
   modals.add(
     new Modal(shallowRef(NodeDeleteModal), {
       props: { nodes },
       size: 'small',
-      onClose: () => {
-        // Prune whatever the modal deleted; survivors stay selected.
-        selection.value = new Set([...selection.value].filter(id => nodesStore.getById(id)));
-      },
+      onClose: pruneSelection,
     }),
   );
+};
+
+const bulkClone = () => {
+  const nodes = topmostSelection();
+  if (!nodes.length) return;
+  modals.add(new Modal(shallowRef(NodeCloneModal), { props: { nodes }, size: 'small', onClose: trimSelection }));
+};
+
+const bulkMove = () => {
+  const nodes = topmostSelection();
+  if (!nodes.length) return;
+  modals.add(new Modal(shallowRef(NodeCloneModal), { props: { nodes, mode: 'move' }, size: 'small', onClose: trimSelection }));
+};
+
+/** After clone/move, keep only ids still rendered here (moved-away rows drop out). */
+const trimSelection = () => {
+  selection.value = new Set([...selection.value].filter(id => renderedIds.value.has(id)));
+};
+
+const bulkCopyLink = () => {
+  const nodes = topmostSelection();
+  if (!nodes.length) return;
+  navigator.clipboard.writeText(nodes.map(n => `${window.location.origin}${resolveNodeLink(n)}`).join('\n'));
 };
 
 provide('directoryRegister', (id: string) => {

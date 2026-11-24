@@ -1,6 +1,6 @@
 <template>
   <div class="modal">
-    <h3>{{ titleKey }} • {{ props.node.name }}</h3>
+    <h3>{{ titleKey }} • {{ targets.length > 1 ? targets.length : targets[0]?.name }}</h3>
     <label for="clone-target">{{ pickKey }}</label>
     <input
       v-model="query"
@@ -45,13 +45,15 @@ import { nodeFullPath } from '~/helpers/node';
 import type { Node } from '~/stores';
 import type { TreeItem } from '~/helpers/TreeBuilder';
 
-/** `move` re-parents the node; the default `clone` creates a second position. */
-const props = withDefaults(defineProps<{ node: Node; mode?: 'clone' | 'move' }>(), { mode: 'clone' });
+/** `move` re-parents the node(s); the default `clone` creates second positions. Bulk callers pass `nodes` (already topmost-reduced); single callers pass `node`. */
+const props = withDefaults(defineProps<{ node?: Node; nodes?: Node[]; mode?: 'clone' | 'move' }>(), { node: undefined, nodes: undefined, mode: 'clone' });
 const emit = defineEmits(['close']);
 
 const store = useNodesStore();
 const notifications = useNotifications();
 const { t } = useI18nT();
+
+const targets = computed(() => (props.nodes?.length ? props.nodes : props.node ? [props.node] : []));
 
 const titleKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.moveTitle') : t('nodes.modals.delete.cloneTitle')));
 const pickKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.movePick') : t('nodes.modals.delete.clonePick')));
@@ -60,14 +62,15 @@ const pickKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.m
 const folderTree = ref<TreeItem<Node>[]>([]);
 const pickRoots = computed(() => folderTree.value.map(item => ({ ...item }) as ANode));
 
-/** The node itself plus its subtree cannot be a target (server re-guards past the cap). */
+/** Every subject itself plus its subtree cannot be a target (server re-guards past the cap). */
 const descendantIds = ref<Set<string>>(new Set());
-const isDisabled = (i: ANode) => i.id === props.node.id || descendantIds.value.has(String(i.id));
+const selfIds = computed(() => new Set(targets.value.map(n => n.id)));
+const isDisabled = (i: ANode) => selfIds.value.has(String(i.id)) || descendantIds.value.has(String(i.id));
 
 onMounted(async () => {
   folderTree.value = await store.fetchFolderTree(2).catch(() => []);
-  const sub = await store.fetchFlatAll(undefined, props.node.id).catch(() => ({ rows: [], total: 0 }));
-  descendantIds.value = new Set(sub.rows.map(n => n.id));
+  const subs = await Promise.all(targets.value.map(n => store.fetchFlatAll(undefined, n.id).catch(() => ({ rows: [] as Node[] }))));
+  descendantIds.value = new Set(subs.flatMap(s => s.rows.map(n => n.id)));
 });
 
 /** Flat "workspace / … / folder" index of every selectable folder. */
@@ -101,15 +104,25 @@ const matches = computed(() => {
 });
 
 const pick = async (target: ANode) => {
-  try {
-    if (props.mode === 'move') {
-      await store.update({ ...props.node, parent_id: String(target.id) });
-    } else {
-      await store.cloneTo(props.node.id, String(target.id));
+  const failed: string[] = [];
+  for (const subject of targets.value) {
+    try {
+      if (props.mode === 'move') {
+        await store.update({ ...subject, parent_id: String(target.id) });
+      } else {
+        await store.cloneTo(subject.id, String(target.id));
+      }
+    } catch (e) {
+      failed.push(`${subject.name}: ${String(e)}`);
     }
-    emit('close');
-  } catch (e) {
-    notifications.add({ type: 'error', title: props.mode === 'move' ? 'Move' : 'Clone', message: String(e) });
+  }
+  emit('close');
+  if (failed.length) {
+    notifications.add({
+      type: 'error',
+      title: props.mode === 'move' ? 'Move' : 'Clone',
+      message: failed.join('\n'),
+    });
   }
 };
 </script>
