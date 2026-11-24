@@ -34,10 +34,21 @@
 <script setup lang="ts">
 const props = defineProps<{ parentId?: string }>();
 
-const nodesTree = useNodesTree();
+const nodesStore = useNodesStore();
 const { t } = useI18nT();
 
-const countByRole = (role: number) => nodesTree.getSubtreeAsArray(props.parentId).filter(node => node.data.role === role).length;
+const counts = ref({ total: 0, teams: 0, workspaces: 0, folders: 0, documents: 0, resources: 0 });
+
+watch(
+  () => props.parentId,
+  async pid => {
+    counts.value = await nodesStore.fetchStats(pid).catch(() => ({ total: 0, teams: 0, workspaces: 0, folders: 0, documents: 0, resources: 0 }));
+  },
+  { immediate: true },
+);
+
+const byRole: Record<number, keyof typeof counts.value> = { 0: 'teams', 1: 'workspaces', 2: 'folders', 3: 'documents', 4: 'resources' };
+const countByRole = (role: number) => counts.value[byRole[role] ?? 'total'];
 </script>
 
 <style scoped lang="scss">

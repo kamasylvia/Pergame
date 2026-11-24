@@ -1,5 +1,5 @@
 <template>
-  <NodeContainerView :parent="parent" :nodes="nodes" />
+  <NodeContainerView :parent="parent" :nodes="rows" :total="total" />
 </template>
 
 <script setup lang="ts">
@@ -15,23 +15,26 @@ definePageMeta({
 
 const nodesStore = useNodesStore();
 const nodesPermissionsStore = useNodesPermissionsStore();
-const nodesTree = useNodesTree();
 
 const modals = useModal();
 const route = useRoute();
 
 const parentId = route.params.id as string;
-const parent = ref<Node | undefined>();
+const parent = computed(() => nodesStore.getById(parentId));
+const rows = ref<Node[]>([]);
+const total = ref(0);
 
-watchEffect(() => {
-  parent.value = nodesStore.getById(parentId);
-});
-
-const nodes = computed(() => {
-  return nodesTree
-    .getSubtreeAsArray(parent.value?.id || '')
-    .filter(d => d.data.role === 3)
-    .map(c => c.data);
+onMounted(async () => {
+  if (!nodesStore.getById(parentId)) {
+    try {
+      await nodesStore.fetch({ id: parentId });
+    } catch {
+      /* parent stays undefined; container renders the empty state */
+    }
+  }
+  const page = await nodesStore.fetchFlatAll(3, parentId).catch(() => ({ rows: [], total: 0 }));
+  rows.value = page.rows;
+  total.value = page.total;
 });
 
 const openDeleteModal = () => {

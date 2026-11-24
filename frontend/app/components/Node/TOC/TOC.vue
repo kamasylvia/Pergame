@@ -46,6 +46,14 @@ const childs = computed(
       .filter(n => n?.role === 3) as Node[],
 );
 
+watch(
+  () => props.doc?.id,
+  id => {
+    if (id) nodesStore.fetchAllChildren(id).catch(() => []);
+  },
+  { immediate: true },
+);
+
 const list = ref<HTMLElement>();
 const marker = ref<HTMLElement>();
 const appElement = ref<HTMLElement | null>(null);

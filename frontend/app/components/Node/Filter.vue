@@ -77,7 +77,7 @@
 
           <div class="panel-footer">
             <small>
-              {{ t('nodes.filter.footer', { count: filtered.length, total: props.nodes.length }) }}
+              {{ t('nodes.filter.footer', { count: filtered.length, total: totalCount }) }}
             </small>
             <small>• <kbd>esc</kbd> {{ t('nodes.filter.toClose') }}</small>
           </div>
@@ -92,7 +92,8 @@ import { parseTags } from '~/helpers/node';
 import type { Node, SearchOptions } from '~/stores';
 import type { KanbanMetadata } from '../Kanban/Board.vue';
 
-const props = defineProps<{ nodes: Node[]; boardId?: string }>();
+const props = defineProps<{ nodes: Node[]; boardId?: string; total?: number }>();
+const totalCount = computed(() => props.total ?? props.nodes.length);
 const emit = defineEmits<{ (e: 'update:nodes', v: Node[]): void }>();
 
 const preferencesStore = usePreferencesStore();

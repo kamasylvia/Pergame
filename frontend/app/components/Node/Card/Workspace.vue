@@ -48,11 +48,12 @@ const categories = computed(() => {
   return childrenIds.map(id => nodesStore.getById(id)).filter((n): n is Node => !!n && (n.role === 1 || n.role === 2));
 });
 
-const docCount = computed(() => {
-  return nodesStore
-    .getDescendantIds(props.workspace.id)
-    .map(id => nodesStore.getById(id))
-    .filter(n => n?.role === 3).length;
+const docCount = ref(0);
+
+onMounted(async () => {
+  nodesStore.fetchAllChildren(props.workspace.id).catch(() => []);
+  const stats = await nodesStore.fetchStats(props.workspace.id).catch(() => null);
+  if (stats) docCount.value = stats.documents;
 });
 </script>
 

@@ -19,7 +19,7 @@
     </Teleport>
     <Teleport to="#navbar-actions">
       <AppBtnIcon v-if="view == 'kanban'" nav icon="reset" :tooltip="t('nodes.actions.resetBoard')" @click="resetKanban" />
-      <NodeFilter :nodes="nodes" :board-id="view === 'kanban' ? parent?.id : undefined" @update:nodes="filteredNodes = $event" />
+      <NodeFilter :nodes="nodes" :total="total" :board-id="view === 'kanban' ? parent?.id : undefined" @update:nodes="filteredNodes = $event" />
       <AppBtnIcon
         v-if="parent?.shared && parent.user_id != connectedId"
         nav
@@ -51,7 +51,7 @@
     </Teleport>
     <Teleport to="#navbar-infos">
       <header>
-        <span class="doc-count no-mobile">{{ filteredNodes.length != nodes.length ? `${filteredNodes.length} /` : '' }} {{ nodes.length }}</span>
+        <span class="doc-count no-mobile">{{ filteredNodes.length != nodes.length ? `${filteredNodes.length} /` : '' }} {{ nodes.length }}{{ total > nodes.length ? ` / ${total}` : '' }}</span>
         <ViewSelection v-model="view" :show-kanban="!!parent" :show-overview="!!parent" />
       </header>
     </Teleport>
@@ -108,7 +108,8 @@ import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string }>();
+const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string; total?: number }>();
+const total = computed(() => props.total ?? props.nodes.length);
 
 const nodesStore = useNodesStore();
 const nodesPermissionsStore = useNodesPermissionsStore();

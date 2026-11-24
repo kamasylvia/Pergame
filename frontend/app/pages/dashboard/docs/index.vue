@@ -1,28 +1,30 @@
 <template>
-  <NodeContainerView :parent="parent" :nodes="nodes" :parent-id="workspaceId" />
+  <NodeContainerView :parent="parent" :nodes="rows" :parent-id="workspaceId" :total="total" />
 </template>
 
 <script setup lang="ts">
-import type { TreeItem } from '~/helpers/TreeBuilder';
 import type { Node } from '~/stores';
 
 definePageMeta({ breadcrumb: { i18n: 'common.labels.all' } });
 
 const nodesStore = useNodesStore();
 
-const { filtered, workspaceId } = useSidebar();
+const { workspaceId } = useSidebar();
 
 const parent = computed(() => nodesStore.getById(workspaceId.value || ''));
+const rows = ref<Node[]>([]);
+const total = ref(0);
 
-const nodes = computed(() => {
-  const result: Node[] = [];
-  const getNodes = (items: TreeItem<Node>[]) => {
-    for (const item of items) {
-      if (item.data.role == 3) result.push(item.data);
-      if (item.children) getNodes(item.children);
-    }
-  };
-  getNodes(filtered.value);
-  return result;
-});
+watch(
+  workspaceId,
+  async wid => {
+    rows.value = [];
+    total.value = 0;
+    if (wid && !nodesStore.getById(wid)) await nodesStore.ensureAncestors(wid).catch(() => {});
+    const page = await nodesStore.fetchFlatAll(3, wid || undefined).catch(() => ({ rows: [], total: 0 }));
+    rows.value = page.rows;
+    total.value = page.total;
+  },
+  { immediate: true },
+);
 </script>

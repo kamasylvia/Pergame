@@ -97,6 +97,8 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
+  const id = route.params.id as string;
+  if (id && !nodesStore.getById(id)) nodesStore.fetch({ id }).catch(() => {});
 });
 
 onUnmounted(() => {

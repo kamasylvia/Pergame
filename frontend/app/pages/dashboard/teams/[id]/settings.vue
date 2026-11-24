@@ -83,6 +83,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
+  if (nodeId && !nodesStore.getById(nodeId)) nodesStore.fetch({ id: nodeId }).catch(() => {});
 });
 
 onUnmounted(() => {

@@ -4,7 +4,7 @@
 
     <Teleport to="#navbar-infos">
       <div class="action-row">
-        <NodeFilter v-show="!device.isMobile" :nodes="nodes" @update:nodes="filteredResources = $event" />
+        <NodeFilter v-show="!device.isMobile" :nodes="nodes" :total="resourcesTotal" @update:nodes="filteredResources = $event" />
         <ViewSelection v-model="view" />
       </div>
     </Teleport>
@@ -397,15 +397,18 @@ const previewOrphan = (key: string) => {
 };
 const parentNodes = tree.getTreeUpToRole(3);
 
-const nodes = computed(() => {
-  if (props.parentId)
-    return tree
-      .getSubtreeAsArray(props.parentId)
-      .filter(node => node.data.role === 4)
-      .map(i => i.data);
-  else return nodesStore.resources;
+const nodes = ref<Node[]>([]);
+const resourcesTotal = ref(0);
+
+onMounted(async () => {
+  const page = await nodesStore.fetchFlatAll(4, props.parentId).catch(() => ({ rows: [], total: 0 }));
+  nodes.value = page.rows;
+  resourcesTotal.value = page.total;
+  // Parent/category names for the table column (merged, never clobbering full rows).
+  const parents = new Set(page.rows.map(r => r.parent_id).filter((id): id is string => !!id));
+  await Promise.allSettled(Array.from(parents).map(pid => nodesStore.ensureAncestors(pid)));
 });
-const filteredResources = ref(nodes.value);
+const filteredResources = ref<Node[]>([]);
 
 const storagePercentage = computed(() => (quota.max ? Math.min((quota.used / quota.max) * 100, 100) : 0));
 const linksText = computed(() => fileLinks.value.join('\n'));

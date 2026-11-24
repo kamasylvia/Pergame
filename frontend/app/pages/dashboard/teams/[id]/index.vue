@@ -75,16 +75,29 @@ watchEffect(() => {
   }
 });
 
+onMounted(async () => {
+  if (!nodesStore.getById(teamId)) {
+    try {
+      team.value = await nodesStore.fetch({ id: teamId });
+    } catch {
+      /* team stays undefined; page renders nothing */
+    }
+  }
+  await nodesStore.fetchAllChildren(teamId).catch(() => []);
+});
+
 const allItems = computed(() =>
   team.value
     ? nodesStore.nodes
         .getChildrenIds(team.value.id)
         .map(id => nodesStore.getById(id)!)
-        .filter(item => item.id !== team.value?.id)
+        .filter(item => item && item.id !== team.value?.id)
     : [],
 );
 const editLink = computed(() => (team.value ? `/dashboard/docs/edit/${team.value.id}?redirect=/dashboard/teams/${team.value.id}` : ''));
-const directChildren = computed(() => (team.value ? nodesStore.nodes.getChildrenIds(team.value.id).map(id => nodesStore.getById(id)) : []));
+const directChildren = computed(() =>
+  team.value ? nodesStore.nodes.getChildrenIds(team.value.id).map(id => nodesStore.getById(id)).filter((n): n is Node => !!n) : [],
+);
 
 const openCreateWorkspace = () => modals.add(new Modal(shallowRef(CreateCategoryModal), { props: { role: 1, parentId: teamId } }));
 const openCreateCategory = () => modals.add(new Modal(shallowRef(CreateCategoryModal), { props: { role: 2, parentId: teamId } }));

@@ -46,6 +46,14 @@ const attachments = computed(() => {
     .map(id => nodeStore.getById(id))
     .filter(n => n?.role === 4) as Node[];
 });
+
+watch(
+  () => props.document?.id,
+  id => {
+    if (id) nodeStore.fetchAllChildren(id).catch(() => []);
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped lang="scss">

@@ -732,6 +732,35 @@ export const useNodesStore = defineStore('nodes', () => {
     return allTags.value;
   }
 
+  /** All direct children of one parent (TOC, footer, cards); loops directory pages, merges rows. */
+  async function fetchAllChildren(id: string, sortKey = 'name', sortDir = 'asc'): Promise<Node[]> {
+    if (!id) return [];
+    await ensureChildren(id, sortKey, sortDir);
+    let guard = 0;
+    while (!isDirComplete(id) && guard++ < 50) await loadMoreChildren(id, sortKey, sortDir);
+    return nodes.value
+      .getChildrenIds(id)
+      .map(cid => nodes.value.get(cid))
+      .filter((n): n is Node => !!n);
+  }
+
+  /** Flat rows up to `cap` (index pages); merges rows, returns live nodes + server total. */
+  async function fetchFlatAll(role?: number, root?: string, cap = 1000): Promise<{ rows: Node[]; total: number }> {
+    const limit = 500;
+    const first = await fetchFlat({ role, root, offset: 0, limit, sortKey: 'name', sortDir: 'asc' });
+    const rows = [...first.rows];
+    const total = first.total;
+    let offset = first.rows.length;
+    let last = first.rows.length;
+    while (offset < total && rows.length < cap && last > 0) {
+      const page = await fetchFlat({ role, root, offset, limit, sortKey: 'name', sortDir: 'asc' });
+      rows.push(...page.rows);
+      offset += page.rows.length;
+      last = page.rows.length;
+    }
+    return { rows: rows.slice(0, cap), total };
+  }
+
   /**
    * Migration bridge: after a full load, mark every directory complete with
    * locally derived totals so the lazy layer stays idle. Retires when init()
@@ -779,6 +808,8 @@ export const useNodesStore = defineStore('nodes', () => {
     fetchNeighbors,
     searchMeta,
     fetchFlat,
+    fetchFlatAll,
+    fetchAllChildren,
     fetchStats,
     fetchActivity,
     fetchTags,
