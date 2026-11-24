@@ -36,7 +36,7 @@ function sortLevel(rows: Node[], sort: DirectorySort): Node[] {
   return [...pinned, ...rest];
 }
 
-export function useDirectoryLevel(parentId: MaybeRef<string>, sort: MaybeRef<DirectorySort>) {
+export function useDirectoryLevel(parentId: MaybeRefOrGetter<string>, sort: MaybeRefOrGetter<DirectorySort>) {
   const nodesStore = useNodesStore();
   const pid = toRef(parentId);
   const ord = toRef(sort);

@@ -36,8 +36,11 @@
     <slot name="below" :node="node" :depth="depth" />
     <ul v-if="expanded && hasKids" class="row-children">
       <NodeDirectoryTreeRow v-for="child in children" :key="child.id" :node="child" :depth="depth + 1" :sort="sort">
-        <template v-for="(_, name) in $slots" :key="name" #[name]="slotProps">
-          <slot :name="name" v-bind="slotProps" />
+        <template #leading="p">
+          <slot name="leading" v-bind="p" />
+        </template>
+        <template #below="p">
+          <slot name="below" v-bind="p" />
         </template>
       </NodeDirectoryTreeRow>
       <li v-if="!complete" class="load-more-row">
@@ -58,6 +61,11 @@ import type { Node } from '~/stores';
 
 const props = defineProps<{ node: Node; depth: number; sort: DirectorySort }>();
 
+defineSlots<{
+  leading(props: { node: Node }): unknown;
+  below(props: { node: Node; depth: number }): unknown;
+}>();
+
 const nodesStore = useNodesStore();
 const preferences = usePreferencesStore();
 const router = useRouter();
@@ -68,6 +76,8 @@ const { t } = useI18nT();
 const resetSort = inject<() => void>('directoryResetSort', () => {});
 const registerRow = inject<(id: string) => void>('directoryRegister', () => {});
 const unregisterRow = inject<(id: string) => void>('directoryUnregister', () => {});
+
+const expanded = ref(false);
 
 onMounted(() => registerRow(props.node.id));
 onUnmounted(() => unregisterRow(props.node.id));
@@ -125,8 +135,9 @@ const onDragOver = (event: DragEvent) => {
 
 const onDragLeave = (event: DragEvent) => {
   // Dragleave fires on child transitions too; only clear when truly outside.
-  const to = event.relatedTarget as Node | null;
-  if (to && (event.currentTarget as HTMLElement).contains(to)) return;
+  const current = event.currentTarget as HTMLElement;
+  const to = event.relatedTarget as unknown as HTMLElement | null;
+  if (to && current.contains(to)) return;
   dropZone.value = '';
 };
 
