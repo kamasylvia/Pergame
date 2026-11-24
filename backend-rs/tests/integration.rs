@@ -2847,6 +2847,13 @@ async fn paged_tree_reads() {
     assert_eq!(status, 200);
     assert_eq!(r.result["prev"]["id"], json!(nb));
     assert_eq!(r.result["next"]["name"], json!("N-c"));
+    let (status, r) = get(&client, &format!("/nodes/{na}/neighbors?role=3")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["prev"]["id"], json!(nb));
+    assert_eq!(r.result["next"]["name"], json!("N-c"));
+    let (status, r) = get(&client, &format!("/nodes/{na}/neighbors?role=2")).await;
+    assert_eq!(status, 200);
+    assert!(r.result["prev"].is_null() && r.result["next"].is_null());
 
     // Meta substring search (single char included).
     let (status, r) = get(&client, "/nodes/search/meta?q=N-&role=3&limit=10").await;
