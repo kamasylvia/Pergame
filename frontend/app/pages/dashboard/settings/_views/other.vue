@@ -8,13 +8,19 @@
 </template>
 
 <script setup lang="ts">
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
 type InterfaceOption = Option & {
   tag?: string;
 };
 
 const { t } = useI18nT();
-const nodesTree = useNodesTree();
-const categories = nodesTree.getTreeUpToRole(2).value;
+const nodesStore = useNodesStore();
+const categories = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  categories.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+});
 
 const options = computed<Array<{ label: string; options: InterfaceOption[] }>>(() => [
   {

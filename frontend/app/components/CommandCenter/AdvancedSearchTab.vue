@@ -70,6 +70,7 @@
 import SearchResultsList from './SearchResultsList.vue';
 import { resolveIcon } from '~/helpers/node';
 import type { Node, NodeSearchResult } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const props = defineProps<{ query: string; selectedIndex: number }>();
 
@@ -77,8 +78,11 @@ defineEmits<{ updateSelectedIndex: [index: number] }>();
 
 const { t } = useI18nT();
 const nodesStore = useNodesStore();
-const nodesTree = useNodesTree();
-const categoriesTree = nodesTree.getTreeUpToRole(2);
+const categoriesTree = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  categoriesTree.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+});
 
 // UI State
 const showFilters = ref(true);

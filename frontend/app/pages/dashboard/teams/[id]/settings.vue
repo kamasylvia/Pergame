@@ -47,19 +47,21 @@
 </template>
 
 <script lang="ts" setup>
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
+
 definePageMeta({ breadcrumb: { i18n: 'common.actions.edit' } });
 
 const nodesStore = useNodesStore();
 
 const { t } = useI18nT();
-const nodesTree = useNodesTree();
 const notifications = useNotifications();
 const route = useRoute();
 const router = useRouter();
 
 const nodeId = route.params.id as string;
 const node = computed(() => nodesStore.getById(nodeId));
-const categoriesItem = nodesTree.getTreeUpToRole(2);
+const categoriesItem = ref<TreeItem<Node>[]>([]);
 
 // Actions
 const updateCategory = async () => {
@@ -81,9 +83,10 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
   if (nodeId && !nodesStore.getById(nodeId)) nodesStore.fetch({ id: nodeId }).catch(() => {});
+  categoriesItem.value = await nodesStore.fetchFolderTree(2).catch(() => []);
 });
 
 onUnmounted(() => {

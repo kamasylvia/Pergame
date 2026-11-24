@@ -7,6 +7,8 @@ import { INTERNAL_LINK_REGEX } from '~/helpers/markdown/internal-links';
 export interface InternalLinkProvider {
   getName: (id: string) => string | undefined;
   getDocuments: () => Node[];
+  /** Fetch one row by id (lazy store); the plugin repaints once it lands. */
+  fetchName?: (id: string) => Promise<unknown>;
 }
 
 class InternalLinkWidget extends WidgetType {
@@ -30,8 +32,9 @@ class InternalLinkWidget extends WidgetType {
   }
 }
 
-function buildDecorations(view: EditorView, provider: InternalLinkProvider): DecorationSet {
+function buildDecorations(view: EditorView, provider: InternalLinkProvider): { set: DecorationSet; missing: string[] } {
   const decorations: Range<Decoration>[] = [];
+  const missing: string[] = [];
   const { selection } = view.state;
 
   for (const { from, to } of view.visibleRanges) {
@@ -45,28 +48,53 @@ function buildDecorations(view: EditorView, provider: InternalLinkProvider): Dec
 
       const id = match[1]!;
       const name = provider.getName(id);
-      if (!name) continue; // Unknown document: leave the raw id visible
+      if (!name) {
+        missing.push(id);
+        continue; // Unknown document: leave the raw id visible
+      }
 
       decorations.push(Decoration.replace({ widget: new InternalLinkWidget(id, name) }).range(start, end));
     }
   }
 
-  return Decoration.set(decorations);
+  return { set: Decoration.set(decorations), missing };
 }
 
 export function createInternalLinks(provider: InternalLinkProvider) {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      attempted = new Set<string>();
+      destroyed = false;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, provider);
+        this.decorations = this.build(view);
+      }
+
+      build(view: EditorView): DecorationSet {
+        const { set, missing } = buildDecorations(view, provider);
+        if (provider.fetchName) {
+          const fresh = missing.filter(id => !this.attempted.has(id));
+          if (fresh.length) {
+            for (const id of fresh) this.attempted.add(id);
+            Promise.allSettled(fresh.map(id => provider.fetchName!(id))).then(() => {
+              // Names may have landed: repaint once. Still-missing ids stay
+              // raw (the attempted set stops refetch loops on dead links).
+              if (!this.destroyed) view.dispatch({});
+            });
+          }
+        }
+        return set;
       }
 
       update(update: ViewUpdate) {
         if (update.docChanged || update.selectionSet || update.viewportChanged) {
-          this.decorations = buildDecorations(update.view, provider);
+          this.decorations = this.build(update.view);
         }
+      }
+
+      destroy() {
+        this.destroyed = true;
       }
     },
     {

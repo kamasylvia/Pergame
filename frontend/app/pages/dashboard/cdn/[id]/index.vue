@@ -21,7 +21,7 @@
       <label>{{ t('common.labels.name') }}</label>
       <input id="name" v-model="resource.name" type="text" required maxlength="50" />
       <label style="display: flex; align-items: center">{{ t('common.labels.parent') }} <AppHint text="To organize your uploads" /></label>
-      <AppSelect v-model="resource.parent_id" nullable :items="nodesTree" placeholder="Select a resource parent" />
+      <AppSelect v-model="resource.parent_id" nullable :items="parentNodes" placeholder="Select a resource parent" />
       <label>{{ t('common.labels.type') }}</label>
       <input id="id" type="text" :value="resource.metadata?.filetype" disabled />
       <label>{{ t('cdn.labels.originalPath') }}</label>
@@ -39,6 +39,8 @@
 <script lang="ts" setup>
 import DeleteNodeModal from '~/components/Node/Modals/Delete.vue';
 import { readableFileSize } from '~/helpers/resources';
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
 
 definePageMeta({ breadcrumb: { i18n: 'common.actions.edit' } });
 
@@ -51,7 +53,7 @@ const notifications = useNotifications();
 const route = useRoute();
 const router = useRouter();
 
-const nodesTree = useNodesTree().getTreeUpToRole(3);
+const parentNodes = ref<TreeItem<Node>[]>([]);
 const resource = computed(() => nodeStore.getById(route.params.id as string));
 
 // Actions
@@ -82,10 +84,11 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
   const id = route.params.id as string;
   if (id && !nodeStore.getById(id)) nodeStore.fetch({ id }).catch(() => {});
+  parentNodes.value = await nodeStore.fetchFolderTree(3).catch(() => []);
 });
 
 onUnmounted(() => {

@@ -43,13 +43,13 @@
 import AppSelectNode from '~/components/AppSelectNode.vue';
 import { nodeFullPath } from '~/helpers/node';
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 /** `move` re-parents the node; the default `clone` creates a second position. */
 const props = withDefaults(defineProps<{ node: Node; mode?: 'clone' | 'move' }>(), { mode: 'clone' });
 const emit = defineEmits(['close']);
 
 const store = useNodesStore();
-const nodesTree = useNodesTree();
 const notifications = useNotifications();
 const { t } = useI18nT();
 
@@ -57,16 +57,18 @@ const titleKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.
 const pickKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.movePick') : t('nodes.modals.delete.clonePick')));
 
 /** Folders only (workspaces + categories); documents/resources are not parents. */
-const pickRoots = computed(() =>
-  nodesTree.getTreeUpToRole(2).value.map(
-    item => ({ ...item }) as ANode,
-  ),
-);
+const folderTree = ref<TreeItem<Node>[]>([]);
+const pickRoots = computed(() => folderTree.value.map(item => ({ ...item }) as ANode));
 
-const isDisabled = (i: ANode) => {
-  if (i.id === props.node.id) return true;
-  return nodesTree.getSubtreeAsArray(props.node.id).some(n => n.id === i.id);
-};
+/** The node itself plus its subtree cannot be a target (server re-guards past the cap). */
+const descendantIds = ref<Set<string>>(new Set());
+const isDisabled = (i: ANode) => i.id === props.node.id || descendantIds.value.has(String(i.id));
+
+onMounted(async () => {
+  folderTree.value = await store.fetchFolderTree(2).catch(() => []);
+  const sub = await store.fetchFlatAll(undefined, props.node.id).catch(() => ({ rows: [], total: 0 }));
+  descendantIds.value = new Set(sub.rows.map(n => n.id));
+});
 
 /** Flat "workspace / … / folder" index of every selectable folder. */
 const flatFolders = computed(() => {

@@ -197,6 +197,7 @@ import { makeRequest } from '~/stores/_utils';
 
 import type { Field } from '~/components/DataTable.vue';
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const props = defineProps<{
   parentId?: string;
@@ -212,7 +213,6 @@ const router = useRouter();
 const { t } = useI18nT();
 const { numericDate } = useDateFormatters();
 const { resourceURL } = useApi();
-const tree = useNodesTree();
 const device = useDevice();
 const appColors = useAppColors();
 const contextMenu = useContextMenu();
@@ -395,7 +395,7 @@ const purgeOrphans = async (keys: string[] | null = null) => {
 const previewOrphan = (key: string) => {
   modals.add(new Modal(shallowRef(OrphanPreviewModal), { props: { fileKey: key }, size: 'large' }));
 };
-const parentNodes = tree.getTreeUpToRole(3);
+const parentNodes = ref<TreeItem<Node>[]>([]);
 
 const nodes = ref<Node[]>([]);
 const resourcesTotal = ref(0);
@@ -407,6 +407,7 @@ onMounted(async () => {
   // Parent/category names for the table column (merged, never clobbering full rows).
   const parents = new Set(page.rows.map(r => r.parent_id).filter((id): id is string => !!id));
   await Promise.allSettled(Array.from(parents).map(pid => nodesStore.ensureAncestors(pid)));
+  parentNodes.value = await nodesStore.fetchFolderTree(3).catch(() => []);
 });
 const filteredResources = ref<Node[]>([]);
 

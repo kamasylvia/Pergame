@@ -30,18 +30,22 @@ import WorkspaceTree from './_components/WorkspaceTree.vue';
 import { filterTreeByLabel, type TreeItem } from '~/helpers/TreeBuilder';
 import type { Node } from '~/stores';
 
-const nodesTree = useNodesTree();
+const nodesStore = useNodesStore();
 
 const { t } = useI18nT();
 const modals = useModal();
 const router = useRouter();
 
 const filter = ref('');
+const folderTree = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  folderTree.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+});
 
 const filteredItems = computed(() => {
-  const items = nodesTree.getTreeUpToRole(2).value;
-  if (!filter.value.trim()) return items;
-  return filterTreeByLabel(items, filter.value);
+  if (!filter.value.trim()) return folderTree.value;
+  return filterTreeByLabel(folderTree.value, filter.value);
 });
 
 const createWorkspace = () => modals.add(new Modal(shallowRef(CreateCategoryModal), { props: { role: 1 } }));

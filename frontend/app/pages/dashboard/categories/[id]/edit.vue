@@ -45,20 +45,21 @@
 <script lang="ts" setup>
 import DeleteModal from '~/components/Node/Modals/Delete.vue';
 import { CATEGORY_ROLES } from '~/helpers/constants';
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
 
 definePageMeta({ breadcrumb: { i18n: 'common.actions.edit' } });
 
 const nodesStore = useNodesStore();
 
 const { t } = useI18nT();
-const nodesTree = useNodesTree();
 const modals = useModal();
 const notifications = useNotifications();
 const route = useRoute();
 const router = useRouter();
 
 const category = computed(() => nodesStore.getById(route.params.id as string));
-const categoriesItem = nodesTree.getTreeUpToRole(2);
+const categoriesItem = ref<TreeItem<Node>[]>([]);
 
 // Actions
 const updateCategory = async () => {
@@ -95,10 +96,11 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
   const id = route.params.id as string;
   if (id && !nodesStore.getById(id)) nodesStore.fetch({ id }).catch(() => {});
+  categoriesItem.value = await nodesStore.fetchFolderTree(2).catch(() => []);
 });
 
 onUnmounted(() => {

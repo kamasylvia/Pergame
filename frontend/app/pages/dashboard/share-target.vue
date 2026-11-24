@@ -62,6 +62,7 @@
 
 <script lang="ts" setup>
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 definePageMeta({ breadcrumb: { i18n: 'common.actions.share' } });
 
@@ -71,7 +72,6 @@ const resourcesStore = useResourcesStore();
 const { t } = useI18nT();
 const notifications = useNotifications();
 const router = useRouter();
-const nodesTree = useNodesTree();
 const route = useRoute();
 
 const loading = ref(true);
@@ -82,9 +82,10 @@ const sharedFiles = ref<File[]>([]);
 const parentId = ref<string | undefined>(undefined);
 const processing = ref(false);
 
-const categories = nodesTree.getTreeUpToRole(2);
+const categories = ref<TreeItem<Node>[]>([]);
 
 onMounted(async () => {
+  categories.value = await nodesStore.fetchFolderTree(2).catch(() => []);
   await retrieveSharedData();
   loading.value = false;
 });

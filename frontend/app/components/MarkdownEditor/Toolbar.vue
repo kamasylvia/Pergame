@@ -119,6 +119,7 @@ import ModalSyntax from './ModalSyntax.vue';
 import VoiceRecognition from './VoiceRecognition.vue';
 import EditorPreferences from './EditorPreferences.vue';
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const { t } = useI18nT();
 const modals = useModal();
@@ -165,8 +166,12 @@ const emitAction = (action: string) => emit('execute-action', action);
 const openHelp = () => modals.add(new Modal(shallowRef(ModalSyntax), { size: 'medium' }));
 const openSettings = () => modals.add(new Modal(shallowRef(EditorPreferences), { size: 'small' }));
 
-const nodesTree = useNodesTree();
-const categories = nodesTree.getTreeUpToRole(2);
+const nodesStore = useNodesStore();
+const categories = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  categories.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+});
 
 // Tool type with optional shortcut
 interface ToolItem {

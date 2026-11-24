@@ -92,18 +92,24 @@
 </template>
 <script setup lang="ts">
 import { Importer, type ImportJob, type ImportItem } from '~/helpers/backups/Importer';
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
 import { DOCUMENT_THEMES } from '~/helpers/constants';
 import ImportReport from './_components/ImportReport.vue';
 
 definePageMeta({ breadcrumb: { i18n: 'import.meta.breadcrumb' } });
 
+const nodesStore = useNodesStore();
 const nodesImporterStore = useNodesImporterStore();
 const preferences = usePreferencesStore();
 
-const nodesTree = useNodesTree();
 const { t } = useI18nT();
 
-const categoriesItem = nodesTree.getTreeUpToRole(2);
+const categoriesItem = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  categoriesItem.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+});
 const displayFeatureTags = preferences.get('displayFeatureTags');
 
 const files = ref<File[]>([]);

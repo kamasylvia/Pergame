@@ -38,6 +38,7 @@
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
 import { assignParent } from '~/helpers/resources-parent';
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 import type { Field } from '~/components/DataTable.vue';
 
 const props = defineProps<{ nodes: Node[] }>();
@@ -49,8 +50,11 @@ const { getAppAccent } = useAppColors();
 const { t } = useI18nT();
 const { numericDate } = useDateFormatters();
 const notifications = useNotifications();
-const tree = useNodesTree();
-const parentNodes = tree.getTreeUpToRole(3);
+const parentNodes = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  parentNodes.value = await nodesStore.fetchFolderTree(3).catch(() => []);
+});
 
 const tableRef = ref<{ selectedRows: Field[] } | null>(null);
 const bulkParentId = ref<string | number>('');

@@ -31,23 +31,28 @@
 
 <script setup lang="ts">
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const props = defineProps<{ role: 0 | 1 | 2; parentId?: string }>();
 const emit = defineEmits(['close']);
 
 const categoriesStore = useNodesStore();
 
-const nodesTree = useNodesTree();
 const sidebar = useSidebar();
 const { t } = useI18nT();
 
-const categoriesItem = nodesTree.getTreeUpToRole(2);
+const categoriesItem = ref<TreeItem<Node>[]>([]);
 
-function getDefaultParentId() {
+/** Nearest role-1/2 ancestor of the sidebar selection (self excluded), after ensuring the chain. */
+async function getDefaultParentId(): Promise<string | undefined> {
   const activeId = sidebar.active_id.value;
   if (activeId) {
-    const activeNode = nodesTree.getClosestCategoryAncestor(activeId);
-    if (activeNode) return activeNode.id;
+    await categoriesStore.ensureAncestors(activeId).catch(() => {});
+    let cur = categoriesStore.getById(activeId);
+    while (cur?.parent_id) {
+      cur = categoriesStore.getById(cur.parent_id);
+      if (cur && (cur.role === 1 || cur.role === 2)) return cur.id;
+    }
   }
   const workspaceId = sidebar.workspaceId.value;
   if (workspaceId == 'shared') return undefined;
@@ -57,8 +62,13 @@ function getDefaultParentId() {
 const category = ref<Partial<Node>>({
   accessibility: 1,
   name: '',
-  parent_id: props.role === 0 ? undefined : (props.parentId ?? getDefaultParentId()),
+  parent_id: props.role === 0 ? undefined : props.parentId,
   role: props.role,
+});
+
+onMounted(async () => {
+  categoriesItem.value = await categoriesStore.fetchFolderTree(2).catch(() => []);
+  if (props.role !== 0 && !props.parentId && !category.value.parent_id) category.value.parent_id = await getDefaultParentId();
 });
 
 const createCategory = () => {

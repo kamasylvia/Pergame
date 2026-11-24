@@ -120,6 +120,8 @@ const referencedDrawioResources = computed(() => {
   return diagrams;
 });
 
+const linkDocs = ref<Node[]>([]);
+
 const state = createEditorState({
   initialDoc: document.value.content || '',
   spellCheck: preferences.get('editorSpellCheck'),
@@ -128,7 +130,8 @@ const state = createEditorState({
   snippetSource: createSnippetSource(preferences.get('editorSnippetsEnabled'), preferences.get('snippets')),
   internalLinks: createInternalLinks({
     getName: id => nodesStore.getById(id)?.name,
-    getDocuments: () => nodesStore.documents,
+    getDocuments: () => linkDocs.value,
+    fetchName: id => nodesStore.fetch({ id }).catch(() => null),
   }),
   onDocChanged: () => {
     updateDocumentContent();
@@ -137,7 +140,7 @@ const state = createEditorState({
   uploadsHandlers,
 });
 
-onMounted(() => {
+onMounted(async () => {
   if (props.autofocusTitle) titleInput.value?.focus();
   if (!editorContainer.value) return;
   editorView.value = new EditorView({
@@ -146,6 +149,8 @@ onMounted(() => {
   });
   editorView.value.scrollDOM.addEventListener('scroll', scrollSync.syncEditorToPreview);
   window.addEventListener('keydown', handleGlobalKeys);
+  nodesStore.fetchAllChildren(document.value.id).catch(() => []);
+  linkDocs.value = (await nodesStore.fetchFlatAll(3).catch(() => ({ rows: [] as Node[] }))).rows;
 });
 
 onBeforeUnmount(() => {

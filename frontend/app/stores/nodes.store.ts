@@ -1,5 +1,6 @@
 import { IndexedCollection } from '~/helpers/IndexedCollection';
-import { parseTags, mergeNode } from '~/helpers/node';
+import { parseTags, mergeNode, resolveIcon, resolveNodeLink } from '~/helpers/node';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 import { LocalDbService } from '~/services/localDB';
 import { skipHydrate } from 'pinia';
 import type { DB_Node, DB_NodeLink, Node, NodeSearchResult, Permission, TrashEntry } from './db_structures';
@@ -86,7 +87,7 @@ export const useNodesStore = defineStore('nodes', () => {
 
     isFetching.value = true;
     nodes.value.startBulk();
-    await Promise.all([syncLocalDeltas(), fetch(), fetchShared(), fetchLinks()]);
+    await Promise.all([syncLocalDeltas(), fetch(), fetchShared(), fetchLinks(), fetchTags()]);
     nodes.value.endBulk();
     seedDirStates();
     isFetching.value = false;
@@ -744,7 +745,64 @@ export const useNodesStore = defineStore('nodes', () => {
       .filter((n): n is Node => !!n);
   }
 
-  /** Flat rows up to `cap` (index pages); merges rows, returns live nodes + server total. */
+  /**
+   * Folder skeleton for parent pickers (roles 0..maxRole, nested, sorted
+   * like the sidebar). Folder counts stay small while documents grow, so
+   * one capped sweep per role replaces the in-memory tree; documents as
+   * parents (maxRole 3) truncate past the cap.
+   */
+  async function fetchFolderTree(maxRole = 2, cap = 2000): Promise<TreeItem<Node>[]> {
+    const prefs = usePreferencesStore();
+    const sortKey = prefs.get('sortKey');
+    const sortOrder = prefs.get('sortOrder');
+    const seen = new Set<string>();
+    const all: Node[] = [];
+    for (let role = 0; role <= maxRole; role++) {
+      const page = await fetchFlatAll(role, undefined, cap).catch(() => ({ rows: [], total: 0 }));
+      for (const n of page.rows) {
+        if (seen.has(n.id)) continue;
+        seen.add(n.id);
+        all.push(n);
+      }
+    }
+    const items = new Map<string, TreeItem<Node>>();
+    for (const n of all) {
+      items.set(n.id, {
+        id: n.id,
+        parentId: n.role === 1 ? null : (n.parent_id ?? null),
+        label: n.name,
+        route: resolveNodeLink(n),
+        icon: resolveIcon(n),
+        data: n,
+        children: [],
+      });
+    }
+    const roots: TreeItem<Node>[] = [];
+    for (const item of items.values()) {
+      const pid = item.data.role === 1 ? null : item.data.parent_id;
+      const parent = pid ? items.get(pid) : undefined;
+      if (parent) parent.children!.push(item);
+      else roots.push(item);
+    }
+    const cmp = (a: TreeItem<Node>, b: TreeItem<Node>): number => {
+      if (a.data.role !== b.data.role) return (b.data.role ?? 0) - (a.data.role ?? 0);
+      const orderA = a.data.order ?? 0;
+      const orderB = b.data.order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      let c = 0;
+      if (sortKey.value === 'name') c = a.label.localeCompare(b.label);
+      else if (sortKey.value === 'created') c = (a.data.created_timestamp ?? 0) - (b.data.created_timestamp ?? 0);
+      else if (sortKey.value === 'modified') c = (a.data.updated_timestamp ?? 0) - (b.data.updated_timestamp ?? 0);
+      return sortOrder.value === 'ascending' ? c : -c;
+    };
+    const sortRec = (list: TreeItem<Node>[]): void => {
+      list.sort(cmp);
+      for (const i of list) if (i.children?.length) sortRec(i.children);
+    };
+    sortRec(roots);
+    return roots;
+  }
+
   async function fetchFlatAll(role?: number, root?: string, cap = 1000): Promise<{ rows: Node[]; total: number }> {
     const limit = 500;
     const first = await fetchFlat({ role, root, offset: 0, limit, sortKey: 'name', sortDir: 'asc' });
@@ -810,6 +868,7 @@ export const useNodesStore = defineStore('nodes', () => {
     fetchFlat,
     fetchFlatAll,
     fetchAllChildren,
+    fetchFolderTree,
     fetchStats,
     fetchActivity,
     fetchTags,

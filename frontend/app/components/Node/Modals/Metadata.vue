@@ -55,22 +55,23 @@
 <script setup lang="ts">
 import { DOCUMENT_THEMES, CATEGORY_ROLES } from '~/helpers/constants';
 import type { Node } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const props = defineProps<{ doc: Node }>();
 
 const nodeStore = useNodesStore();
-const nodesTree = useNodesTree();
+const parentsTree = ref<TreeItem<Node>[]>([]);
 
 const { t } = useI18nT();
 const { getAppAccent } = useAppColors();
 
 const node = ref<Node>({ ...props.doc });
 const pinnedToggle = ref(node.value.order == -1);
-const parentsTree = nodesTree.getTreeUpToRole(node.value.role);
 
 onBeforeMount(async () => {
   const latestNode = await nodeStore.fetch({ id: node.value.id });
   if (latestNode) node.value = { ...latestNode }; // CLONE
+  parentsTree.value = await nodeStore.fetchFolderTree(node.value.role ?? 2).catch(() => []);
 });
 
 watch(pinnedToggle, val => (node.value.order = val ? -1 : 0));
