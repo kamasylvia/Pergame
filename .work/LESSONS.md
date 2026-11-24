@@ -236,3 +236,8 @@
 - **integration 备份类用例要 `TARGET_TEST_BUCKET`**:`backup_zip_contains_links`/`snapshot_*`/`trash_lifecycle` 等无该 env 直接 `NotPresent` 失败;scratch 桶 `pergame-tgt-test` 已存在(非空也可用,断言不依赖空桶)。另 `trash_lifecycle`(3vs2)与 `mcp_token`(工具表 7vs10)在 HEAD 已失败,非回归。
 - **浏览器回归撞 HMR 陈旧先整页重载**:Delete modal 修后仍报旧错,reload 即好。过渡态报错先 reload 再定 bug。
 - **`.sidebar` 嵌套两层,滚动测试须取内层**:`querySelector('.sidebar')` 命中 Resizable 外壳(不可滚);真滚动容器是内层 `ref=scroller` 的 div(已有 TODO 前例)。按 `scrollHeight > clientHeight` 选。
+
+## 2026-11-24 目录树批次
+
+- **migration 文件改完先跑一遍 SQL 再重启后端**:0014 落盘后一次 edit 误删 `INSERT INTO` 首行,后端启动才报 `syntax error at ON`(sqlx 按文件报行号难定位)。DDL + 回填分别可执行验证后再 composite 进文件。
+- **合成 DragEvent 测 DnD 必须 defineProperty 塞 dataTransfer**:`new DragEvent(type, {dataTransfer})` 里 init 值会被浏览器丢弃,handler 读到 null;`Object.defineProperty(ev,'dataTransfer',{value: dt})` 才进得去。另 `tab.evaluate` 不收 args,参数拼进函数字符串。

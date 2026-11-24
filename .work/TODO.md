@@ -5,6 +5,14 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 目录树吸纳 siyuan-auto-directory(2026-11-24)
+
+- [x] **A refs 索引**:migration `0014_node_refs`(FK 双向 cascade + SQL 回填),写时 reconcile(挂 repo insert/update,restore 事务回填),`GET /nodes/refs?ids`(100 锚点批量)+`/nodes/:id/refs`(双向,可见性过滤);自链/资源/legacy 数字号跳过。`refs_lifecycle` 集成绿(`3f499ddb`)。
+- [x] **B 目录树**:`DirectoryTree/Row` 替换概览目录表(嵌套展开/100 页懒载 + Load more/临时排序置顶优先/置顶/标签/时间/计数/跳转);tree 排序显式镜像服务端(role/order/name);最近浏览表与文档内 children/recent 块不动。i18n 8 语种(`b74c6814`)。
+- [x] **C 树操作**:行拖拽(上下沿 reorder,中部 move-into,与侧栏同 mime 可互拖),order 1024-gap(单写 midpoint,耗尽 renumber,pin 排除,不完整层先拉齐);move 确认框 + 不再询问(`directoryConfirmMove` 偏好,设置页可重开);行多选 + 表头全选(仅渲染行)+ 批量删(`6f29a31b`)。
+- [x] **D 引用内联**:渲染行单批量拉 refs(容器级缓存),出边去重(自身 + 已在下方的子孙,best-effort)/2 条 + `+N`,referenced-by 同式;点击跳转(`bfa96cff`)。
+- [x] **验证**:隔离号逐批活验(树/排序/置顶/导航;reorder 落库 + 显示;move 确认流 + 服务端 parent;多选删 2;去重 `+1` 算术 + 展开 + 单批量);`cargo test --lib` 162 绿;测试号全清。未做:Quick directory 浮层(与 CommandCenter 重叠)、引用路径展示(只名 + 跳转)、refs 跨页实时刷新(切容器重拉)。
+
 ## 懒加载消费者迁移 P3a–P3f(2026-11-24)
 
 - [x] **P3a 后端补齐**:neighbors role 过滤断言 + flat/meta/stats/activity/tags/roots?role(随 `a4203431`/`1c658f24` 进仓)。
