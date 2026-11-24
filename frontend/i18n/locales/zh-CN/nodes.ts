@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: '删除所选',
+    dontAskAgain: '不再询问',
     loadMore: '加载更多',
+    moveMessage: '将“{name}”移动到“{target}”？',
+    selected: '已选 {count} 项',
     treeOrder: '文档树顺序',
   },
 

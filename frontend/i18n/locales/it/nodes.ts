@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: 'Elimina selezionati',
+    dontAskAgain: 'Non chiedere più',
     loadMore: 'Carica altri',
+    moveMessage: 'Spostare "{name}" in "{target}"?',
+    selected: '{count} selezionati',
     treeOrder: 'Ordine albero documenti',
   },
 

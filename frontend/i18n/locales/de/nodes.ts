@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: 'Auswahl löschen',
+    dontAskAgain: 'Nicht erneut fragen',
     loadMore: 'Mehr laden',
+    moveMessage: '„{name}“ nach „{target}“ verschieben?',
+    selected: '{count} ausgewählt',
     treeOrder: 'Dokumentbaum-Reihenfolge',
   },
 

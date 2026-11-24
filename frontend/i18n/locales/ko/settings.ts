@@ -254,6 +254,8 @@ export default {
   other: {
     advancedView: '고급 보기',
     advancedViewDesc: '카테고리 및 작업 공간에 대한 대량 작업이 가능한 고급 데이터 테이블 보기를 활성화합니다.',
+    confirmDirectoryMove: '디렉터리 이동 확인',
+    confirmDirectoryMoveDesc: '디렉터리 트리에서 드래그 앤 드롭으로 이동하기 전에 확인합니다.',
     datatable: '데이터 테이블',
     defaultItemsCount: '기본 항목 수',
     defaultUploadFolder: '기본 업로드 폴더',

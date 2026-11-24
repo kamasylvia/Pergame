@@ -68,6 +68,12 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         type: 'toggle',
         key: 'developerMode',
       },
+      {
+        label: t('settings.other.confirmDirectoryMove'),
+        description: t('settings.other.confirmDirectoryMoveDesc'),
+        type: 'toggle',
+        key: 'directoryConfirmMove',
+      },
     ],
   },
   {

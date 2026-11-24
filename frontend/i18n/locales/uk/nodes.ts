@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: 'Видалити вибрані',
+    dontAskAgain: 'Більше не питати',
     loadMore: 'Завантажити ще',
+    moveMessage: 'Перемістити "{name}" до "{target}"?',
+    selected: 'Вибрано: {count}',
     treeOrder: 'Порядок дерева документів',
   },
 

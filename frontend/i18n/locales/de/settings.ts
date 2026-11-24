@@ -257,6 +257,8 @@ export default {
   other: {
     advancedView: 'Erweiterte Ansicht',
     advancedViewDesc: 'Aktiviere die erweiterte Datentabellenansicht mit Massenaktionen für Kategorien und Arbeitsbereiche.',
+    confirmDirectoryMove: 'Verschieben im Verzeichnis bestätigen',
+    confirmDirectoryMoveDesc: 'Vor dem Verschieben per Drag & Drop im Verzeichnisbaum nachfragen.',
     datatable: 'Datentabelle',
     defaultItemsCount: 'Standardanzahl von Elementen',
     defaultUploadFolder: 'Standard-Upload-Ordner',

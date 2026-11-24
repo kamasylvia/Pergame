@@ -257,6 +257,8 @@ export default {
   other: {
     advancedView: 'Vista avanzata',
     advancedViewDesc: 'Abilita la vista avanzata della tabella dati con azioni di massa per Categorie e Spazi di lavoro.',
+    confirmDirectoryMove: 'Conferma spostamenti',
+    confirmDirectoryMoveDesc: 'Chiedi conferma prima di spostare una nota con il trascinamento nell’albero.',
     datatable: 'Tabella dati',
     defaultItemsCount: 'Numero predefinito di elementi',
     defaultUploadFolder: 'Cartella di caricamento predefinita',

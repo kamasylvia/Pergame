@@ -254,6 +254,8 @@ export default {
   other: {
     advancedView: '進階檢視',
     advancedViewDesc: '啟用進階資料表格檢視，提供分類與工作區的批次操作。',
+    confirmDirectoryMove: '目錄移動確認',
+    confirmDirectoryMoveDesc: '在目錄樹中拖放移動筆記前先確認。',
     datatable: '資料表格',
     defaultItemsCount: '預設項目數量',
     defaultUploadFolder: '預設上傳資料夾',

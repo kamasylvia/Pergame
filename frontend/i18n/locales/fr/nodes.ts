@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: 'Supprimer la sélection',
+    dontAskAgain: 'Ne plus demander',
     loadMore: 'Charger plus',
+    moveMessage: 'Déplacer « {name} » vers « {target} » ?',
+    selected: '{count} sélectionné(s)',
     treeOrder: "Ordre de l'arborescence",
   },
 

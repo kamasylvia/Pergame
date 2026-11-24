@@ -254,6 +254,8 @@ export default {
   other: {
     advancedView: '高级视图',
     advancedViewDesc: '启用带有批量操作的高级数据表格视图，用于分类和工作区。',
+    confirmDirectoryMove: '目录移动确认',
+    confirmDirectoryMoveDesc: '在目录树中拖放移动笔记前进行确认。',
     datatable: '数据表格',
     defaultItemsCount: '默认项目数量',
     defaultUploadFolder: '默认上传文件夹',

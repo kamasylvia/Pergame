@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: '선택 삭제',
+    dontAskAgain: '다시 묻지 않기',
     loadMore: '더 보기',
+    moveMessage: '"{name}"을(를) "{target}"(으)로 이동하시겠습니까?',
+    selected: '{count}개 선택됨',
     treeOrder: '문서 트리 순서',
   },
 

@@ -37,7 +37,11 @@ export default {
   },
 
   directory: {
+    deleteSelected: 'Delete selected',
+    dontAskAgain: "Don't ask again",
     loadMore: 'Load more',
+    moveMessage: 'Move "{name}" into "{target}"?',
+    selected: '{count} selected',
     treeOrder: 'Document tree order',
   },
 

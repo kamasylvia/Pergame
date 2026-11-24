@@ -255,6 +255,8 @@ export default {
   other: {
     advancedView: 'Advanced view',
     advancedViewDesc: 'Enable the advanced datatable view with bulk actions for Categories and Workspaces.',
+    confirmDirectoryMove: 'Confirm directory moves',
+    confirmDirectoryMoveDesc: 'Ask before moving a note by drag and drop in the directory tree.',
     datatable: 'Data table',
     defaultItemsCount: 'Default items count',
     defaultUploadFolder: 'Default upload folder',

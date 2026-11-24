@@ -256,6 +256,8 @@ export default {
   other: {
     advancedView: 'Vue avancée',
     advancedViewDesc: 'Activer la vue avancée du tableau de données avec des actions groupées pour les catégories et les espaces de travail.',
+    confirmDirectoryMove: 'Confirmer les déplacements',
+    confirmDirectoryMoveDesc: 'Demander confirmation avant de déplacer une note par glisser-déposer dans l’arborescence.',
     datatable: 'Tableau de données',
     defaultItemsCount: "Nombre d'éléments par défaut",
     defaultUploadFolder: 'Dossier de téléchargement par défaut',
