@@ -1,7 +1,13 @@
 import type { MarkdownIt, StateInline } from 'markdown-it';
 
-// Internal links: #726782907684193440 => link to the document, displayed as "#<document name>"
-export const INTERNAL_LINK_REGEX = /#(\d{15,20})(?!\d)/g;
+// Internal links: `#<uuid>` (what the editor inserts) or legacy `#<15-20
+// digits>` (SiYuan-era snowflake ids) => link to the document, displayed as
+// "#<document name>".
+const UUID_BODY = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const LEGACY_BODY = '\\d{15,20}';
+export const INTERNAL_LINK_REGEX = new RegExp(`#(${UUID_BODY}(?![0-9a-fA-F])|${LEGACY_BODY}(?!\\d))`, 'g');
+/** Same alternation anchored for single-position matching (inline ruler). */
+export const INTERNAL_LINK_ANCHORED = new RegExp(`^(?:${UUID_BODY}(?![0-9a-fA-F])|${LEGACY_BODY}(?!\\d))`);
 
 export interface InternalLinkEnv {
   resolveNode?: (id: string) => string | undefined;
@@ -16,17 +22,13 @@ export function internalLinkPlugin(md: MarkdownIt) {
     const prev = start > 0 ? state.src[start - 1] : '';
     if (prev && /[\w#&]/.test(prev)) return false;
 
-    let end = start + 1;
-    while (end < state.posMax && state.src.charCodeAt(end) >= 0x30 && state.src.charCodeAt(end) <= 0x39) {
-      end++;
-    }
-
-    const digits = end - start - 1;
-    if (digits < 15 || digits > 20) return false;
+    const match = INTERNAL_LINK_ANCHORED.exec(state.src.slice(start + 1, state.posMax));
+    if (!match) return false;
+    const end = start + 1 + match[0].length;
 
     if (!silent) {
       const token = state.push('internal_link', '', 0);
-      token.meta = { id: state.src.slice(start + 1, end) };
+      token.meta = { id: match[0] };
     }
 
     state.pos = end;

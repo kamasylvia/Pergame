@@ -2,9 +2,7 @@ import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, typ
 import type { Range } from '@codemirror/state';
 import type { CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import type { Node } from '~/stores';
-
-// Internal links: #726782907684193440 is displayed as "#<document name>" in the editor
-const INTERNAL_LINK_REGEX = /#(\d{15,20})(?!\d)/g;
+import { INTERNAL_LINK_REGEX } from '~/helpers/markdown/internal-links';
 
 export interface InternalLinkProvider {
   getName: (id: string) => string | undefined;
