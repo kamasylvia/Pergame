@@ -29,7 +29,7 @@
             :items="categoriesItem"
             :placeholder="t('common.placeholder.parent')"
             nullable
-            :disabled="i => i.id == node!.id || nodesStore.isDescendant(node!, i.id as string)"
+            :disabled="i => i.id == node!.id || descendantIds.has(String(i.id))"
           />
         </div>
         <div class="form-column">
@@ -62,6 +62,7 @@ const router = useRouter();
 const nodeId = route.params.id as string;
 const node = computed(() => nodesStore.getById(nodeId));
 const categoriesItem = ref<TreeItem<Node>[]>([]);
+const descendantIds = ref<Set<string>>(new Set());
 
 // Actions
 const updateCategory = async () => {
@@ -87,6 +88,8 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
   if (nodeId && !nodesStore.getById(nodeId)) nodesStore.fetch({ id: nodeId }).catch(() => {});
   categoriesItem.value = await nodesStore.fetchFolderTree(2).catch(() => []);
+  const sub = await nodesStore.fetchFlatAll(undefined, nodeId).catch(() => ({ rows: [] as Node[] }));
+  descendantIds.value = new Set(sub.rows.map(n => n.id));
 });
 
 onUnmounted(() => {

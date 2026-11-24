@@ -84,9 +84,9 @@ export default defineNuxtPlugin(async nuxtApp => {
       notifications.add(payload);
     },
     async onNodesChanged() {
-      // Plugin node writes bypass the pinia stores (plain REST); refetch so
-      // the sidebar/tree shows plugin-created notes without a full reload.
-      await useNodesStore().fetch();
+      // Plugin node writes bypass the pinia stores (plain REST); reload the
+      // held directory pages so the tree shows them without a full reload.
+      await useNodesStore().refreshLoadedDirs();
     },
   });
 

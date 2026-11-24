@@ -4,7 +4,7 @@
     <template v-if="props.node">
       <h3>{{ t('nodes.modals.delete.title', { type: nodeType }) }} • {{ props.node.name }}</h3>
       <p>{{ t('nodes.modals.delete.confirm', { type: nodeType }) }}</p>
-      <p v-if="allChildren.length > 0" class="warn">{{ t('nodes.modals.delete.hasChildren', { type: nodeType, count: allChildren.length }) }}</p>
+      <p v-if="childCount > 0" class="warn">{{ t('nodes.modals.delete.hasChildren', { type: nodeType, count: childCount }) }}</p>
       <p v-if="cloneCount > 0" class="warn">{{ t('nodes.modals.delete.hasClones', { type: nodeType, count: cloneCount }) }}</p>
     </template>
 
@@ -42,13 +42,16 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 
 const store = useNodesStore();
-const nodesTree = useNodesTree();
 
 const { t } = useI18nT();
 const router = useRouter();
 const notifications = useNotifications();
 
-const allChildren = computed(() => (props.node ? nodesTree.getSubtreeAsArray(props.node.id) : []));
+const childCount = ref(0);
+
+onMounted(async () => {
+  if (props.node) childCount.value = (await store.fetchStats(props.node.id).catch(() => null))?.total ?? 0;
+});
 
 const cloneCount = computed(() => (props.node ? store.links.filter(l => l.node_id === props.node!.id).length : 0));
 

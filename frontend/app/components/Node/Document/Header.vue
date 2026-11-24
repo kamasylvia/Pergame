@@ -41,6 +41,7 @@ import type { Node, PublicUser } from '~/stores';
 const props = defineProps<{ doc?: Node; public?: boolean }>();
 
 const userStore = useUserStore();
+const nodesStore = useNodesStore();
 const preferences = usePreferencesStore();
 
 const nodesTree = useNodesTree();
@@ -49,6 +50,14 @@ const { getAppAccent } = useAppColors();
 const user = ref<PublicUser | null>(null);
 
 const category = computed(() => nodesTree.getClosestCategoryAncestor(props.doc?.id)?.data);
+
+watch(
+  () => props.doc?.id,
+  id => {
+    if (id) nodesStore.ensureAncestors(id).catch(() => {});
+  },
+  { immediate: true },
+);
 const printMode = preferences.get('printMode');
 
 watch(

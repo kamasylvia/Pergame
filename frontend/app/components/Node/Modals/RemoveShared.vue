@@ -3,7 +3,7 @@
     <h3>{{ t('nodes.modals.removeShared.title') }}</h3>
     <p>{{ t('nodes.modals.removeShared.confirm') }}</p>
     <p style="opacity: 0.7">{{ t('nodes.modals.removeShared.noAccess') }}</p>
-    <p v-if="allChildren.length > 0" class="warn">{{ t('nodes.modals.removeShared.childWarning', { count: allChildren.length }) }}</p>
+    <p v-if="childCount > 0" class="warn">{{ t('nodes.modals.removeShared.childWarning', { count: childCount }) }}</p>
     <div class="footer">
       <AppButton type="secondary" @click="emit('close')">{{ t('common.actions.cancel') }}</AppButton>
       <AppButton type="danger" @click="removeDoc">{{ t('common.actions.confirm') }}</AppButton>
@@ -20,10 +20,12 @@ const nodesPermissionsStore = useNodesPermissionsStore();
 const userStore = useUserStore();
 
 const { t } = useI18nT();
-const nodesTree = useNodesTree();
 const notifications = useNotifications();
+const childCount = ref(0);
 
-const allChildren = nodesTree.getSubtreeAsArray(props.nodeId);
+onMounted(async () => {
+  childCount.value = (await nodesStore.fetchStats(props.nodeId).catch(() => null))?.total ?? 0;
+});
 
 const removeDoc = () => {
   const node = nodesStore.getById(props.nodeId);

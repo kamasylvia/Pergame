@@ -316,7 +316,8 @@ const transferImgbed = async (kind: 'migrate' | 'import') => {
           ? t('cdn.imgbed.migrated', { n: result.migrated ?? 0, failed })
           : t('cdn.imgbed.imported', { n: result.imported ?? 0, docs: result.documents ?? 0, failed });
       await fetchQuota();
-      await nodesStore.fetch();
+      await nodesStore.refreshLoadedDirs();
+      await reloadResources();
     } else {
       notifications.add({ type: 'error', title: t('cdn.imgbed.failed'), message: response.message });
     }
@@ -400,7 +401,7 @@ const parentNodes = ref<TreeItem<Node>[]>([]);
 const nodes = ref<Node[]>([]);
 const resourcesTotal = ref(0);
 
-onMounted(async () => {
+async function reloadResources(): Promise<void> {
   const page = await nodesStore.fetchFlatAll(4, props.parentId).catch(() => ({ rows: [], total: 0 }));
   nodes.value = page.rows;
   resourcesTotal.value = page.total;
@@ -408,7 +409,9 @@ onMounted(async () => {
   const parents = new Set(page.rows.map(r => r.parent_id).filter((id): id is string => !!id));
   await Promise.allSettled(Array.from(parents).map(pid => nodesStore.ensureAncestors(pid)));
   parentNodes.value = await nodesStore.fetchFolderTree(3).catch(() => []);
-});
+}
+
+onMounted(reloadResources);
 const filteredResources = ref<Node[]>([]);
 
 const storagePercentage = computed(() => (quota.max ? Math.min((quota.used / quota.max) * 100, 100) : 0));

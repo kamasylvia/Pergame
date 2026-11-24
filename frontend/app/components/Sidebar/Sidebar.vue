@@ -89,10 +89,22 @@ const virtualTree = ref<{
 
 const filter = ref<string>('');
 
-const teams: ComputedRef<Workspace[]> = computed(() => [...nodesStore.teams.map(c => ({ text: c.name, value: c.id, meta: c, children: [] }))]);
+const teamRows = ref<Node[]>([]);
+const workspaceRows = ref<Node[]>([]);
+
+onMounted(async () => {
+  const [t, w] = await Promise.all([
+    nodesStore.fetchFlatAll(0).catch(() => ({ rows: [] as Node[] })),
+    nodesStore.fetchFlatAll(1).catch(() => ({ rows: [] as Node[] })),
+  ]);
+  teamRows.value = t.rows;
+  workspaceRows.value = w.rows;
+});
+
+const teams: ComputedRef<Workspace[]> = computed(() => [...teamRows.value.map(c => ({ text: c.name, value: c.id, meta: c, children: [] }))]);
 const workspaces = computed(() => {
   const items = [];
-  for (const workspace of nodesStore.workspaces) {
+  for (const workspace of workspaceRows.value) {
     const parentTeam = teams.value.find(t => t.value === workspace.parent_id);
     if (parentTeam) {
       parentTeam.children!.push({ text: workspace.name, value: workspace.id, meta: workspace });
@@ -171,12 +183,16 @@ let lastNavAt = 0;
  * below repairs within a bounded settle window.
  */
 const revealWithRetry = async (nodeId: string, token: number) => {
+  // Lazy bootstrap: the chain and every directory along it must exist in
+  // the store before expansion can mount the row (no-ops when loaded).
+  await nodesStore.ensureAncestors(nodeId).catch(() => {});
   for (let i = 0; i < 30 && token === revealToken; i++) {
     if (nodeId === revealedFor) return;
     // getAncestors returns [self … root]; the node itself needs no expansion.
     const chain = nodesTree.getAncestors(nodeId);
     const vt = virtualTree.value;
     if (chain.length && vt) {
+      await Promise.all(chain.slice(1).map(item => nodesStore.ensureChildren(item.id).catch(() => {})));
       for (const item of chain.slice(1)) nodesTree.setExpanded(item.id, true);
       // The tree is virtualized: rows outside the window are not mounted, so
       // the list itself scrolls by index first, then polishes with a

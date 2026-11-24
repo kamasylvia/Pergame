@@ -15,24 +15,20 @@ import type { MonthlyCount } from '~/stores';
 definePageMeta({ breadcrumb: { i18n: 'teams.insights.title' } });
 
 const route = useRoute();
-const tree = useNodesTree();
+const nodesStore = useNodesStore();
 const { t } = useI18nT();
 
 const teamId = route.params.id as string;
 
 const stats = ref<MonthlyCount[]>([]);
 
-watchEffect(() => {
-  const nodes = tree.getSubtreeAsArray(teamId);
-  for (const node of nodes) {
-    const month = new Date(node.data.created_timestamp).toISOString().slice(5, 7);
-    const existing = stats.value.find(item => item.month === month);
-    if (existing) {
-      existing.count++;
-    } else {
-      stats.value.push({ month, count: 1 });
-    }
+onMounted(async () => {
+  const days = await nodesStore.fetchActivity(3660, teamId, 'created').catch(() => []);
+  const byMonth = new Map<string, number>();
+  for (const d of days) {
+    const month = d.day.slice(5, 7);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + d.count);
   }
-  stats.value.sort((a, b) => a.month.localeCompare(b.month));
+  stats.value = [...byMonth.entries()].map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month));
 });
 </script>

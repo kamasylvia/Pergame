@@ -48,6 +48,10 @@ pub struct SearchArgs {
 pub struct ListChildrenArgs {
     /// Folder id (workspace or category). Omit for the top level.
     pub folder_id: Option<String>,
+    /// Maximum children (1-500, default 100).
+    pub limit: Option<i32>,
+    /// Skip this many children (default 0).
+    pub offset: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
@@ -264,20 +268,37 @@ impl PergameMcp {
             _ => None,
         };
 
-        // Both sources already encode visibility (owned tree + granted tree),
-        // so no per-child permission round trip is needed.
-        let mut rows = node_repo::list_all(&self.state.db, actor.user_id)
+        let limit = args.limit.unwrap_or(100).clamp(1, 500) as i64;
+        let offset = args.offset.unwrap_or(0).max(0) as i64;
+        let map_err = |e: sqlx::Error| mcp_error(crate::error::ApiError::from(e));
+        let (rows, total) = match parent {
+            Some(id) => node_repo::tree::children_page(
+                &self.state.db,
+                actor.user_id,
+                id,
+                None,
+                offset,
+                limit,
+                node_repo::tree::TreeSortKey::Name,
+                node_repo::tree::SortDir::Asc,
+            )
             .await
-            .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
-        let shared = node_repo::list_shared(&self.state.db, actor.user_id)
+            .map_err(map_err)?,
+            None => node_repo::tree::roots_page(
+                &self.state.db,
+                actor.user_id,
+                None,
+                offset,
+                limit,
+                node_repo::tree::TreeSortKey::Name,
+                node_repo::tree::SortDir::Asc,
+            )
             .await
-            .map_err(|e| mcp_error(crate::error::ApiError::from(e)))?;
-        let seen: std::collections::HashSet<Uuid> = rows.iter().map(|n| n.id).collect();
-        rows.extend(shared.into_iter().filter(|n| !seen.contains(&n.id)));
+            .map_err(map_err)?,
+        };
 
         let children: Vec<serde_json::Value> = rows
             .iter()
-            .filter(|n| n.parent_id == parent)
             .map(|n| {
                 serde_json::json!({
                     "id": n.id,
@@ -289,7 +310,7 @@ impl PergameMcp {
                 })
             })
             .collect();
-        text(&serde_json::json!({ "parent_id": parent, "children": children }))
+        text(&serde_json::json!({ "parent_id": parent, "children": children, "total": total, "offset": offset, "limit": limit }))
     }
 
     #[tool(description = "Read one node: markdown content, name, role, parent_id and timestamps.")]

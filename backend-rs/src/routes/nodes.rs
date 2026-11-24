@@ -60,6 +60,17 @@ pub async fn list_containers(
 }
 
 #[derive(Debug, Deserialize)]
+/// GET /nodes/activity paging + filters (`root` subtree id, `field` created|updated).
+pub struct ActivityQuery {
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub root: Option<String>,
+    #[serde(default)]
+    pub field: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 /// GET /nodes/roots + /nodes/:id/children paging (`offset`/`limit`), tree
 /// sort (`sort=name|created|modified`, `order=asc|desc`, preference parity)
 /// and optional single-role narrowing (`role=0..4`).
@@ -237,14 +248,24 @@ pub async fn node_stats(
     Ok(ApiOk::ok(stats))
 }
 
-/// GET /nodes/activity — per-day live-node counts, newest first (home feed).
+/// GET /nodes/activity — per-day live-node counts, newest first (home feed,
+/// team insights with `root` + `field=created`).
 pub async fn node_activity(
     State(state): State<AppState>,
     auth: AuthUser,
-    Query(q): Query<ChildrenQuery>,
+    Query(q): Query<ActivityQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let limit = q.limit.unwrap_or(15).clamp(1, 90);
-    let days = node_repo::lists::activity(&state.db, auth.user_id(), limit)
+    let limit = q.limit.unwrap_or(15).clamp(1, 3660);
+    let root = match q.root.as_deref() {
+        None => None,
+        Some(raw) => Some(resolve_id(raw)?),
+    };
+    let created = match q.field.as_deref() {
+        None | Some("updated") => false,
+        Some("created") => true,
+        Some(_) => return Err(ApiError::BadRequest("field must be created|updated".into())),
+    };
+    let days = node_repo::lists::activity(&state.db, auth.user_id(), limit, root, created)
         .await
         .map_err(ApiError::from)?;
     Ok(ApiOk::ok(days))

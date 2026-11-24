@@ -172,8 +172,15 @@ pub async fn activity(
     pool: &PgPool,
     user_id: Uuid,
     limit: i64,
+    root: Option<Uuid>,
+    created: bool,
 ) -> Result<Vec<ActivityDay>, sqlx::Error> {
-    sqlx::query_as::<_, ActivityDay>(
+    let stamp = if created {
+        "n.created_timestamp"
+    } else {
+        "n.updated_timestamp"
+    };
+    let sql = format!(
         r#"
         WITH RECURSIVE grant_roots(id) AS (
             SELECT p.node_id FROM permissions p JOIN nodes n ON n.id = p.node_id
@@ -189,18 +196,27 @@ pub async fn activity(
             SELECT id FROM nodes WHERE user_id = $1 AND deleted_at IS NULL
             UNION
             SELECT id FROM shared_ids
+        ),
+        subtree(id) AS (
+            SELECT $3::uuid WHERE $3 IS NOT NULL
+            UNION ALL
+            SELECT c.id FROM nodes c JOIN subtree s ON s.id = c.parent_id
+            WHERE c.deleted_at IS NULL
         )
-        SELECT to_char(to_timestamp(n.updated_timestamp / 1000), 'YYYY-MM-DD') AS day, COUNT(*) AS count
+        SELECT to_char(to_timestamp({stamp} / 1000), 'YYYY-MM-DD') AS day, COUNT(*) AS count
         FROM nodes n
         JOIN visible_ids v ON v.id = n.id
+        WHERE $3::uuid IS NULL OR (n.id <> $3 AND n.id IN (SELECT id FROM subtree))
         GROUP BY day
         ORDER BY day DESC
         LIMIT $2"#,
-    )
-    .bind(user_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await
+    );
+    sqlx::query_as::<_, ActivityDay>(sqlx::AssertSqlSafe(sql))
+        .bind(user_id)
+        .bind(limit)
+        .bind(root)
+        .fetch_all(pool)
+        .await
 }
 
 /// Distinct raw tag strings (the frontend parses/unions, as before).

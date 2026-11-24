@@ -43,11 +43,17 @@ const uploadError = ref<string | null>(null);
 const dropComponent = ref();
 const { resourceURL } = useApi();
 
+const imageRows = ref<Node[]>([]);
+
+onMounted(async () => {
+  imageRows.value = (await nodesStore.fetchFlatAll(4).catch(() => ({ rows: [] as Node[] }))).rows;
+});
+
 const filteredImages = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return nodesStore.resources.filter(img => isImageFile(img.metadata?.filetype as string));
-  }
-  return nodesStore.resources.filter(img => isImageFile(img.metadata?.filetype as string) && img.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
+  const q = searchQuery.value.trim().toLowerCase();
+  return imageRows.value.filter(
+    img => isImageFile(img.metadata?.filetype as string) && (!q || img.name.toLowerCase().includes(q)),
+  );
 });
 
 const submitFile = (selectedFile: File | File[] | null) => {

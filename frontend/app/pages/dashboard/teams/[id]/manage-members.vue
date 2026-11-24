@@ -90,6 +90,7 @@
 import { NODE_PERMISSIONS } from '~/helpers/constants';
 import { resolvePermissionName } from '~/helpers/node';
 import type { Node, NodeInvitation, Permission, PublicUser } from '~/stores';
+import type { TreeItem } from '~/helpers/TreeBuilder';
 
 definePageMeta({ breadcrumb: { i18n: 'teams.members.title' } });
 
@@ -102,7 +103,6 @@ const { shortDate, numericDate } = useDateFormatters();
 const { getAppAccent } = useAppColors();
 const notifications = useNotifications();
 const route = useRoute();
-const tree = useNodesTree();
 
 const teamId = route.params.id as string;
 
@@ -118,14 +118,18 @@ const isLoading = ref(false);
 const permissions = ref<Permission[]>([]);
 
 const invitationLink = (code: string) => `${window.location.origin}/dashboard/join-workspace?code=${encodeURIComponent(code)}`;
-const contextOptions = computed(() => tree.getWorkspaceTree(node.value?.id as string, true));
+const contextOptions = ref<TreeItem<Node>[]>([]);
+
+onMounted(async () => {
+  contextOptions.value = await nodesStore.fetchSubtree(teamId).catch(() => []);
+});
 permissionsStore.fetchPermissions(teamId, true).then(perms => (permissions.value = perms));
 permissionsStore.fetchInvitations(teamId).then(invites => (invitations.value = invites));
 
 watchEffect(async () => {
   try {
     const cached = nodesStore.getById(teamId);
-    if (cached && cached.partial) {
+    if (!cached || cached.partial) {
       await nodesStore.fetch({ id: teamId });
     }
     node.value = nodesStore.getById(teamId);

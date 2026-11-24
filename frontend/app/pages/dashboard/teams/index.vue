@@ -34,14 +34,20 @@
 
 <script setup lang="ts">
 import CreateCategoryModal from '~/components/Node/Modals/CreateCategory.vue';
+import type { Node } from '~/stores';
 
 const nodesStore = useNodesStore();
 const modals = useModal();
 const { t } = useI18nT();
 
 const query = ref('');
+const teamRows = ref<Node[]>([]);
 
-const teams = computed(() => nodesStore.teams.toSorted((a, b) => a.name.localeCompare(b.name)));
+onMounted(async () => {
+  teamRows.value = (await nodesStore.fetchFlatAll(0).catch(() => ({ rows: [] as Node[] }))).rows;
+});
+
+const teams = computed(() => teamRows.value.toSorted((a, b) => a.name.localeCompare(b.name)));
 const filteredTeams = computed(() => {
   const search = query.value.trim().toLowerCase();
   if (!search) return teams.value;

@@ -87,9 +87,8 @@ export const useNodesStore = defineStore('nodes', () => {
 
     isFetching.value = true;
     nodes.value.startBulk();
-    await Promise.all([syncLocalDeltas(), fetch(), fetchShared(), fetchLinks(), fetchTags()]);
+    await Promise.all([syncLocalDeltas(), loadDirPage(null, 0), fetchShared(), fetchLinks(), fetchTags()]);
     nodes.value.endBulk();
-    seedDirStates();
     isFetching.value = false;
     if (import.meta.client) {
       window.addEventListener('online', () => {
@@ -121,23 +120,7 @@ export const useNodesStore = defineStore('nodes', () => {
     }
   }
 
-  function recomputeTags() {
-    const tags = new Set<string>();
-
-    nodes.value.startBulk();
-
-    nodes.value.forEach(node => {
-      if (node.tags) {
-        parseTags(node.tags).forEach(tag => tags.add(tag));
-      }
-      // NOTE: no orphan-detach here anymore (lazy loading keeps parents
-      // unloaded routinely — detaching would corrupt them). Dangling rows
-      // float to the root in the tree builder without writes.
-    });
-
-    nodes.value.endBulk();
-    allTags.value = Array.from(tags).sort();
-  }
+  // (recomputeTags retired with the full load: tags come from fetchTags plus per-page merges.)
 
   // Check if a node (descendantId) is a descendant of another node.
   // Partial-data blind spot (lazy loading): an unloaded ancestor reads as
@@ -232,39 +215,27 @@ export const useNodesStore = defineStore('nodes', () => {
     return filtered.sort(sortNodes);
   };
 
-  async function fetch<T extends FetchOptions>(opts?: T): Promise<'id' extends keyof T ? Node : IndexedCollection> {
-    if (opts?.id && !nodes.value.get(opts.id)?.partial) return nodes.value.get(opts.id) as 'id' extends keyof T ? Node : IndexedCollection;
-    console.debug(`[store/nodes] Fetching nodes with options: ${JSON.stringify(opts)}`);
-    const request = await makeRequest(`nodes/${opts?.id ? opts.id : 'user/@me'}`, 'GET', {});
+  /** Fetch one full row by id (deep links, link names, refresh-after-write). Merges, returns the live row. */
+  async function fetch(opts: FetchOptions): Promise<Node> {
+    const cached = nodes.value.get(opts.id);
+    if (cached && !cached.partial) return cached;
+    console.debug(`[store/nodes] Fetching node: ${opts.id}`);
+    const request = await makeRequest(`nodes/${opts.id}`, 'GET', {});
     if (request.status == 'success') {
-      if (opts?.id) {
-        const result = request.result as { node: DB_Node; permissions: Permission[] };
-        const shared = nodes.value.get(opts.id)?.shared ?? false;
-        // Keep the server parent_id verbatim (lazy loading: an unloaded
-        // parent is routine, not corruption — never detach).
-        const finalParentId = result.node.parent_id;
-
-        const updatedNode: Node = {
-          ...(result.node as DB_Node),
-          parent_id: finalParentId,
-          partial: false,
-          synced: true,
-          shared: shared,
-          permissions: result.permissions,
-        };
-        nodes.value.set(opts.id, updatedNode, true);
-        return updatedNode as 'id' extends keyof T ? Node : IndexedCollection;
-      } else {
-        if (!request.result) return nodes.value as 'id' extends keyof T ? Node : IndexedCollection;
-        nodes.value.startBulk();
-        for (const node of request.result as DB_Node[]) {
-          nodes.value.set(node.id, { ...node, partial: true, synced: true, shared: false, permissions: [] });
-        }
-        nodes.value.endBulk();
-        recomputeTags();
-        seedDirStates();
-        return nodes.value as 'id' extends keyof T ? Node : IndexedCollection;
-      }
+      const result = request.result as { node: DB_Node; permissions: Permission[] };
+      const shared = nodes.value.get(opts.id)?.shared ?? false;
+      // Keep the server parent_id verbatim (lazy loading: an unloaded
+      // parent is routine, not corruption — never detach).
+      const updatedNode: Node = {
+        ...(result.node as DB_Node),
+        parent_id: result.node.parent_id,
+        partial: false,
+        synced: true,
+        shared: shared,
+        permissions: result.permissions,
+      };
+      nodes.value.set(opts.id, updatedNode, true);
+      return updatedNode;
     } else throw request.message;
   }
 
@@ -367,7 +338,7 @@ export const useNodesStore = defineStore('nodes', () => {
       const payload = response.result!;
       const created = 'node' in payload ? payload.node : payload;
       nodes.value.set(created.id, { ...created, partial: false, synced: true, shared: false, permissions: [] }, true);
-      invalidateDir(created.parent_id ?? null);
+      await refreshDir(created.parent_id ?? null);
       return created;
     } else if (isNetworkError(response)) {
       node.user_id = userStore.user?.id;
@@ -394,8 +365,8 @@ export const useNodesStore = defineStore('nodes', () => {
       // Never detach an unloaded parent (see fetch()); order/name edits
       // re-sort the directory, moves touch two.
       nodes.value.set(node.id, node, true);
-      invalidateDir(oldParent);
-      invalidateDir(node.parent_id ?? null);
+      await refreshDir(oldParent);
+      await refreshDir(node.parent_id ?? null);
     } else if (isNetworkError(response)) {
       await LocalDbService.saveUpdateDelta(node);
       node.synced = false;
@@ -438,7 +409,7 @@ export const useNodesStore = defineStore('nodes', () => {
     const allChildrens = getDescendantIds(id);
     nodes.value.delete(id);
     allChildrens.forEach(childId => nodes.value.delete(childId));
-    invalidateDir(parent);
+    await refreshDir(parent);
   }
 
   async function bulkDelete(toDelete: Node[]) {
@@ -463,7 +434,7 @@ export const useNodesStore = defineStore('nodes', () => {
       allChildrens.forEach(childId => nodes.value.delete(childId));
     });
     for (const node of toDelete) {
-      if (deletedIds.includes(node.id)) invalidateDir(node.parent_id ?? null);
+      if (deletedIds.includes(node.id)) await refreshDir(node.parent_id ?? null);
     }
     nodes.value.endBulk();
     return { deletedIds, failedIds };
@@ -493,8 +464,8 @@ export const useNodesStore = defineStore('nodes', () => {
       {},
     );
     if (request.status === 'success' && request.result) {
-      // Re-fetch the tree so the restored subtree reappears with fresh state.
-      await fetch();
+      // Reload held directory pages so the restored subtree reappears with fresh state.
+      await refreshLoadedDirs();
       return request.result;
     }
     return { restored: 0, reparented: false };
@@ -617,6 +588,18 @@ export const useNodesStore = defineStore('nodes', () => {
     dirStates.value.clear();
   }
 
+  /**
+   * Invalidate one directory and re-pull its held pages (create/rename/move/
+   * delete stay visible in expanded trees); unheld directories just drop
+   * state and reload on next expansion.
+   */
+  async function refreshDir(parentId: string | null): Promise<void> {
+    const held = dirStates.value.get(parentId);
+    dirStates.value.delete(parentId);
+    if (!held) return;
+    await Promise.allSettled([...held.pages].map(p => loadDirPage(parentId, p)));
+  }
+
   /** True when the upward chain from `id` resolves fully from memory. */
   function isChainComplete(id: string): boolean {
     let cur = nodes.value.get(id);
@@ -717,9 +700,12 @@ export const useNodesStore = defineStore('nodes', () => {
     return res.status === 'success' && res.result ? res.result : empty;
   }
 
-  /** Activity histogram (day/count pairs, newest first). */
-  async function fetchActivity(limit = 15): Promise<{ day: string; count: number }[]> {
-    const res = await makeRequest<{ day: string; count: number }[]>(`nodes/activity?limit=${limit}`, 'GET', {});
+  /** Activity histogram (day/count pairs, newest first); optional subtree root + created|updated field. */
+  async function fetchActivity(limit = 15, root?: string, field?: 'created' | 'updated'): Promise<{ day: string; count: number }[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (root) params.set('root', root);
+    if (field) params.set('field', field);
+    const res = await makeRequest<{ day: string; count: number }[]>(`nodes/activity?${params.toString()}`, 'GET', {});
     return res.status === 'success' && res.result ? res.result : [];
   }
 
@@ -745,26 +731,11 @@ export const useNodesStore = defineStore('nodes', () => {
       .filter((n): n is Node => !!n);
   }
 
-  /**
-   * Folder skeleton for parent pickers (roles 0..maxRole, nested, sorted
-   * like the sidebar). Folder counts stay small while documents grow, so
-   * one capped sweep per role replaces the in-memory tree; documents as
-   * parents (maxRole 3) truncate past the cap.
-   */
-  async function fetchFolderTree(maxRole = 2, cap = 2000): Promise<TreeItem<Node>[]> {
+  /** Assemble nested picker items from flat rows (sidebar sort). Shared by the skeleton loaders. */
+  function buildTreeItems(all: Node[]): TreeItem<Node>[] {
     const prefs = usePreferencesStore();
     const sortKey = prefs.get('sortKey');
     const sortOrder = prefs.get('sortOrder');
-    const seen = new Set<string>();
-    const all: Node[] = [];
-    for (let role = 0; role <= maxRole; role++) {
-      const page = await fetchFlatAll(role, undefined, cap).catch(() => ({ rows: [], total: 0 }));
-      for (const n of page.rows) {
-        if (seen.has(n.id)) continue;
-        seen.add(n.id);
-        all.push(n);
-      }
-    }
     const items = new Map<string, TreeItem<Node>>();
     for (const n of all) {
       items.set(n.id, {
@@ -803,6 +774,40 @@ export const useNodesStore = defineStore('nodes', () => {
     return roots;
   }
 
+  /**
+   * Folder skeleton for parent pickers (roles 0..maxRole, nested, sorted
+   * like the sidebar). Folder counts stay small while documents grow, so
+   * one capped sweep per role replaces the in-memory tree; documents as
+   * parents (maxRole 3) truncate past the cap.
+   */
+  async function fetchFolderTree(maxRole = 2, cap = 2000): Promise<TreeItem<Node>[]> {
+    const seen = new Set<string>();
+    const all: Node[] = [];
+    for (let role = 0; role <= maxRole; role++) {
+      const page = await fetchFlatAll(role, undefined, cap).catch(() => ({ rows: [], total: 0 }));
+      for (const n of page.rows) {
+        if (seen.has(n.id)) continue;
+        seen.add(n.id);
+        all.push(n);
+      }
+    }
+    return buildTreeItems(all);
+  }
+
+  /** One subtree as nested picker items (root included, permission scopes), capped. */
+  async function fetchSubtree(root: string, cap = 2000): Promise<TreeItem<Node>[]> {
+    let self = nodes.value.get(root);
+    if (!self) {
+      try {
+        self = await fetch({ id: root });
+      } catch {
+        self = undefined;
+      }
+    }
+    const page = await fetchFlatAll(undefined, root, cap).catch(() => ({ rows: [], total: 0 }));
+    return buildTreeItems(self ? [self, ...page.rows] : page.rows);
+  }
+
   async function fetchFlatAll(role?: number, root?: string, cap = 1000): Promise<{ rows: Node[]; total: number }> {
     const limit = 500;
     const first = await fetchFlat({ role, root, offset: 0, limit, sortKey: 'name', sortDir: 'asc' });
@@ -820,28 +825,17 @@ export const useNodesStore = defineStore('nodes', () => {
   }
 
   /**
-   * Migration bridge: after a full load, mark every directory complete with
-   * locally derived totals so the lazy layer stays idle. Retires when init()
-   * flips to roots-only.
+   * Reload every directory page currently held (plugin writes, restores,
+   * bulk imports): captures the loaded page sets, drops the states, then
+   * re-pulls the same windows so visible trees refresh in place.
    */
-  function seedDirStates(): void {
-    const counts = new Map<string | null, number>();
-    let roots = 0;
-    nodes.value.forEach(node => {
-      const key = node.parent_id ?? null;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      if ((node.role ?? 99) <= 1 || !node.parent_id || !nodes.value.has(node.parent_id)) roots++;
-      const kids = nodes.value.getChildrenIds(node.id).length > 0 || (linksByParent.value.get(node.id)?.length ?? 0) > 0;
-      hasChildren.value.set(node.id, kids);
-    });
-    counts.forEach((total, key) => {
-      const pages = new Set<number>();
-      for (let p = 0; p < Math.ceil(total / PAGE_SIZE); p++) pages.add(p);
-      dirStates.value.set(key, { total, pages, loading: false });
-    });
-    const rootPages = new Set<number>();
-    for (let p = 0; p < Math.ceil(roots / PAGE_SIZE); p++) rootPages.add(p);
-    dirStates.value.set(null, { total: roots, pages: rootPages, loading: false });
+  async function refreshLoadedDirs(): Promise<void> {
+    const snapshot = new Map<string | null, number[]>();
+    dirStates.value.forEach((st, key) => snapshot.set(key, [...st.pages]));
+    dirStates.value.clear();
+    await Promise.allSettled(
+      [...snapshot.entries()].flatMap(([id, pages]) => pages.map(p => loadDirPage(id, p).catch(() => {}))),
+    );
   }
 
   return {
@@ -862,6 +856,7 @@ export const useNodesStore = defineStore('nodes', () => {
     isDirLoading,
     invalidateDir,
     invalidateAllDirs,
+    refreshDir,
     ensureAncestors,
     fetchNeighbors,
     searchMeta,
@@ -869,6 +864,7 @@ export const useNodesStore = defineStore('nodes', () => {
     fetchFlatAll,
     fetchAllChildren,
     fetchFolderTree,
+    fetchSubtree,
     fetchStats,
     fetchActivity,
     fetchTags,
@@ -883,7 +879,7 @@ export const useNodesStore = defineStore('nodes', () => {
     getDescendantIds,
     search,
     init,
-    recomputeTags,
+    refreshLoadedDirs,
     fetch,
     fetchShared,
     searchFulltext,

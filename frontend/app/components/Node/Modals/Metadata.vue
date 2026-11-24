@@ -17,7 +17,7 @@
           :items="parentsTree"
           :placeholder="t('common.labels.parent')"
           nullable
-          :disabled="i => i.id == node.id || nodeStore.isDescendant(node, i.id as string)"
+          :disabled="i => i.id == node.id || descendantIds.has(String(i.id))"
         />
 
         <div class="setting-row">
@@ -67,11 +67,14 @@ const { getAppAccent } = useAppColors();
 
 const node = ref<Node>({ ...props.doc });
 const pinnedToggle = ref(node.value.order == -1);
+const descendantIds = ref<Set<string>>(new Set());
 
 onBeforeMount(async () => {
   const latestNode = await nodeStore.fetch({ id: node.value.id });
   if (latestNode) node.value = { ...latestNode }; // CLONE
   parentsTree.value = await nodeStore.fetchFolderTree(node.value.role ?? 2).catch(() => []);
+  const sub = await nodeStore.fetchFlatAll(undefined, node.value.id).catch(() => ({ rows: [] as Node[] }));
+  descendantIds.value = new Set(sub.rows.map(n => n.id));
 });
 
 watch(pinnedToggle, val => (node.value.order = val ? -1 : 0));
