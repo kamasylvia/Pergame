@@ -33,7 +33,7 @@
     <div v-if="multiTags.length" class="row-tags">
       <span v-for="tag in multiTags" :key="tag" class="tag">{{ tag }}</span>
     </div>
-    <slot name="below" :node="node" />
+    <slot name="below" :node="node" :depth="depth" />
     <ul v-if="expanded && hasKids" class="row-children">
       <NodeDirectoryTreeRow v-for="child in children" :key="child.id" :node="child" :depth="depth + 1" :sort="sort">
         <template v-for="(_, name) in $slots" :key="name" #[name]="slotProps">

@@ -41,6 +41,8 @@ export default {
     dontAskAgain: 'Nicht erneut fragen',
     loadMore: 'Mehr laden',
     moveMessage: '„{name}“ nach „{target}“ verschieben?',
+    referencedBy: 'Referenziert von',
+    references: 'Verweise',
     selected: '{count} ausgewählt',
     treeOrder: 'Dokumentbaum-Reihenfolge',
   },

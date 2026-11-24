@@ -3,7 +3,7 @@ import { parseTags, mergeNode, resolveIcon, resolveNodeLink } from '~/helpers/no
 import type { TreeItem } from '~/helpers/TreeBuilder';
 import { LocalDbService } from '~/services/localDB';
 import { skipHydrate } from 'pinia';
-import type { DB_Node, DB_NodeLink, Node, NodeSearchResult, Permission, TrashEntry } from './db_structures';
+import type { DB_Node, DB_NodeLink, Node, NodeRefs, NodeSearchResult, Permission, TrashEntry } from './db_structures';
 import type { KanbanMetadata } from '~/components/Kanban/Board.vue';
 
 export type TeamRole = 0;
@@ -714,6 +714,13 @@ export const useNodesStore = defineStore('nodes', () => {
     return res.status === 'success' && res.result ? res.result : [];
   }
 
+  /** Internal links (both directions) for up to 100 anchors, keyed by id. */
+  async function fetchRefs(ids: string[]): Promise<Record<string, NodeRefs>> {
+    if (!ids.length) return {};
+    const res = await makeRequest<Record<string, NodeRefs>>(`nodes/refs?ids=${ids.slice(0, 100).join(',')}`, 'GET', {});
+    return res.status === 'success' && res.result ? res.result : {};
+  }
+
   /** Distinct tag strings, unioned into suggestions. */
   async function fetchTags(): Promise<string[]> {
     const res = await makeRequest<string[]>('nodes/tags', 'GET', {});
@@ -874,6 +881,7 @@ export const useNodesStore = defineStore('nodes', () => {
     fetchStats,
     fetchActivity,
     fetchTags,
+    fetchRefs,
     hasChildren,
     getTotalUsedStorage,
     teams,

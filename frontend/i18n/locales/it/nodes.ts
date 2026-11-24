@@ -41,6 +41,8 @@ export default {
     dontAskAgain: 'Non chiedere più',
     loadMore: 'Carica altri',
     moveMessage: 'Spostare "{name}" in "{target}"?',
+    referencedBy: 'Referenziato da',
+    references: 'Riferimenti',
     selected: '{count} selezionati',
     treeOrder: 'Ordine albero documenti',
   },

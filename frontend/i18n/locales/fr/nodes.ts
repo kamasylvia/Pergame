@@ -41,6 +41,8 @@ export default {
     dontAskAgain: 'Ne plus demander',
     loadMore: 'Charger plus',
     moveMessage: 'Déplacer « {name} » vers « {target} » ?',
+    referencedBy: 'Référencé par',
+    references: 'Références',
     selected: '{count} sélectionné(s)',
     treeOrder: "Ordre de l'arborescence",
   },

@@ -18,6 +18,20 @@
         <template #leading="{ node }">
           <input type="checkbox" class="row-check" :checked="selection.has(node.id)" @change="toggle(node.id)" @click.stop />
         </template>
+        <template #below="{ node, depth }">
+          <div v-if="visibleOutgoing(node).length" class="refs-line" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
+            <Icon name="link" display="xsm" class="refs-icon" />
+            <span class="refs-label">{{ t('nodes.directory.references') }}</span>
+            <a v-for="ref in visibleOutgoing(node)" :key="ref.id" href="#" @click.prevent="openRef(ref)">{{ ref.name }}</a>
+            <button v-if="hiddenOutgoing(node) > 0" class="refs-more" @click="outFull.add(node.id)">+{{ hiddenOutgoing(node) }}</button>
+          </div>
+          <div v-if="visibleIncoming(node).length" class="refs-line refs-incoming" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
+            <Icon name="link" display="xsm" class="refs-icon" />
+            <span class="refs-label">{{ t('nodes.directory.referencedBy') }}</span>
+            <a v-for="ref in visibleIncoming(node)" :key="ref.id" href="#" @click.prevent="openRef(ref)">{{ ref.name }}</a>
+            <button v-if="hiddenIncoming(node) > 0" class="refs-more" @click="inFull.add(node.id)">+{{ hiddenIncoming(node) }}</button>
+          </div>
+        </template>
         <template v-for="(_, name) in $slots" :key="name" #[name]="slotProps">
           <slot :name="name" v-bind="slotProps" />
         </template>
@@ -35,12 +49,14 @@
 <script setup lang="ts">
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
 import { TREE_SORT, useDirectoryLevel, type DirectorySort } from '~/composables/useDirectoryLevel';
-import type { Node } from '~/stores';
+import { resolveNodeLink } from '~/helpers/node';
+import type { Node, NodeRefs, RefNode } from '~/stores';
 
 const props = defineProps<{ containerId: string }>();
 
 const nodesStore = useNodesStore();
 const modals = useModal();
+const router = useRouter();
 const { t } = useI18nT();
 
 type SortId = 'tree' | 'name-asc' | 'name-desc' | 'created-asc' | 'created-desc' | 'modified-asc' | 'modified-desc';
@@ -112,12 +128,60 @@ provide('directoryResetSort', () => {
   sortId.value = 'tree';
 });
 
+// Inline references (plugin parity): one batch per newly rendered set,
+// cached per container. Outgoing targets already below the row as
+// children are omitted (best-effort on partial data).
+const refsCache = ref<Record<string, NodeRefs>>({});
+const outFull = ref<Set<string>>(new Set());
+const inFull = ref<Set<string>>(new Set());
+let refsReq = 0;
+
+watch(
+  () => [...renderedIds.value],
+  async ids => {
+    const missing = ids.filter(id => !refsCache.value[id]).slice(0, 100);
+    if (!missing.length) return;
+    const req = ++refsReq;
+    const batch = await nodesStore.fetchRefs(missing).catch(() => ({} as Record<string, NodeRefs>));
+    if (req !== refsReq) return;
+    refsCache.value = { ...refsCache.value, ...batch };
+  },
+);
+
+const outgoingOf = (node: Node): RefNode[] => {
+  const all = refsCache.value[node.id]?.outgoing ?? [];
+  return all.filter(r => r.id !== node.id && !nodesStore.isDescendant(node, r.id));
+};
+
+const incomingOf = (node: Node): RefNode[] => refsCache.value[node.id]?.incoming ?? [];
+
+const visibleOutgoing = (node: Node): RefNode[] => {
+  const list = outgoingOf(node);
+  return outFull.value.has(node.id) ? list : list.slice(0, 2);
+};
+
+const hiddenOutgoing = (node: Node): number =>
+  outFull.value.has(node.id) ? 0 : Math.max(0, outgoingOf(node).length - 2);
+
+const visibleIncoming = (node: Node): RefNode[] => {
+  const list = incomingOf(node);
+  return inFull.value.has(node.id) ? list : list.slice(0, 2);
+};
+
+const hiddenIncoming = (node: Node): number =>
+  inFull.value.has(node.id) ? 0 : Math.max(0, incomingOf(node).length - 2);
+
+const openRef = (ref: RefNode) => router.push(resolveNodeLink(ref as unknown as Node));
+
 watch(
   () => props.containerId,
   () => {
     // Temporary sorting resets when the container changes (plugin parity).
     sortId.value = 'tree';
     selection.value = new Set();
+    refsCache.value = {};
+    outFull.value = new Set();
+    inFull.value = new Set();
     ensure();
   },
   { immediate: true },
@@ -149,6 +213,42 @@ watch(
   .row-check {
     flex-shrink: 0;
     cursor: pointer;
+  }
+
+  .refs-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 1px 4px 3px 30px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .refs-icon {
+    flex-shrink: 0;
+  }
+
+  .refs-label {
+    flex-shrink: 0;
+  }
+
+  .refs-more {
+    border: none;
+    background: transparent;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 0;
   }
 
   h2 {

@@ -41,6 +41,8 @@ export default {
     dontAskAgain: 'Більше не питати',
     loadMore: 'Завантажити ще',
     moveMessage: 'Перемістити "{name}" до "{target}"?',
+    referencedBy: 'Посилаються',
+    references: 'Посилання',
     selected: 'Вибрано: {count}',
     treeOrder: 'Порядок дерева документів',
   },

@@ -41,6 +41,8 @@ export default {
     dontAskAgain: "Don't ask again",
     loadMore: 'Load more',
     moveMessage: 'Move "{name}" into "{target}"?',
+    referencedBy: 'Referenced by',
+    references: 'References',
     selected: '{count} selected',
     treeOrder: 'Document tree order',
   },

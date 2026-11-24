@@ -67,6 +67,21 @@ export interface Node extends DB_Node {
   _children?: Node[];
 }
 
+/** One internal-link endpoint (GET /nodes/refs). */
+export interface RefNode {
+  id: string;
+  name: string;
+  role: number;
+  parent_id: string | null;
+  updated_timestamp: number;
+}
+
+/** Both link directions for one anchor. */
+export interface NodeRefs {
+  outgoing: RefNode[];
+  incoming: RefNode[];
+}
+
 /** Trashed subtree root (spec .work/features/trash.md §3.1). */
 export interface TrashEntry {
   id: string;

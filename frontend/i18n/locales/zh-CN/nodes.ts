@@ -41,6 +41,8 @@ export default {
     dontAskAgain: '不再询问',
     loadMore: '加载更多',
     moveMessage: '将“{name}”移动到“{target}”？',
+    referencedBy: '被引用自',
+    references: '引用',
     selected: '已选 {count} 项',
     treeOrder: '文档树顺序',
   },
