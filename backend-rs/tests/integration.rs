@@ -2668,3 +2668,196 @@ async fn plugin_registry_lifecycle() {
     demote_user(&user_id).await;
     cleanup_user(&user_id).await;
 }
+
+// ---------------------------------------------------------------- paged tree reads
+
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn paged_tree_reads() {
+    let client = Client::new();
+    let (user_a, _) = signup_and_login_tagged(&client, "treepage").await;
+    let client_b = Client::new();
+    let (user_b, _) = signup_and_login_tagged(&client_b, "treeshare").await;
+
+    async fn mk(client: &Client, body: &Value) -> String {
+        let (status, r) = post_json(client, "/nodes", body).await;
+        assert_eq!(status, 200, "create failed: {:?}", r.message);
+        result_id_string(&r)
+    }
+    let w = mk(&client, &json!({"name": "W", "role": 1})).await;
+    let f1 = mk(&client, &json!({"name": "F1", "role": 2, "parent_id": w})).await;
+    let f2 = mk(&client, &json!({"name": "F2", "role": 2, "parent_id": w})).await;
+    let nb = mk(&client, &json!({"name": "N-b", "role": 3, "parent_id": f1})).await;
+    let na = mk(&client, &json!({"name": "N-a", "role": 3, "parent_id": f1})).await;
+    let nc = mk(&client, &json!({"name": "N-c", "role": 3, "parent_id": f1})).await;
+    let sf = mk(&client, &json!({"name": "SF", "role": 2, "parent_id": f1})).await;
+    let deep = mk(
+        &client,
+        &json!({"name": "N-deep", "role": 3, "parent_id": sf, "content": "x"}),
+    )
+    .await;
+    let _nroot = mk(
+        &client,
+        &json!({"name": "N-root", "role": 3, "parent_id": w}),
+    )
+    .await;
+    // Pin N-b (PUT is full-row: parent_id must be re-sent).
+    let (status, _) = put_json(
+        &client,
+        &format!("/nodes/{nb}"),
+        &json!({"name": "N-b", "role": 3, "parent_id": f1, "order": -1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    // Clone deep into F2.
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{deep}/links"),
+        &json!({"parent_id": f2}),
+    )
+    .await;
+    assert!(status == 200 || status == 201, "clone failed: {status}");
+
+    // Roots: workspace with chevron, no content columns.
+    let (status, r) = get(&client, "/nodes/roots").await;
+    assert_eq!(status, 200);
+    let rows = r.result["rows"].as_array().unwrap();
+    assert!(rows.iter().any(|x| x["id"] == json!(w)), "roots: {rows:?}");
+    let wr = rows.iter().find(|x| x["id"] == json!(w)).unwrap();
+    assert_eq!(wr["has_children"], json!(true));
+    assert!(wr["link_id"].is_null());
+    assert!(wr.get("content").is_none() && wr.get("content_compiled").is_none());
+
+    // Children order mirrors the frontend comparator: role DESC, pinned
+    // (`order`) first, name ASC, with per-row chevron flags.
+    let (status, r) = get(&client, &format!("/nodes/{w}/children?limit=10")).await;
+    assert_eq!(status, 200);
+    let names: Vec<_> = r.result["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(names, vec!["N-root", "F1", "F2"]);
+    assert_eq!(r.result["total"], json!(3));
+
+    // Pages are disjoint, stable and cover the directory.
+    let (status, p1) = get(&client, &format!("/nodes/{f1}/children?limit=2&offset=0")).await;
+    assert_eq!(status, 200);
+    let (status, p2) = get(&client, &format!("/nodes/{f1}/children?limit=2&offset=2")).await;
+    assert_eq!(status, 200);
+    let ids = |r: &ApiResponse| {
+        r.result["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    let (a, b) = (ids(&p1), ids(&p2));
+    assert_eq!(a.len() + b.len(), 4);
+    assert!(a.iter().all(|id| !b.contains(id)), "pages overlap");
+    let (_, p1b) = get(&client, &format!("/nodes/{f1}/children?limit=2&offset=0")).await;
+    assert_eq!(ids(&p1b), a, "page drifted across reads");
+
+    // Sort params flip only the key comparison; pinned stays first.
+    let (_, asc) = get(
+        &client,
+        &format!("/nodes/{f1}/children?limit=10&sort=created&order=asc"),
+    )
+    .await;
+    let (_, desc) = get(
+        &client,
+        &format!("/nodes/{f1}/children?limit=10&sort=created&order=desc"),
+    )
+    .await;
+    let (a, d) = (ids(&asc), ids(&desc));
+    assert_eq!(a[0], nb);
+    assert_eq!(d[0], nb);
+    assert_ne!(a, d);
+    assert!(a.contains(&na) && a.contains(&nc) && a.contains(&sf));
+    let (_, bad) = get(&client, &format!("/nodes/{w}/children?sort=size")).await;
+    assert_eq!(bad.status, "error");
+
+    // Link positions carry link_id and never double canonical rows.
+    let (status, r) = get(&client, &format!("/nodes/{f2}/children?limit=10")).await;
+    assert_eq!(status, 200);
+    let rows = r.result["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"], json!(deep));
+    assert!(rows[0]["link_id"].is_string());
+
+    // Ancestors leaf-first.
+    let (status, r) = get(&client, &format!("/nodes/{deep}/ancestors")).await;
+    assert_eq!(status, 200);
+    let chain: Vec<_> = r
+        .result
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(chain, vec!["N-deep", "SF", "F1", "W"]);
+
+    // Move cycle guard (frontend checks go blind under lazy loading).
+    let (status, r) = put_json(
+        &client,
+        &format!("/nodes/{f1}"),
+        &json!({"name": "F1", "role": 2, "parent_id": deep}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    assert!(r.message.unwrap_or_default().contains("subtree"));
+    let (status, _) = put_json(
+        &client,
+        &format!("/nodes/{f1}"),
+        &json!({"name": "F1", "role": 2, "parent_id": f1}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = put_json(
+        &client,
+        &format!("/nodes/{f1}"),
+        &json!({"name": "F1", "role": 2, "parent_id": w}),
+    )
+    .await;
+    assert_eq!(status, 200);
+
+    // Missing nodes 404.
+    let nil = "00000000-0000-0000-0000-000000000000";
+    let (status, _) = get(&client, &format!("/nodes/{nil}/children")).await;
+    assert_eq!(status, 404);
+    let (status, _) = get(&client, &format!("/nodes/{nil}/ancestors")).await;
+    assert_eq!(status, 404);
+
+    // Shared visibility: grant B read on F1.
+    let (status, _) = post_json(
+        &client,
+        &format!("/nodes/{f1}/permissions"),
+        &json!({"user_id": user_b, "permission": 1}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client_b, "/nodes/roots").await;
+    assert_eq!(status, 200);
+    assert!(
+        r.result["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["id"] == json!(f1)),
+        "grant not rooted for B"
+    );
+    let (status, r) = get(&client_b, &format!("/nodes/{f1}/children?limit=10")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["rows"].as_array().unwrap().len(), 4);
+    assert_eq!(r.result["total"], json!(4));
+    let (status, r) = get(&client_b, &format!("/nodes/{deep}/ancestors")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 4);
+    let (status, _) = get(&client_b, &format!("/nodes/{w}/children")).await;
+    assert!(status == 403 || status == 404, "unexpected {status}");
+
+    cleanup_user(&user_a).await;
+    cleanup_user(&user_b).await;
+}

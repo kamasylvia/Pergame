@@ -59,6 +59,96 @@ pub async fn list_containers(
     Ok(ApiOk::ok(nodes))
 }
 
+#[derive(Debug, Deserialize)]
+/// GET /nodes/roots + /nodes/:id/children paging (`offset`/`limit`) and
+/// tree sort (`sort=name|created|modified`, `order=asc|desc`, preference parity).
+pub struct ChildrenQuery {
+    #[serde(default)]
+    pub offset: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub sort: Option<String>,
+    #[serde(default)]
+    pub order: Option<String>,
+}
+
+fn parse_page(
+    q: &ChildrenQuery,
+) -> Result<
+    (
+        i64,
+        i64,
+        node_repo::tree::TreeSortKey,
+        node_repo::tree::SortDir,
+    ),
+    ApiError,
+> {
+    let offset = q.offset.unwrap_or(0).max(0);
+    let limit = q.limit.unwrap_or(100).clamp(1, 500);
+    let key = node_repo::tree::TreeSortKey::parse(q.sort.as_deref().unwrap_or("name"))
+        .ok_or_else(|| ApiError::BadRequest("sort must be name|created|modified".into()))?;
+    let dir = node_repo::tree::SortDir::parse(q.order.as_deref().unwrap_or("asc"))
+        .ok_or_else(|| ApiError::BadRequest("order must be asc|desc".into()))?;
+    Ok((offset, limit, key, dir))
+}
+
+/// GET /nodes/roots — top-level rows for lazy tree bootstrap (owned
+/// workspaces/teams and parentless nodes, plus directly granted nodes the
+/// frontend roots when their parent is not loaded).
+pub async fn list_roots(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<ChildrenQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (offset, limit, key, dir) = parse_page(&q)?;
+    let (rows, total) =
+        node_repo::tree::roots_page(&state.db, auth.user_id(), offset, limit, key, dir)
+            .await
+            .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(
+        json!({ "rows": rows, "total": total, "offset": offset, "limit": limit }),
+    ))
+}
+
+/// GET /nodes/:id/children — one visible directory page (canonical children
+/// plus clone positions, `has_children` per row so chevrons render without
+/// fetching). Read access on the parent is required.
+pub async fn list_children(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(node_id): Path<String>,
+    Query(q): Query<ChildrenQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let actor: Actor = auth.into();
+    let id = resolve_id(&node_id)?;
+    guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
+    let (offset, limit, key, dir) = parse_page(&q)?;
+    let (rows, total) =
+        node_repo::tree::children_page(&state.db, actor.user_id, id, offset, limit, key, dir)
+            .await
+            .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(
+        json!({ "rows": rows, "total": total, "offset": offset, "limit": limit }),
+    ))
+}
+
+/// GET /nodes/:id/ancestors — chain leaf-first (`[self … root]`) for
+/// breadcrumbs, reveal and permission walks. Read access required.
+pub async fn list_ancestors(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(node_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let actor: Actor = auth.into();
+    let id = resolve_id(&node_id)?;
+    guard::require_node_action(&state.db, &actor, id, NodeAction::Read).await?;
+    let chain = node_repo::tree::ancestors(&state.db, id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiOk::ok(chain))
+}
+
 /// GET /nodes/user/:userId — full tree (self or admin); "@me" = caller.
 pub async fn get_user_nodes(
     State(state): State<AppState>,
@@ -376,6 +466,21 @@ pub async fn update_node(
         };
         if !allowed {
             safe_parent = None;
+        }
+    }
+    // Cycle guard (the frontend `isDescendant` check goes blind under lazy
+    // loading, so the server enforces it): the new parent must be neither
+    // the node itself nor one of its descendants. Rooting (None) is safe.
+    if let Some(pid) = safe_parent
+        && pid != db_node.parent_id.unwrap_or_default()
+    {
+        let subtree = node_repo::subtree_ids(&state.db, id)
+            .await
+            .map_err(ApiError::from)?;
+        if subtree.contains(&pid) {
+            return Err(ApiError::BadRequest(
+                "cannot move a node into itself or its subtree".into(),
+            ));
         }
     }
     let mut write = input.into_write();

@@ -314,6 +314,9 @@ async fn main() {
             delete(routes::links::delete_link),
         )
         .route("/api/nodes/containers", get(routes::nodes::list_containers))
+        .route("/api/nodes/roots", get(routes::nodes::list_roots))
+        .route("/api/nodes/{nodeId}/children", get(routes::nodes::list_children))
+        .route("/api/nodes/{nodeId}/ancestors", get(routes::nodes::list_ancestors))
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/query", post(routes::dql::query))
         // Plugin registry (PS-D): installs are admin-only, everything else is
