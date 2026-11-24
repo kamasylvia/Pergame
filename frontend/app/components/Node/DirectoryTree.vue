@@ -2,10 +2,8 @@
   <section class="directory-tree">
     <div class="tree-header">
       <h2>目录</h2>
-      <div class="header-actions">
-        <label v-if="renderedIds.size" class="select-all" :title="t('nodes.directory.selected', { count: selection.size })">
-          <input type="checkbox" :checked="allSelected" @change="toggleAll" />
-        </label>
+      <div class="header-actions" :title="t('nodes.directory.selected', { count: selection.size })">
+        <AppCheck v-if="renderedIds.size" :model-value="allSelected" @change="toggleAll" />
         <AppButton v-if="selection.size" type="danger" small @click="deleteSelected">
           {{ t('nodes.directory.deleteSelected') }} ({{ selection.size }})
         </AppButton>
@@ -16,7 +14,7 @@
     <ul v-else-if="children.length" class="tree-roots">
       <NodeDirectoryTreeRow v-for="child in children" :key="child.id" :node="child" :depth="0" :sort="sort">
         <template #leading="{ node }">
-          <input type="checkbox" class="row-check" :checked="selection.has(node.id)" @change="toggle(node.id)" @click.stop />
+          <AppCheck :model-value="selection.has(node.id)" @change="toggle(node.id)" @click.stop />
         </template>
         <template #below="{ node, depth }">
           <div v-if="visibleOutgoing(node).length" class="refs-line" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
@@ -202,17 +200,6 @@ watch(
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .select-all {
-    display: inline-flex;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  .row-check {
-    flex-shrink: 0;
-    cursor: pointer;
   }
 
   .refs-line {
