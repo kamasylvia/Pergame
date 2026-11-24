@@ -5,6 +5,14 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 侧栏树虚拟滚动+多选(抄思源 DocTreeController,2026-11-24)
+
+- [x] **虚拟化(用户指令"抄思源的虚拟滚动")**:新 `VirtualTree.vue` 替换树区递归——定高实测行高 + 展开感知 flat rows + 开窗(overscan 8)+ 前后 spacer(思源 `getDocTreeWindow` 同式);滚动 rAF 节流,ResizeObserver 跟视口;行渲染复用 `SidebarItem`(拖拽/菜单/图标全保留),缩进改 flat `paddingLeft`,chevron 样式自带(备注 CollapseItem 同源)。另抄:展开入场 fade(仅 transform/opacity,不碰行高数学;`prefers-reduced-motion` 跳过)+ ctrl/shift 多选(位置键,视觉 `selection-color`,Delete/Backspace 调现成批量删 modal,Esc 清空,跨变更自动剪枝,输入框/编辑器/弹窗内不劫持)。不抄:异步分批(思源按需翻页内核数据,pergame 全量已在内存,无事可做)+ 键盘导航。reveal 联动改 `ensureVisible`(按位滚+nearest 抛光);修 reveal 时序真 bug(导航时 store 清空致单次尝试落空——改有界重试 30×200ms,旧 tree watcher 退役)。验证:隔离浏览器 150 节点——挂载 36 行 spacer 正确、滚底换窗、展开见 34 行 `.vt-enter`、ctrl×2+shift 范围精确+URL 不变、批量删 modal 走取消/确认双路、折叠后直链 reveal 回归绿;eslint 过。附带发现:`.sidebar` 嵌套了两层(Resizable 外壳 + 真滚动容器),测试选择器须取内层。
+
+## 内链 UUID 规范修复(2026-11-24)
+
+- [x] **正则认 UUID(用户指令,顺手)**:markdown-it 规则与编辑器装饰器共用 `#(\d{15,20})`,而编辑器插入的是 `#<uuid>` → 预览永远不链化。修 = 正则加 UUID 分支(大小写 hex,旧数字兼容保留),双文件收敛到 `helpers/markdown/internal-links.ts` 单一源(ruler 改 anchored 单点匹配,编辑器改 import),新 `internal-links.test.ts`(node:test 同仓惯例)6 例——UUID/未知回退/旧数字/大写/四种不匹配/全局扫描;`bun test` 9/9 绿(含 counters 回归)。
+
 ## 文件树打开定位(2026-11-23 新功能)
 
 - [x] **开笔记自动展开定位(用户需求:非树打开时树还折叠着)**:`Sidebar.vue` 监听 docs/categories 路由 id → `getAncestors` 展开祖先链(`setExpanded`,持久化复用) → `nextTick` 后把 exact-active 行 `scrollIntoView({block:'nearest'})`(已在视口则不动);categories 编辑页用非 exact 回退(`.nav` 图标链排除)。`revealedFor` 守卫防后台刷新乱滚;树异步加载期由 tree watcher 重试;跨 workspace/过滤态无行则静默跳过(不切 workspace)。验证:隔离浏览器登录临时号(工作区>文件夹>笔记三层)——页内折叠文件夹后直链开笔记,断言祖先展开 + 唯一定位行 exact-active + in-viewport,REVEAL OK;eslint 过。测试号/节点已清。
