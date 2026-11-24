@@ -142,35 +142,61 @@ const isSearchFocused = ref(false);
 // User info
 const userName = computed(() => userStore.user?.firstname || userStore.user?.username || '');
 
-// Stats
-const documentsCount = computed(() => nodesStore.getAll.getIdsByRole(3).length);
-const workspacesCount = computed(() => nodesStore.getAll.getIdsByRole(1).length);
+// Home data comes from server aggregates (the store no longer preloads
+// everything); shapes mirror the old client-side computeds exactly.
+const stats = ref({ total: 0, teams: 0, workspaces: 0, folders: 0, documents: 0, resources: 0 });
+const documentsCount = computed(() => stats.value.documents);
+const workspacesCount = computed(() => stats.value.workspaces);
 
-// Recently edited documents (last 5, sorted by update time)
-const recentlyEdited = computed(() => {
-  return nodesStore.getAll
-    .toSortedArray()
-    .filter(node => node.role === 3)
-    .slice(0, 5);
-});
+const recentlyEdited = ref<Node[]>([]);
+const pinnedDocuments = ref<Node[]>([]);
+const workspaces = ref<Node[]>([]);
+const activityDocs = ref<Node[]>([]);
+const searchResults = ref<Node[]>([]);
 
-// Pinned documents (order === -1).
-const pinnedDocuments = computed(() => {
-  return nodesStore.getAll.toSortedArray().filter(node => node.role === 3 && node.order === -1);
-});
+async function loadHome(): Promise<void> {
+  const [s, recent, pinned, spaces, activity] = await Promise.all([
+    nodesStore.fetchStats(),
+    nodesStore.fetchFlat({ role: 3, limit: 5 }),
+    nodesStore.fetchFlat({ role: 3, pinned: true, limit: 100 }),
+    nodesStore.fetchFlat({ role: 1, limit: 100 }),
+    nodesStore.fetchFlat({ role: 3, sortKey: 'modified', sortDir: 'desc', limit: 15 }),
+  ]);
+  stats.value = s;
+  recentlyEdited.value = recent.rows;
+  pinnedDocuments.value = pinned.rows;
+  workspaces.value = spaces.rows;
+  activityDocs.value = activity.rows;
+}
 
-// Workspaces
-const workspaces = computed(() => {
-  const workspaceNodes = nodesStore.workspaces.filter((n): n is Node => !!n);
-  return workspaceNodes.sort((a, b) => a.name.localeCompare(b.name));
+let homeSearchId = 0;
+const runHomeSearch = useDebounceFn(async (query: string) => {
+  const id = ++homeSearchId;
+  const q = query.toLowerCase().trim();
+  if (!q) {
+    searchResults.value = [];
+    return;
+  }
+  try {
+    // Resources live on the CDN page: over-fetch, then drop role 4.
+    const rows = await nodesStore.searchMeta(query, undefined, 12);
+    if (id !== homeSearchId) return;
+    searchResults.value = rows.filter(node => node.role !== 4).slice(0, 8);
+  } catch {
+    if (id === homeSearchId) searchResults.value = [];
+  }
+}, 200);
+
+watch(searchQuery, query => runHomeSearch(query));
+
+onMounted(() => {
+  void loadHome();
 });
 
 // Activity grouped by date
 const activityByDate = computed(() => {
-  const docs = nodesStore.documents.toSorted((a, b) => b.updated_timestamp - a.updated_timestamp).slice(0, 15);
-
   const groups: Record<string, Node[]> = {};
-  docs.forEach(doc => {
+  activityDocs.value.forEach(doc => {
     const date = shortDateLabel(doc.updated_timestamp);
     if (!groups[date]) groups[date] = [];
     groups[date].push(doc);
@@ -178,27 +204,12 @@ const activityByDate = computed(() => {
   return groups;
 });
 
-// Search results
-const searchResults = computed(() => {
-  const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return [];
-
-  return nodesStore.nodes
-    .toSortedArray()
-    .filter((node: Node) => {
-      if (node.role === 4) return false; // resources live on the CDN page
-      const name = (node.name || '').toLowerCase();
-      const description = (node.description || '').toLowerCase();
-      const tags = (node.tags || '').toLowerCase();
-      return name.includes(query) || description.includes(query) || tags.includes(query);
-    })
-    .slice(0, 8);
-});
-
 // Helpers
 const getCategory = (id?: string) => nodesStore.getById(id || '');
 
 const getNodePath = (node: Node) => {
+  // Fill ancestors on demand; the template re-renders when they land.
+  void nodesStore.ensureAncestors(node.id);
   const parts: string[] = [];
   let current = node;
   while (current.parent_id) {

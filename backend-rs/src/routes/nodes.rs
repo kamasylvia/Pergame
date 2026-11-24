@@ -291,16 +291,13 @@ pub struct MetaSearchQuery {
     pub limit: Option<i64>,
 }
 
-/// GET /nodes/search/meta — literal substring search over metadata, any
-/// length (covers what FTS refuses). Shared-aware, newest first.
+/// GET /nodes/search/meta — literal substring search over metadata (empty
+/// query lists recently updated, so filter-only browsing works too).
 pub async fn meta_search(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<MetaSearchQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if q.q.trim().is_empty() {
-        return Err(ApiError::BadRequest("q must not be empty".into()));
-    }
     let role = parse_role(q.role)?;
     let limit = q.limit.unwrap_or(50).clamp(1, 100);
     let rows = node_repo::lists::meta_search(&state.db, auth.user_id(), q.q.trim(), role, limit)

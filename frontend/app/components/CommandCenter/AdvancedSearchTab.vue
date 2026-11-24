@@ -97,7 +97,7 @@ let searchRequestId = 0;
 /**
  * Global search function
  * - If searchInContent is ON and query >= 2 chars → API fulltext search
- * - Otherwise → local store search
+ * - Otherwise → API metadata search (name/description/tags substring)
  */
 
 async function searchAPI(query: string) {
@@ -116,20 +116,25 @@ async function searchAPI(query: string) {
 
 const searchAPIdebounced = useDebounceFn((query: string) => searchAPI(query), 300);
 
-async function localSearch() {
-  searchRequestId++;
-  searchResults.value = nodesStore.search({
-    query: props.query,
-    category: selectedCategory.value,
-    dateType: dateType.value,
-    fromDate: dateFrom.value ? new Date(dateFrom.value) : undefined,
-    toDate: dateTo.value ? new Date(dateTo.value) : undefined,
-    tags: selectedTags.value
-      .split(',')
-      .map(t => t.trim())
-      .filter(t => t.length > 0),
-    role: 3,
-  });
+async function metaSearch() {
+  const requestId = ++searchRequestId;
+  const query = props.query;
+  const hasFilters = selectedCategory.value !== '' || selectedTags.value !== '' || dateFrom.value !== '' || dateTo.value !== '';
+  if (!query.trim() && !hasFilters) {
+    searchResults.value = [];
+    return;
+  }
+  try {
+    // Server metadata search (the store no longer holds every node);
+    // category/tag/date filters still apply in memory below.
+    const rows = await nodesStore.searchMeta(query, 3, 50);
+    if (requestId !== searchRequestId || query !== props.query) return;
+    searchResults.value = applyFilters(rows);
+  } catch (error) {
+    if (requestId !== searchRequestId) return;
+    console.error('[CommandCenter] Meta search error:', error);
+    searchResults.value = [];
+  }
 }
 
 /**
@@ -177,7 +182,7 @@ watch(
     if (props.query.length >= 2 && searchInContent.value) {
       searchAPIdebounced(props.query);
     } else {
-      localSearch();
+      void metaSearch();
     }
   },
   { immediate: true, deep: true },

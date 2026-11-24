@@ -55,7 +55,9 @@
 
 <script setup lang="ts">
 import { navigationItems, type Workspace } from './helpers';
-import { filterTreeByLabel } from '~/helpers/TreeBuilder';
+import type { TreeItem } from '~/helpers/TreeBuilder';
+import type { Node } from '~/stores';
+import { resolveIcon, resolveNodeLink } from '~/helpers/node';
 import NewCategoryModal from '~/components/Node/Modals/CreateCategory.vue';
 import SidebarSkeleton from './SidebarSkeleton.vue';
 import Dock from './Dock.vue';
@@ -101,9 +103,47 @@ const workspaces = computed(() => {
   return items;
 });
 const isLoading = computed(() => nodesStore.isFetching);
+
+// Server-backed filter: substring matches as a flat list (the loaded tree
+// is partial under lazy loading, so client-side tree filtering would lie).
+const filterResults = ref<TreeItem<Node>[]>([]);
+let filterSearchId = 0;
+const runFilterSearch = useDebounceFn(async (query: string) => {
+  const id = ++filterSearchId;
+  const q = query.trim();
+  if (!q) {
+    filterResults.value = [];
+    return;
+  }
+  try {
+    const rows = await nodesStore.searchMeta(q, undefined, 50);
+    if (id !== filterSearchId) return;
+    filterResults.value = rows.map(node => ({
+      id: node.id,
+      label: node.name,
+      route: resolveNodeLink(node),
+      icon: resolveIcon(node),
+      data: node,
+    }));
+  } catch {
+    if (id === filterSearchId) filterResults.value = [];
+  }
+}, 250);
+
+watch(filter, query => {
+  runFilterSearch(query);
+  // Filter cleared: reveal the open note in the restored tree.
+  if (!query.trim() && routeNodeId.value) {
+    revealedFor = null;
+    revealToken++;
+    lastNavAt = Date.now();
+    void revealWithRetry(routeNodeId.value, revealToken);
+  }
+});
+
 const tree = computed(() => {
   if (!filter.value.trim()) return filtered.value;
-  return filterTreeByLabel(filtered.value, filter.value);
+  return filterResults.value;
 });
 
 /**
@@ -153,7 +193,8 @@ watch(routeNodeId, id => {
   revealedFor = null;
   revealToken++;
   lastNavAt = Date.now();
-  if (id) void revealWithRetry(id, revealToken);
+  // Filtered view shows search hits, not the tree: revealing would fight it.
+  if (id && !filter.value.trim()) void revealWithRetry(id, revealToken);
 }, { immediate: true });
 // Post-success repair: late-merging rows can push a revealed row back out
 // of view. Only within 10s of navigation and only when actually outside —

@@ -25,6 +25,16 @@ export interface SearchOptions {
   assignedUserId?: string;
 }
 
+export interface FlatParams {
+  role?: number;
+  root?: string;
+  pinned?: boolean;
+  offset?: number;
+  limit?: number;
+  sortKey?: string;
+  sortDir?: string;
+}
+
 export const useNodesStore = defineStore('nodes', () => {
   const userStore = useUserStore();
   const { sortNodes } = useNodesSort();
@@ -527,6 +537,24 @@ export const useNodesStore = defineStore('nodes', () => {
     total: number;
   }
 
+  /**
+   * Merge one metadata-only row. Never clobbers a full (content-bearing)
+   * row — list responses carry no content. Returns the live row.
+   */
+  function mergePartialRow(row: DB_Node): Node {
+    const ex = nodes.value.get(row.id);
+    if (ex && !ex.partial) return ex;
+    const merged = {
+      ...row,
+      partial: true,
+      synced: true,
+      shared: row.user_id !== userStore.user?.id,
+      permissions: ex?.permissions ?? [],
+    };
+    nodes.value.set(row.id, merged, true);
+    return merged as Node;
+  }
+
   async function loadDirPage(parentId: string | null, page: number, sortKey = 'name', sortDir = 'asc'): Promise<void> {
     const st = dirStateOf(parentId);
     if (st.loading || st.pages.has(page)) return;
@@ -541,21 +569,10 @@ export const useNodesStore = defineStore('nodes', () => {
       });
       const res = await makeRequest<DirPage>(`${route}?${params.toString()}`, 'GET', {});
       if (res.status !== 'success' || !res.result) throw new Error(res.message || 'directory load failed');
-      const me = userStore.user?.id;
       const tags = new Set(allTags.value);
       nodes.value.startBulk();
       for (const row of res.result.rows) {
-        nodes.value.set(
-          row.id,
-          {
-            ...row,
-            partial: true,
-            synced: true,
-            shared: row.user_id !== me,
-            permissions: nodes.value.get(row.id)?.permissions ?? [],
-          },
-          true,
-        );
+        mergePartialRow(row);
         if (typeof row.has_children === 'boolean') hasChildren.value.set(row.id, row.has_children);
         if (row.tags) parseTags(row.tags).forEach(tag => tags.add(tag));
       }
@@ -623,12 +640,8 @@ export const useNodesStore = defineStore('nodes', () => {
     try {
       const res = await makeRequest<DB_Node[]>(`nodes/${id}/ancestors`, 'GET', {});
       if (res.status !== 'success' || !res.result) return;
-      const me = userStore.user?.id;
       nodes.value.startBulk();
-      for (const n of res.result) {
-        if (nodes.value.has(n.id)) continue;
-        nodes.value.set(n.id, { ...n, partial: true, synced: true, shared: n.user_id !== me, permissions: [] }, true);
-      }
+      for (const n of res.result) mergePartialRow(n);
       nodes.value.endBulk();
     } finally {
       ancestorInflight.delete(id);
@@ -655,16 +668,68 @@ export const useNodesStore = defineStore('nodes', () => {
       {},
     );
     if (res.status !== 'success' || !res.result) return none;
-    const me = userStore.user?.id;
-    const merge = (n: DB_Node | null): Node | null => {
-      if (!n) return null;
-      const ex = nodes.value.get(n.id);
-      if (ex) return ex;
-      const row = { ...n, partial: true, synced: true, shared: n.user_id !== me, permissions: [] };
-      nodes.value.set(n.id, row, true);
-      return row as Node;
+    nodes.value.startBulk();
+    const out = {
+      prev: res.result.prev ? mergePartialRow(res.result.prev) : null,
+      next: res.result.next ? mergePartialRow(res.result.next) : null,
     };
-    return { prev: merge(res.result.prev), next: merge(res.result.next) };
+    nodes.value.endBulk();
+    return out;
+  }
+
+  /** Substring search over name/description/tags (server, any length). Merges hits. */
+  async function searchMeta(query: string, role?: number, limit = 20): Promise<Node[]> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    if (role !== undefined) params.set('role', String(role));
+    const res = await makeRequest<DB_Node[]>(`nodes/search/meta?${params.toString()}`, 'GET', {});
+    if (res.status !== 'success' || !res.result) return [];
+    nodes.value.startBulk();
+    const out = res.result.map(mergePartialRow);
+    nodes.value.endBulk();
+    return out;
+  }
+
+  /** Paged flat list (index pages, cards); merges rows, returns live nodes + total. */
+  async function fetchFlat(p: FlatParams): Promise<{ rows: Node[]; total: number }> {
+    const params = new URLSearchParams({
+      offset: String(p.offset ?? 0),
+      limit: String(p.limit ?? 50),
+      sort: p.sortKey ?? 'name',
+      order: p.sortDir ?? 'asc',
+    });
+    if (p.role !== undefined) params.set('role', String(p.role));
+    if (p.root) params.set('root', p.root);
+    if (p.pinned) params.set('pinned', 'true');
+    const res = await makeRequest<{ rows: DB_Node[]; total: number }>(`nodes/flat?${params.toString()}`, 'GET', {});
+    if (res.status !== 'success' || !res.result) return { rows: [], total: 0 };
+    nodes.value.startBulk();
+    const rows = res.result.rows.map(mergePartialRow);
+    nodes.value.endBulk();
+    return { rows, total: res.result.total };
+  }
+
+  /** Counts for stats cards, globally or under one subtree root. */
+  async function fetchStats(root?: string): Promise<{ total: number; teams: number; workspaces: number; folders: number; documents: number; resources: number }> {
+    const empty = { total: 0, teams: 0, workspaces: 0, folders: 0, documents: 0, resources: 0 };
+    const params = root ? `?root=${root}` : '';
+    const res = await makeRequest<typeof empty>(`nodes/stats${params}`, 'GET', {});
+    return res.status === 'success' && res.result ? res.result : empty;
+  }
+
+  /** Activity histogram (day/count pairs, newest first). */
+  async function fetchActivity(limit = 15): Promise<{ day: string; count: number }[]> {
+    const res = await makeRequest<{ day: string; count: number }[]>(`nodes/activity?limit=${limit}`, 'GET', {});
+    return res.status === 'success' && res.result ? res.result : [];
+  }
+
+  /** Distinct tag strings, unioned into suggestions. */
+  async function fetchTags(): Promise<string[]> {
+    const res = await makeRequest<string[]>('nodes/tags', 'GET', {});
+    if (res.status !== 'success' || !res.result) return [...allTags.value];
+    const tags = new Set(allTags.value);
+    for (const raw of res.result) parseTags(raw).forEach(tag => tags.add(tag));
+    allTags.value = Array.from(tags).sort();
+    return allTags.value;
   }
 
   /**
@@ -712,6 +777,11 @@ export const useNodesStore = defineStore('nodes', () => {
     invalidateAllDirs,
     ensureAncestors,
     fetchNeighbors,
+    searchMeta,
+    fetchFlat,
+    fetchStats,
+    fetchActivity,
+    fetchTags,
     hasChildren,
     getTotalUsedStorage,
     teams,

@@ -37,19 +37,40 @@ function filterByTokens<T>(items: T[], getText: (item: T) => string): T[] {
 
 const filteredActions = computed(() => filterByTokens(quickActions, a => `${a.title} ${a.description}`));
 
-const filteredDocuments = computed<SearchResult[]>(() =>
-  documentStore
-    .search({ query: props.searchQuery, role: 3 })
-    .slice(0, 5)
-    .map(d => ({
+const docResults = ref<SearchResult[]>([]);
+let docSearchId = 0;
+
+// Server metadata search (the store no longer holds every node): debounced,
+// out-of-order guarded, empty on blank query.
+const runDocSearch = useDebounceFn(async (query: string) => {
+  const id = ++docSearchId;
+  if (!query.trim()) {
+    docResults.value = [];
+    return;
+  }
+  try {
+    const rows = await documentStore.searchMeta(query, 3, 5);
+    if (id !== docSearchId) return;
+    docResults.value = rows.map(d => ({
       id: d.id,
       title: d.name,
       description: d.tags ? `#${String(d.tags)}` : 'Document',
       icon: 'files',
       path: `/dashboard/docs/${d.id}`,
       category: 'Documents',
-    })),
+    }));
+  } catch {
+    if (id === docSearchId) docResults.value = [];
+  }
+}, 200);
+
+watch(
+  () => props.searchQuery,
+  query => runDocSearch(query),
+  { immediate: true },
 );
+
+const filteredDocuments = computed<SearchResult[]>(() => docResults.value);
 
 const filteredPages = computed(() => filterByTokens(availablePages, p => `${p.title} ${p.description} ${p.category}`));
 
