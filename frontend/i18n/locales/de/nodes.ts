@@ -43,6 +43,7 @@ export default {
     moveMessage: '„{name}“ nach „{target}“ verschieben?',
     referencedBy: 'Referenziert von',
     references: 'Verweise',
+    refresh: 'Aktualisieren',
     selected: '{count} ausgewählt',
     treeOrder: 'Dokumentbaum-Reihenfolge',
   },

@@ -43,6 +43,7 @@ export default {
     moveMessage: '将“{name}”移动到“{target}”？',
     referencedBy: '被引用自',
     references: '引用',
+    refresh: '刷新',
     selected: '已选 {count} 项',
     treeOrder: '文档树顺序',
   },

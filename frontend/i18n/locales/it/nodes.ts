@@ -43,6 +43,7 @@ export default {
     moveMessage: 'Spostare "{name}" in "{target}"?',
     referencedBy: 'Referenziato da',
     references: 'Riferimenti',
+    refresh: 'Aggiorna',
     selected: '{count} selezionati',
     treeOrder: 'Ordine albero documenti',
   },

@@ -43,6 +43,7 @@ export default {
     moveMessage: 'Déplacer « {name} » vers « {target} » ?',
     referencedBy: 'Référencé par',
     references: 'Références',
+    refresh: 'Actualiser',
     selected: '{count} sélectionné(s)',
     treeOrder: "Ordre de l'arborescence",
   },

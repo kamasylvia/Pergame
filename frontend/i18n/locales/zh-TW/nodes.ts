@@ -43,6 +43,7 @@ export default {
     moveMessage: '將「{name}」移到「{target}」？',
     referencedBy: '被引用自',
     references: '引用',
+    refresh: '重新整理',
     selected: '已選 {count} 項',
     treeOrder: '文件樹順序',
   },

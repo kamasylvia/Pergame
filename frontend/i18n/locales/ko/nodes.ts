@@ -43,6 +43,7 @@ export default {
     moveMessage: '"{name}"을(를) "{target}"(으)로 이동하시겠습니까?',
     referencedBy: '참조됨',
     references: '참조',
+    refresh: '새로고침',
     selected: '{count}개 선택됨',
     treeOrder: '문서 트리 순서',
   },

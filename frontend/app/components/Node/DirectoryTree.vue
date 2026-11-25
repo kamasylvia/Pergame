@@ -10,6 +10,7 @@
         <AppButton v-if="selection.size" type="danger" small @click="deleteSelected">
           {{ t('nodes.directory.deleteSelected') }} ({{ selection.size }})
         </AppButton>
+        <AppButton type="secondary" small :disabled="refreshing" @click="refresh">{{ t('nodes.directory.refresh') }}</AppButton>
         <AppSelect v-model="sortId" :items="sortOptions" size="170px" />
       </div>
     </div>
@@ -198,17 +199,36 @@ const outFull = ref<Set<string>>(new Set());
 const inFull = ref<Set<string>>(new Set());
 let refsReq = 0;
 
+const fetchRefsFor = async (ids: string[]): Promise<void> => {
+  const missing = ids.filter(id => !refsCache.value[id]).slice(0, 100);
+  if (!missing.length) return;
+  const req = ++refsReq;
+  const batch = await nodesStore.fetchRefs(missing).catch(() => ({} as Record<string, NodeRefs>));
+  if (req !== refsReq) return;
+  refsCache.value = { ...refsCache.value, ...batch };
+};
+
 watch(
   () => [...renderedIds.value],
-  async ids => {
-    const missing = ids.filter(id => !refsCache.value[id]).slice(0, 100);
-    if (!missing.length) return;
-    const req = ++refsReq;
-    const batch = await nodesStore.fetchRefs(missing).catch(() => ({} as Record<string, NodeRefs>));
-    if (req !== refsReq) return;
-    refsCache.value = { ...refsCache.value, ...batch };
+  ids => {
+    void fetchRefsFor(ids);
   },
 );
+
+// Manual refresh: reload every held directory page plus this tree's refs.
+// Selection, expansion and temp sort are preserved.
+const refreshing = ref(false);
+const refresh = async (): Promise<void> => {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try {
+    refsCache.value = {};
+    await nodesStore.refreshLoadedDirs();
+    await fetchRefsFor([...renderedIds.value]);
+  } finally {
+    refreshing.value = false;
+  }
+};
 
 const outgoingOf = (node: Node): RefNode[] => {
   const all = refsCache.value[node.id]?.outgoing ?? [];

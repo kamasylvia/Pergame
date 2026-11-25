@@ -43,6 +43,7 @@ export default {
     moveMessage: 'Перемістити "{name}" до "{target}"?',
     referencedBy: 'Посилаються',
     references: 'Посилання',
+    refresh: 'Оновити',
     selected: 'Вибрано: {count}',
     treeOrder: 'Порядок дерева документів',
   },
