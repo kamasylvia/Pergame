@@ -12,7 +12,8 @@
 - [x] **Copy to 替复制链接 + 表头计数**:CloneTo 加 copy 模式(递归深拷贝,子快照防自吞,附件留原);表头 `目录 共N篇`(stats.documents)+ Copy/Clone/Move/Delete/Refresh 文字栏;顺手补 sidebarItemsPrefs 缺失声明(消 warning,导航显隐遵设置)(`852f0905`).
 - [x] **PDF 独立滚动窗口**:`PDFViewer` 加 `max-height:80vh`,长文档页内翻页不再撑宿主(5 页实测 614px 窗/5292px 内滚)(`5b9d2c39e9`)。
 - [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist,图床分支与 REST 同语义);`read_resource` 对二进制返元数据 + 下载 URL;`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a` + `8ce32511`)。
-- [x] **思源同步一则**:思源 `20261123063714-akbgu1t`(计算摄影,9338 字纯 md,无子文档/附件)→ pergame `01a21180-…`(Photography 子文档,保留思源原时间戳,metadata 记 imported 来源;tsv 生成列自动生效,读端空 compiled 即时编译,无 refs 需回填)。
+- [x] **思源计算摄影整树同步( supersedes 单篇 `01a21180`,已删)**:思源 `20261123063714-akbgu1t` 子树 36 篇 → pergame 新目录 `计算摄影`(folder `01a211ac-e5b5`)+ root-body 文档持 `人像/通用` 两支,全标题(最长 98 字)/正文/时间戳/imported 标记;导出内无内部链接 refs=0;3 PDF 附件(原文重下,思源 file API 只走文本)经 blob 通道入库 + 文档内改命名路由,S3 字节与 db size 对齐。
+- [x] **标题 50 字上限解除**:`nodes.name` VARCHAR(50)→TEXT(迁移 0015,search_tsv 重建);REST 校验/MCP+REST 上传截断/前端 8 处 maxlength 同批去;140 字标题 API roundtrip 实测 + FTS 健康;Go 遗留不动,web-clipper 仍自截 50(`b45fb2ec`)。
 - [x] **目录块刷新机制(问答)**:无刷新按钮,靠 store 响应式自动刷新——本会话写操作走 `refreshDir` 回填可见页,跨 tab/他人写入需切容器或重进(无轮询/推送)。
 - [x] **刷新按钮**:表头加文字刷新键,重拉全部已持目录页 + 本树 refs,保留选择/展开/排序;外部改名实测点按即新(`6f67b422`)。
 
