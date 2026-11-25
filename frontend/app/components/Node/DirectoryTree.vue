@@ -4,9 +4,9 @@
       <h2>目录</h2>
       <div class="header-actions" :title="t('nodes.directory.selected', { count: selection.size })">
         <AppCheck v-if="renderedIds.size" :model-value="allSelected" @change="toggleAll" />
-        <AppBtnIcon v-if="selection.size" icon="duplicate" :tooltip="t('common.actions.cloneTo')" @click="bulkClone" />
-        <AppBtnIcon v-if="selection.size" icon="location" :tooltip="t('common.actions.moveTo')" @click="bulkMove" />
-        <AppBtnIcon v-if="selection.size" icon="link" :tooltip="t('common.actions.copyLink')" @click="bulkCopyLink" />
+        <AppButton v-if="selection.size" type="secondary" small @click="bulkClone">{{ t('common.actions.cloneTo') }}</AppButton>
+        <AppButton v-if="selection.size" type="secondary" small @click="bulkMove">{{ t('common.actions.moveTo') }}</AppButton>
+        <AppButton v-if="selection.size" type="secondary" small @click="bulkCopyLink">{{ t('common.actions.copyLink') }}</AppButton>
         <AppButton v-if="selection.size" type="danger" small @click="deleteSelected">
           {{ t('nodes.directory.deleteSelected') }} ({{ selection.size }})
         </AppButton>
