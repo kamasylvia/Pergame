@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: 'Копіювати до…',
     deleteSelected: 'Видалити вибрані',
     dontAskAgain: 'Більше не питати',
     loadMore: 'Завантажити ще',
@@ -45,6 +46,7 @@ export default {
     references: 'Посилання',
     refresh: 'Оновити',
     selected: 'Вибрано: {count}',
+    total: 'документів: {count}',
     treeOrder: 'Порядок дерева документів',
   },
 

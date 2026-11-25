@@ -41,12 +41,17 @@
 
 <script setup lang="ts">
 import AppSelectNode from '~/components/AppSelectNode.vue';
+import { deepCopyNodes } from '~/composables/useDirectoryLevel';
 import { nodeFullPath } from '~/helpers/node';
 import type { Node } from '~/stores';
 import type { TreeItem } from '~/helpers/TreeBuilder';
 
-/** `move` re-parents the node(s); the default `clone` creates second positions. Bulk callers pass `nodes` (already topmost-reduced); single callers pass `node`. */
-const props = withDefaults(defineProps<{ node?: Node; nodes?: Node[]; mode?: 'clone' | 'move' }>(), { node: undefined, nodes: undefined, mode: 'clone' });
+/** Target picker for three operations: `move` re-parents, `clone` adds link positions, `copy` deep-copies. Bulk callers pass `nodes` (already topmost-reduced); single callers pass `node`. */
+const props = withDefaults(defineProps<{ node?: Node; nodes?: Node[]; mode?: 'clone' | 'move' | 'copy' }>(), {
+  node: undefined,
+  nodes: undefined,
+  mode: 'clone',
+});
 const emit = defineEmits(['close']);
 
 const store = useNodesStore();
@@ -55,7 +60,13 @@ const { t } = useI18nT();
 
 const targets = computed(() => (props.nodes?.length ? props.nodes : props.node ? [props.node] : []));
 
-const titleKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.moveTitle') : t('nodes.modals.delete.cloneTitle')));
+const titleKey = computed(() =>
+  props.mode === 'move'
+    ? t('nodes.modals.delete.moveTitle')
+    : props.mode === 'copy'
+      ? t('nodes.directory.copyTo')
+      : t('nodes.modals.delete.cloneTitle'),
+);
 const pickKey = computed(() => (props.mode === 'move' ? t('nodes.modals.delete.movePick') : t('nodes.modals.delete.clonePick')));
 
 /** Folders only (workspaces + categories); documents/resources are not parents. */
@@ -104,6 +115,17 @@ const matches = computed(() => {
 });
 
 const pick = async (target: ANode) => {
+  if (props.mode === 'copy') {
+    const { failed } = await deepCopyNodes(
+      targets.value.map(n => n.id),
+      String(target.id),
+    );
+    emit('close');
+    if (failed.length) {
+      notifications.add({ type: 'error', title: t('nodes.directory.copyTo'), message: failed.join('\n') });
+    }
+    return;
+  }
   const failed: string[] = [];
   for (const subject of targets.value) {
     try {

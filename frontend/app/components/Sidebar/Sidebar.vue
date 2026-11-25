@@ -79,6 +79,7 @@ const modals = useModal();
 
 const viewDock = preferences.get('view_dock');
 const compactMode = preferences.get('compactMode');
+const sidebarItemsPrefs = preferences.get('sidebarItems');
 const route = useRoute();
 const scroller = ref<HTMLElement | null>(null);
 const virtualTree = ref<{

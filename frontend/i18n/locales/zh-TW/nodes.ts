@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: '複製到…',
     deleteSelected: '刪除所選',
     dontAskAgain: '不再詢問',
     loadMore: '載入更多',
@@ -45,6 +46,7 @@ export default {
     references: '引用',
     refresh: '重新整理',
     selected: '已選 {count} 項',
+    total: '共 {count} 篇',
     treeOrder: '文件樹順序',
   },
 

@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: '복사…',
     deleteSelected: '선택 삭제',
     dontAskAgain: '다시 묻지 않기',
     loadMore: '더 보기',
@@ -45,6 +46,7 @@ export default {
     references: '참조',
     refresh: '새로고침',
     selected: '{count}개 선택됨',
+    total: '문서 {count}개',
     treeOrder: '문서 트리 순서',
   },
 

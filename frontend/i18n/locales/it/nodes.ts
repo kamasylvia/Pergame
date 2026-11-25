@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: 'Copia in…',
     deleteSelected: 'Elimina selezionati',
     dontAskAgain: 'Non chiedere più',
     loadMore: 'Carica altri',
@@ -45,6 +46,7 @@ export default {
     references: 'Riferimenti',
     refresh: 'Aggiorna',
     selected: '{count} selezionati',
+    total: '{count} documenti',
     treeOrder: 'Ordine albero documenti',
   },
 

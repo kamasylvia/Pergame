@@ -1,12 +1,12 @@
 <template>
   <section class="directory-tree">
     <div class="tree-header">
-      <h2>目录</h2>
+      <h2>目录 <span v-if="docTotal >= 0" class="doc-total">{{ t('nodes.directory.total', { count: docTotal }) }}</span></h2>
       <div class="header-actions" :title="t('nodes.directory.selected', { count: selection.size })">
         <AppCheck v-if="renderedIds.size" :model-value="allSelected" @change="toggleAll" />
+        <AppButton v-if="selection.size" type="secondary" small @click="bulkCopy">{{ t('nodes.directory.copyTo') }}</AppButton>
         <AppButton v-if="selection.size" type="secondary" small @click="bulkClone">{{ t('common.actions.cloneTo') }}</AppButton>
         <AppButton v-if="selection.size" type="secondary" small @click="bulkMove">{{ t('common.actions.moveTo') }}</AppButton>
-        <AppButton v-if="selection.size" type="secondary" small @click="bulkCopyLink">{{ t('common.actions.copyLink') }}</AppButton>
         <AppButton v-if="selection.size" type="danger" small @click="deleteSelected">
           {{ t('nodes.directory.deleteSelected') }} ({{ selection.size }})
         </AppButton>
@@ -144,6 +144,7 @@ const topmostSelection = (): Node[] => {
 
 const pruneSelection = () => {
   selection.value = new Set([...selection.value].filter(id => nodesStore.getById(id)));
+  void reloadTotal();
 };
 
 const deleteSelected = () => {
@@ -175,10 +176,10 @@ const trimSelection = () => {
   selection.value = new Set([...selection.value].filter(id => renderedIds.value.has(id)));
 };
 
-const bulkCopyLink = () => {
+const bulkCopy = () => {
   const nodes = topmostSelection();
   if (!nodes.length) return;
-  navigator.clipboard.writeText(nodes.map(n => `${window.location.origin}${resolveNodeLink(n)}`).join('\n'));
+  modals.add(new Modal(shallowRef(NodeCloneModal), { props: { nodes, mode: 'copy' }, size: 'small', onClose: trimSelection }));
 };
 
 provide('directoryRegister', (id: string) => {
@@ -225,6 +226,7 @@ const refresh = async (): Promise<void> => {
     refsCache.value = {};
     await nodesStore.refreshLoadedDirs();
     await fetchRefsFor([...renderedIds.value]);
+    await reloadTotal();
   } finally {
     refreshing.value = false;
   }
@@ -255,6 +257,13 @@ const hiddenIncoming = (node: Node): number =>
 
 const openRef = (ref: RefNode) => router.push(resolveNodeLink(ref as unknown as Node));
 
+const docTotal = ref(-1);
+
+const reloadTotal = async (): Promise<void> => {
+  const stats = await nodesStore.fetchStats(props.containerId).catch(() => null);
+  if (stats) docTotal.value = stats.documents;
+};
+
 watch(
   () => props.containerId,
   () => {
@@ -264,7 +273,9 @@ watch(
     refsCache.value = {};
     outFull.value = new Set();
     inFull.value = new Set();
+    docTotal.value = -1;
     ensure();
+    void reloadTotal();
   },
   { immediate: true },
 );
@@ -326,6 +337,13 @@ watch(
     margin: 0;
     font-size: 16px;
     font-weight: 600;
+  }
+
+  .doc-total {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 8px;
   }
 
   .tree-roots {

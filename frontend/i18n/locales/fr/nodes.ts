@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: 'Copier vers…',
     deleteSelected: 'Supprimer la sélection',
     dontAskAgain: 'Ne plus demander',
     loadMore: 'Charger plus',
@@ -45,6 +46,7 @@ export default {
     references: 'Références',
     refresh: 'Actualiser',
     selected: '{count} sélectionné(s)',
+    total: '{count} documents',
     treeOrder: "Ordre de l'arborescence",
   },
 

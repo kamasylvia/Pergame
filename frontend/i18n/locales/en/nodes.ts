@@ -37,6 +37,7 @@ export default {
   },
 
   directory: {
+    copyTo: 'Copy to…',
     deleteSelected: 'Delete selected',
     dontAskAgain: "Don't ask again",
     loadMore: 'Load more',
@@ -45,6 +46,7 @@ export default {
     references: 'References',
     refresh: 'Refresh',
     selected: '{count} selected',
+    total: '{count} documents',
     treeOrder: 'Document tree order',
   },
 

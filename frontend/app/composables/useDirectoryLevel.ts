@@ -124,3 +124,46 @@ export async function moveDirectoryNode(draggedId: string, targetId: string, zon
     }),
   );
 }
+
+/**
+ * Deep-copy nodes (docs + folders) under a target folder. Children are
+ * snapshotted before each insert so a copy landing inside its own source
+ * subtree cannot recurse forever (the picker also disables those
+ * targets); resource attachments stay with the originals.
+ */
+export async function deepCopyNodes(ids: string[], targetParentId: string): Promise<{ copied: number; failed: string[] }> {
+  const nodesStore = useNodesStore();
+  let copied = 0;
+  const failed: string[] = [];
+  const copyOne = async (id: string, parentId: string): Promise<void> => {
+    let node = nodesStore.getById(id);
+    if (!node) throw new Error(id);
+    if (node.partial) node = await nodesStore.fetch({ id });
+    if (node.id === parentId) throw new Error(node.name || id);
+    const kids = await nodesStore.fetchAllChildren(id).catch(() => [] as Node[]);
+    const created = await nodesStore.post({
+      name: node.name,
+      description: node.description,
+      role: node.role,
+      parent_id: parentId,
+      tags: node.tags,
+      accessibility: node.accessibility,
+      access: node.access,
+      content: node.content,
+      content_compiled: node.content_compiled,
+    });
+    copied += 1;
+    for (const kid of kids) {
+      if ((kid.role ?? 99) > 3) continue;
+      await copyOne(kid.id, created.id);
+    }
+  };
+  for (const id of ids) {
+    try {
+      await copyOne(id, targetParentId);
+    } catch (e) {
+      failed.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  return { copied, failed };
+}
