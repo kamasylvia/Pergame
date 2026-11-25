@@ -834,23 +834,53 @@ impl PergameMcp {
             _ => None,
         };
 
-        // Node + blob layout mirrors POST /api/resources (code files never
-        // take the imgbed branch, so no remote_url handling here).
+        // Node + blob layout mirrors POST /api/resources, including the
+        // image-host branch for images/videos (failures fall back to S3).
         let id = crate::types::new_id();
         let ext: String = filename
             .rsplit_once('.')
             .map(|(_, e)| format!(".{e}"))
             .unwrap_or_default();
         let transformed_path = format!("{id}{ext}");
-        let sha = crate::blobs::acquire(&self.state.db, &storage, &bytes)
-            .await
-            .map_err(mcp_error)?;
-        let metadata = serde_json::json!({
-            "filetype": mime,
-            "original_path": filename,
-            "transformed_path": transformed_path,
-            "content_sha256": sha,
-        });
+        let mut metadata_json = crate::routes::resources::upload::build_metadata(
+            &mime,
+            &filename,
+            &transformed_path,
+            None,
+        );
+        let mut remote_url: Option<String> = None;
+        if let Some(bed) = crate::imgbed::Imgbed::from_config()
+            && crate::routes::resources::upload::is_media_mime(&mime)
+            && crate::routes::resources::upload::imgbed_private_ok(&self.state, actor.user_id, parent).await
+        {
+            match bed.upload(&bytes, &filename, &mime).await {
+                Ok(url) => {
+                    if let Some(obj) = metadata_json.as_object_mut() {
+                        obj.insert("imgbed_url".into(), serde_json::Value::String(url.clone()));
+                        obj.insert(
+                            "transformed_path".into(),
+                            serde_json::Value::String(url.clone()),
+                        );
+                    }
+                    remote_url = Some(url);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "image-host upload failed; falling back to S3");
+                }
+            }
+        }
+        if remote_url.is_none() {
+            let sha = crate::blobs::acquire(&self.state.db, &storage, &bytes)
+                .await
+                .map_err(mcp_error)?;
+            if let Some(obj) = metadata_json.as_object_mut() {
+                obj.insert(
+                    "content_sha256".into(),
+                    serde_json::Value::String(sha),
+                );
+            }
+        }
+        let metadata = metadata_json;
         let mut name = filename.clone();
         if name.len() > 50 {
             // Byte-boundary parity with REST, then trim to a char edge.
@@ -871,7 +901,7 @@ impl PergameMcp {
             display: None,
             node_order: None,
             content: Some(filename.clone()),
-            content_compiled: Some(transformed_path.clone()),
+            content_compiled: Some(remote_url.clone().unwrap_or_else(|| transformed_path.clone())),
             size: Some(bytes.len() as i64),
             metadata: Some(metadata),
         };

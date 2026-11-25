@@ -146,13 +146,13 @@ pub(crate) fn mime_allowed(list: &[String], mime: &str) -> bool {
 }
 
 /// Image-host scope: images and videos only (PDFs/docs stay on S3).
-fn is_media_mime(mime: &str) -> bool {
+pub(crate) fn is_media_mime(mime: &str) -> bool {
     mime.starts_with("image/") || mime.starts_with("video/")
 }
 
 /// Public parents are already public; private ones require the user's
 /// `imgbedPrivate` opt-in.
-async fn imgbed_private_ok(state: &AppState, user_id: Uuid, parent_id: Option<Uuid>) -> bool {
+pub(crate) async fn imgbed_private_ok(state: &AppState, user_id: Uuid, parent_id: Option<Uuid>) -> bool {
     if let Some(pid) = parent_id
         && let Ok(Some(parent)) = node_repo::get_by_id(&state.db, pid).await
         && parent.accessibility.is_some_and(|a| a == 3)
@@ -167,7 +167,7 @@ async fn imgbed_private_ok(state: &AppState, user_id: Uuid, parent_id: Option<Uu
         .unwrap_or(false)
 }
 
-fn build_metadata(
+pub(crate) fn build_metadata(
     filetype: &str,
     original_path: &str,
     transformed_path: &str,

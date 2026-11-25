@@ -27,7 +27,7 @@
 - `update_note(id, content?, name?)` — 改 content/name;资源仅改名(content 必拒,重传换字节)
 - `move_node(id, new_folder_id)`(根 = null) — 改 parent,复用 safe_parent 门
 - `delete_node(id)` — 软删进回收站,响应 `{deleted_at, nodes}`
-- `upload_resource(folder_id?, filename, content?, content_base64?, content_type?)` — `content` 传文本/`content_base64` 传二进制(二选一;二进制走 REST 同 allowlist,缺 content_type 按扩展名推断);quota 门 + blob 落盘与 REST 同语义,不走 imgbed 分支
+- `upload_resource(folder_id?, filename, content?, content_base64?, content_type?)` — `content` 传文本/`content_base64` 传二进制(二选一;二进制走 REST 同 allowlist,缺 content_type 按扩展名推断);quota 门 + blob 落盘 + imgbed 分支(图床故障回退 S3)与 REST 同语义
 
 权限:MCP 调用 = 该 token 所属用户身份,复用现有 permissions/actor 体系(不是超权通道)。
 
