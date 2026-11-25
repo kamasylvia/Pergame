@@ -54,11 +54,35 @@ const codeLanguage = (filename: string): string => {
   return map[ext] || ext;
 };
 
-/** Embed URL for a resource: code files use the named route so the markdown
- * renderer can dispatch on the extension; others use the bare file URL. */
+/** Embed URL for a resource: always the named route — the markdown renderer
+ * dispatches media/PDF/code embeds on the extension, and the bare file URL
+ * carries none (legacy bare URLs resolve via stored metadata instead). */
 const resourceEmbedUrl = (node: Pick<Node, 'id'>, filename: string): string => {
   const { resourceURL } = useApi();
-  return isCodeFile(filename) ? `${resourceURL(node as Node)}/${encodeURIComponent(filename)}` : resourceURL(node as Node);
+  return `${resourceURL(node as Node)}/${encodeURIComponent(filename)}`;
+};
+
+/** Best-effort extension for a stored mime (legacy bare-URL dispatch). */
+const mimeToExt = (mime: string): string => {
+  const map: Record<string, string> = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/bmp': 'bmp',
+    'image/webp': 'webp', 'image/avif': 'avif', 'image/svg+xml': 'svg', 'image/vnd.microsoft.icon': 'ico',
+    'video/mp4': 'mp4', 'video/x-msvideo': 'avi', 'video/quicktime': 'mov', 'video/x-ms-wmv': 'wmv',
+    'video/x-flv': 'flv', 'video/x-matroska': 'mkv', 'video/webm': 'webm',
+    'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/flac': 'flac',
+    'audio/aac': 'aac', 'audio/webm': 'weba',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'text/plain': 'txt', 'text/csv': 'csv',
+    'application/zip': 'zip', 'application/x-rar-compressed': 'rar', 'application/x-tar': 'tar',
+    'application/gzip': 'gz', 'application/x-bzip2': 'bz2',
+  };
+  return map[mime] ?? '';
 };
 
 /** Get the CDN preview URL for a resource node */
@@ -92,4 +116,4 @@ const resolveFileType = (mimeType: string) => {
   return 'File';
 };
 
-export { readableFileSize, resolvePreviewUrl, isImageFile, resolveFileIcon, resolveFileType, isPdfFile, isVideoFile, isAudioFile, CODE_EXTS, fileExt, isCodeFile, codeLanguage, resourceEmbedUrl };
+export { readableFileSize, resolvePreviewUrl, isImageFile, resolveFileIcon, resolveFileType, isPdfFile, isVideoFile, isAudioFile, CODE_EXTS, fileExt, isCodeFile, codeLanguage, resourceEmbedUrl, mimeToExt };

@@ -1,4 +1,6 @@
 import type { Env, MarkdownIt, StateInline } from 'markdown-it';
+import { mimeToExt } from '~/helpers/resources';
+import { useNodesStore } from '~/stores/nodes.store';
 
 function superscriptPlugin(md: MarkdownIt) {
   md.inline.ruler.after('emphasis', 'superscript', (state: StateInline, silent: boolean) => {
@@ -129,9 +131,12 @@ function footNotePlugin(md: MarkdownIt) {
 const VIDEO_REGEX = /\.(mp4|webm|ogg|ogv|mov|avi|mkv|flv|wmv)([?#].*)?$/i;
 const AUDIO_REGEX = /\.(mp3|wav|ogg|m4a|flac|aac)([?#].*)?$/i;
 const PDF_REGEX = /\.pdf([?#].*)?$/i;
+// Bare resource ids already fetch-triggered (rules re-run on store changes;
+// without this each recompile would refire missing ids).
+const bareFetchTried = new Set<string>();
 // Keep in sync with backend-rs/src/utils.rs (CODE_EXTS). Named resource URLs
-// (/api/resources/{id}/file/{name}) carry the extension; bare URLs fall
-// through to the image renderer as before.
+// (/api/resources/{id}/file/{name}) carry the extension; legacy bare URLs
+// resolve the stored mime via the nodes store (see matchSrc below).
 const CODE_REGEX
   = /\.(py|rs|go|js|mjs|cjs|ts|tsx|jsx|java|c|h|cpp|hpp|cs|rb|php|sh|bash|zsh|fish|sql|r|swift|kt|scala|pl|lua|toml|yaml|yml|json|xml|ini|md|markdown|txt|csv|diff|log|dockerfile|makefile|bat|ps1|vim|el)([?#].*)?$/i;
 
@@ -169,23 +174,51 @@ function html5MediaPlugin(md: MarkdownIt) {
       }
     }
 
+    // Legacy bare resource URLs (/api/resources/{id}/file, no filename)
+    // predate the named route: resolve the stored mime so media/PDF/code
+    // dispatch by inferred extension. Match-only — output keeps real src.
+    // getById registers a dep, so landing rows recompile automatically.
+    let matchSrc = src;
+    const bare = src.match(/\/api\/resources\/([0-9a-fA-F-]{36})\/file\/?$/);
+    if (bare) {
+      try {
+        const store = useNodesStore();
+        const id = bare[1]!;
+        const node = store.getById(id);
+        if (!node && !bareFetchTried.has(id)) {
+          bareFetchTried.add(id);
+          // Failed fetches re-arm: the next unrelated store change
+          // recompiles and retries (no timer, no hot loop).
+          void store.fetch({ id }).catch(() => bareFetchTried.delete(id));
+        }
+        const filetype = (node?.metadata as Record<string, unknown> | undefined)?.filetype;
+        if (typeof filetype === 'string') {
+          const ext = mimeToExt(filetype);
+          if (ext) matchSrc = `${src}.${ext}`;
+        }
+      } catch {
+        // No store (SSR/tests): extension matching only.
+      }
+    }
+
+
     const escSrc = md.utils.escapeHtml(src);
     const escAlt = md.utils.escapeHtml(alt);
-    if (src.match(VIDEO_REGEX)) {
+    if (matchSrc.match(VIDEO_REGEX)) {
       return `<video controls preload="metadata" style="max-width:100%" crossorigin="use-credentials" src="${escSrc}">${escAlt}</video>`;
     }
 
-    if (src.match(AUDIO_REGEX)) {
+    if (matchSrc.match(AUDIO_REGEX)) {
       return `<audio controls preload="metadata" style="max-width:100%" crossorigin="use-credentials" src="${escSrc}">${escAlt}</audio>`;
     }
 
-    if (src.match(PDF_REGEX)) {
+    if (matchSrc.match(PDF_REGEX)) {
       // Placeholder: ContentCompiled mounts PDFViewer here after render
       // (same post-mount pattern as mermaid diagrams).
       return `<div class="pdf-embed" data-src="${escSrc}" data-alt="${escAlt}"></div>`;
     }
 
-    if (src.match(CODE_REGEX)) {
+    if (matchSrc.match(CODE_REGEX)) {
       // Placeholder: ContentCompiled hydrates the fetched text into a
       // highlighted code block (code-embed.ts), falling back to a link.
       return `<div class="code-embed" data-src="${escSrc}" data-name="${escAlt}"></div>`;
