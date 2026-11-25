@@ -4,7 +4,7 @@
 mod download;
 mod imgbed;
 mod orphans;
-mod upload;
+pub(crate) mod upload;
 
 pub use download::{
     DownloadQuery, download_avatar, download_file, download_file_named, download_legacy,

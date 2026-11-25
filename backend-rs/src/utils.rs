@@ -285,6 +285,50 @@ pub fn is_text_resource(filename: &str, filetype: &str) -> bool {
     CODE_EXTS.contains(&file_ext(filename).as_str()) || filetype.starts_with("text/")
 }
 
+/// Best-effort mime for binary uploads that omit `content_type`
+/// (mirrors the REST allowlist families: images, video, audio, PDF,
+/// office docs, archives).
+pub fn guess_mime(filename: &str) -> Option<&'static str> {
+    Some(match file_ext(filename).as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        "svg" => "image/svg+xml",
+        "ico" => "image/vnd.microsoft.icon",
+        "mp4" => "video/mp4",
+        "avi" => "video/x-msvideo",
+        "mov" => "video/quicktime",
+        "wmv" => "video/x-ms-wmv",
+        "flv" => "video/x-flv",
+        "mkv" => "video/x-matroska",
+        "webm" => "video/webm",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "aac" => "audio/aac",
+        "pdf" => "application/pdf",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "txt" | "md" => "text/plain",
+        "csv" => "text/csv",
+        "weba" => "audio/webm",
+        "zip" => "application/zip",
+        "rar" => "application/x-rar-compressed",
+        "tar" => "application/x-tar",
+        "gz" => "application/gzip",
+        "bz2" => "application/x-bzip2",
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod code_ext_tests {
     use super::*;
@@ -305,6 +349,19 @@ mod code_ext_tests {
         assert!(is_text_resource("blob.bin", "text/plain"));
         assert!(!is_text_resource("blob.bin", "application/octet-stream"));
         assert!(!is_text_resource("x.png", "image/png"));
+    }
+
+    #[test]
+    fn mime_guess_covers_allowlist_families() {
+        assert_eq!(guess_mime("a.PNG"), Some("image/png"));
+        assert_eq!(guess_mime("clip.mov"), Some("video/quicktime"));
+        assert_eq!(guess_mime("s.aac"), Some("audio/aac"));
+        assert_eq!(guess_mime("doc.pdf"), Some("application/pdf"));
+        assert_eq!(guess_mime("s.xlsx"), Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        assert_eq!(guess_mime("a.zip"), Some("application/zip"));
+        assert_eq!(guess_mime("n.csv"), Some("text/csv"));
+        assert_eq!(guess_mime("blob.bin"), None);
+        assert_eq!(guess_mime("noext"), None);
     }
 }
 

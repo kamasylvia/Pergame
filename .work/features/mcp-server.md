@@ -16,18 +16,18 @@
 | 鉴权 | 每用户 **API token**(设置页生成/吊销;`Authorization: Bearer`),不复用 session |
 | SDK | 官方 Rust SDK `rmcp`(tokio 系,与 axum 同栈) |
 
-## 工具集(2026-11-12 定稿,2026-11-23 增补 2 个)
+## 工具集(2026-11-12 定稿,2026-11-23 增补 2 个,2026-11-25 二进制资源)
 
 - `search_notes(query, limit?)` — 全文搜索(pg FTS,role=3,owner 域,固定含 snippet)
-- `list_children(folder_id?)` — 列子节点(空 = 根;owner + shared 合并;`{id,name,role,updated_timestamp,access}`)
+- `list_children(folder_id?, limit?, offset?)` — 列子节点(空 = 根;owner + shared 合并;`{id,name,role,updated_timestamp,access}`;懒加载批次加分页 + total)
 - `read_note(id)` — 读 md 正文(`require_node_action` Read 放行即返 `content`,不限 role)
-- `read_resource(id)` — 读 role-4 文本/代码资源全文(扩展名/`text/*` 判定,2 MiB 上限,拒二进制)
+- `read_resource(id)` — 文本/代码资源返全文(2 MiB 上限);图片/音视频/PDF 等二进制返元数据 + 下载 URL(不再拒绝)
 - `create_note(folder_id, name, content?)` — 建 document(role=3,`content_compiled=None`)
 - `create_folder(folder_id, name)` — 建目录(role=2;2026-11-23 增补,迁移建树用)
-- `update_note(id, content?, name?)` — 改 content/name(非 owner 禁改归属字段,同 REST)
+- `update_note(id, content?, name?)` — 改 content/name;资源仅改名(content 必拒,重传换字节)
 - `move_node(id, new_folder_id)`(根 = null) — 改 parent,复用 safe_parent 门
 - `delete_node(id)` — 软删进回收站,响应 `{deleted_at, nodes}`
-- `upload_resource(folder_id?, filename, content, content_type?)` — 传 UTF-8 文本/代码文件(role=4,无 MCP 侧上限,quota 门 + blob 落盘与 REST 同语义;2026-11-23 增补,EUDAMED 脚本迁移用)
+- `upload_resource(folder_id?, filename, content?, content_base64?, content_type?)` — `content` 传文本/`content_base64` 传二进制(二选一;二进制走 REST 同 allowlist,缺 content_type 按扩展名推断);quota 门 + blob 落盘与 REST 同语义,不走 imgbed 分支
 
 权限:MCP 调用 = 该 token 所属用户身份,复用现有 permissions/actor 体系(不是超权通道)。
 

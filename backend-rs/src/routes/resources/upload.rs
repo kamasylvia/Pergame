@@ -60,7 +60,7 @@ const IMAGE_TYPES: &[&str] = &[
     "image/vnd.microsoft.icon",
 ];
 
-fn supported_types() -> Vec<String> {
+pub(crate) fn supported_types() -> Vec<String> {
     let mut v: Vec<String> = crate::config::global()
         .cdn
         .supported_types
@@ -141,7 +141,7 @@ async fn read_upload(
     Ok((file, fields))
 }
 
-fn mime_allowed(list: &[String], mime: &str) -> bool {
+pub(crate) fn mime_allowed(list: &[String], mime: &str) -> bool {
     list.iter().any(|t| t == mime)
 }
 

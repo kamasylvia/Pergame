@@ -3007,3 +3007,55 @@ async fn refs_lifecycle() {
 
     cleanup_user(&user_id).await;
 }
+
+/// MCP binary resources: base64 upload, metadata read, rename, move,
+/// delete, plus the argument gates.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn mcp_resource_binary_roundtrip() {
+    // 1x1 transparent PNG.
+    const DOT_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let client = Client::new();
+    let (user_id, _) = signup_and_login_tagged(&client, "mcpbin").await;
+    let (status, r) = post_json(&client, "/users/@me/api-tokens", &json!({ "name": "bin" })).await;
+    assert_eq!(status, 201);
+    let token = r.result["token"].as_str().expect("plaintext").to_string();
+    let mcp = reqwest::Client::builder().no_proxy().build().unwrap();
+    let sid = mcp_session(&mcp, &token).await;
+
+    // Upload without an explicit mime: extension inference must kick in.
+    let up = tool_payload(&mcp_tool(&mcp, &token, &sid, 11, "upload_resource", json!({"filename": "dot.png", "content_base64": DOT_PNG_B64})).await);
+    let rid = up["id"].as_str().expect("resource id").to_string();
+    assert!(up["embed_url"].as_str().unwrap().ends_with("/dot.png"));
+
+    // Binary read returns metadata with URLs, not bytes.
+    let meta = tool_payload(&mcp_tool(&mcp, &token, &sid, 12, "read_resource", json!({"id": rid})).await);
+    assert_eq!(meta["kind"], json!("binary"));
+    assert_eq!(meta["filetype"], json!("image/png"));
+    assert!(meta["url"].as_str().unwrap().contains(&rid));
+
+    // Rename ok; content rewrite on a resource refused.
+    let ren = tool_payload(&mcp_tool(&mcp, &token, &sid, 13, "update_note", json!({"id": rid, "name": "dot2.png"})).await);
+    assert_eq!(ren["name"], json!("dot2.png"));
+    let (code, _) = tool_error(&mcp_tool(&mcp, &token, &sid, 14, "update_note", json!({"id": rid, "content": "x"})).await);
+    assert_eq!(code, -32602);
+
+    // Move into a fresh folder, then delete.
+    let folder = tool_payload(&mcp_tool(&mcp, &token, &sid, 15, "create_folder", json!({"name": "binbox"})).await);
+    let fid = folder["id"].as_str().expect("folder id").to_string();
+    let moved = tool_payload(&mcp_tool(&mcp, &token, &sid, 16, "move_node", json!({"id": rid, "new_folder_id": fid})).await);
+    assert_eq!(moved["parent_id"], json!(fid));
+    let _ = tool_payload(&mcp_tool(&mcp, &token, &sid, 17, "delete_node", json!({"id": rid})).await);
+
+    // Gates: rejected type, bad base64, both/neither payload.
+    let (code, _) = tool_error(&mcp_tool(&mcp, &token, &sid, 18, "upload_resource", json!({"filename": "x.exe", "content_base64": DOT_PNG_B64})).await);
+    assert_eq!(code, -32602);
+    let (code, _) = tool_error(&mcp_tool(&mcp, &token, &sid, 19, "upload_resource", json!({"filename": "dot.png", "content_base64": "!!!"})).await);
+    assert_eq!(code, -32602);
+    let (code, _) = tool_error(&mcp_tool(&mcp, &token, &sid, 20, "upload_resource", json!({"filename": "a.txt", "content": "x", "content_base64": DOT_PNG_B64})).await);
+    assert_eq!(code, -32602);
+    let (code, _) = tool_error(&mcp_tool(&mcp, &token, &sid, 21, "upload_resource", json!({"filename": "a.txt"})).await);
+    assert_eq!(code, -32602);
+
+    cleanup_user(&user_id).await;
+}

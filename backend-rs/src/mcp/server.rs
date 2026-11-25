@@ -119,13 +119,22 @@ pub struct CreateFolderArgs {
 /// Arguments for `upload_resource`.
 pub struct UploadResourceArgs {
     /// Parent folder id. Omit (or an unwritable id) to upload at the top level.
+    #[serde(default)]
     pub folder_id: Option<String>,
-    /// File name with extension (drives text/code detection, same list as
-    /// `read_resource`).
+    /// File name with extension (drives mime inference when `content_type`
+    /// is omitted).
     pub filename: String,
-    /// File content as UTF-8 text (no MCP-side size cap; quota gates apply).
-    pub content: String,
-    /// MIME type hint (default `application/octet-stream`).
+    /// File content as UTF-8 text (exactly one of `content`,
+    /// `content_base64` required; quota gates apply).
+    #[serde(default)]
+    pub content: Option<String>,
+    /// File content as base64 (for images, video, audio, PDF and other
+    /// binaries in the REST allowlist).
+    #[serde(default)]
+    pub content_base64: Option<String>,
+    /// MIME type hint (default: inferred from the extension, else
+    /// `application/octet-stream`).
+    #[serde(default)]
     pub content_type: Option<String>,
 }
 
@@ -338,7 +347,7 @@ impl PergameMcp {
     }
 
     #[tool(
-        description = "Read the text of an uploaded code/text resource (role-4 node): returns name, language and full UTF-8 content. Text is inferred from the file extension or a text/* mime; binary resources and bodies above 2 MiB are refused."
+        description = "Read an uploaded resource (role-4 node): code/text files return name, language and full UTF-8 content (2 MiB cap); images/video/audio/PDF and other binaries return metadata with download URLs instead of bytes."
     )]
     async fn read_resource(
         &self,
@@ -368,11 +377,18 @@ impl PergameMcp {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("");
         if !crate::utils::is_text_resource(&filename, filetype) {
-            return Err(McpError::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                format!("resource {filename} is not a text/code file"),
-                None,
-            ));
+            return text(&serde_json::json!({
+                "id": node.id,
+                "name": node.name,
+                "filename": filename,
+                "kind": "binary",
+                "filetype": filetype,
+                "size": node.size,
+                "parent_id": node.parent_id,
+                "updated_timestamp": node.updated_timestamp,
+                "url": format!("/api/resources/{}/file", node.id),
+                "embed_url": format!("/api/resources/{}/file/{filename}", node.id),
+            }));
         }
         if let Some(size) = node.size
             && size as usize > MAX_TEXT_BYTES
@@ -568,7 +584,7 @@ impl PergameMcp {
 
 
     #[tool(
-        description = "Update a document's markdown content and/or title. Omitted fields stay unchanged. Requires write access."
+        description = "Update a node's title and/or (documents only) markdown content. Omitted fields stay unchanged. Resources accept renames only; re-upload to replace file bytes. Requires write access."
     )]
     async fn update_note(
         &self,
@@ -588,6 +604,13 @@ impl PergameMcp {
         let node = self
             .load(&actor, parse_id(&args.id)?, NodeAction::Update)
             .await?;
+        if node.role == 4 && args.content.is_some() {
+            return Err(McpError::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "resources accept renames only (re-upload to replace file bytes)",
+                None,
+            ));
+        }
 
         let mut write = Self::write_from_row(&node);
         if let Some(name) = args.name {
@@ -709,7 +732,7 @@ impl PergameMcp {
     }
 
     #[tool(
-        description = "Upload a UTF-8 text/code file as a resource (role-4 node) under a folder. The filename extension must be a known code/text type (same list as read_resource); binaries are refused. Returns the resource id and its markdown embed URL."
+        description = "Upload a file as a resource (role-4 node) under a folder: UTF-8 text/code via `content`, or images/video/audio/PDF and other REST-allowlisted binaries via `content_base64` (exactly one required). Returns the resource id and its markdown embed URL."
     )]
     async fn upload_resource(
         &self,
@@ -727,19 +750,52 @@ impl PergameMcp {
                 None,
             ));
         }
-        let mime = args
-            .content_type
-            .unwrap_or_else(|| "application/octet-stream".to_string());
-        if !crate::utils::is_text_resource(&filename, &mime) {
+        let bytes: Vec<u8> = match (args.content, args.content_base64) {
+            (Some(_), Some(_)) => {
+                return Err(McpError::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "pass exactly one of content, content_base64",
+                    None,
+                ));
+            }
+            (Some(text), None) => text.into_bytes(),
+            (None, Some(b64)) => {
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD.decode(b64.trim()).map_err(|_| {
+                    McpError::new(
+                        rmcp::model::ErrorCode::INVALID_PARAMS,
+                        "content_base64 is not valid base64",
+                        None,
+                    )
+                })?
+            }
+            (None, None) => {
+                return Err(McpError::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "pass exactly one of content, content_base64",
+                    None,
+                ));
+            }
+        };
+        let mime = args.content_type.unwrap_or_else(|| {
+            crate::utils::guess_mime(&filename)
+                .unwrap_or("application/octet-stream")
+                .to_string()
+        });
+        // Text/code keep the historical gate; binaries must sit in the same
+        // allowlist POST /api/resources enforces.
+        let text_ok = crate::utils::is_text_resource(&filename, &mime);
+        let bin_ok = crate::routes::resources::upload::mime_allowed(
+            &crate::routes::resources::upload::supported_types(),
+            &mime,
+        );
+        if !text_ok && !bin_ok {
             return Err(McpError::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                format!(
-                    "{filename} is not a text/code file (known extension or text/* mime required)"
-                ),
+                format!("{filename} ({mime}) is not an accepted type"),
                 None,
             ));
         }
-        let bytes = args.content.as_bytes();
         let storage = self.state.storage.clone().ok_or_else(|| {
             McpError::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -786,7 +842,7 @@ impl PergameMcp {
             .map(|(_, e)| format!(".{e}"))
             .unwrap_or_default();
         let transformed_path = format!("{id}{ext}");
-        let sha = crate::blobs::acquire(&self.state.db, &storage, bytes)
+        let sha = crate::blobs::acquire(&self.state.db, &storage, &bytes)
             .await
             .map_err(mcp_error)?;
         let metadata = serde_json::json!({
