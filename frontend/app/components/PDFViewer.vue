@@ -274,6 +274,10 @@ onBeforeUnmount(() => {
 .pdf-container {
   width: 100%;
   height: 100%;
+  // Independent scroll window: long documents page inside instead of
+  // stretching the host page (all page wrappers keep full height for
+  // the intersection observer either way).
+  max-height: 80vh;
   overflow-y: auto;
 }
 
