@@ -8,9 +8,11 @@
 ## 目录树后续 + MCP 二进制资源(2026-11-25)
 
 - [x] **批量栏统一文字按钮**:克隆/移动/复制链接图标改小 secondary 文字按钮,与删除一致(`5e67d9b5`)。
-- [x] **PDF 独立滚动窗口**:`PDFViewer` 加 `max-height:80vh`,长文档页内翻页不再撑长宿主(5 页实测 614px 窗/5292px 内滚)(`5b9d2c39e9`)。
-- [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist);`read_resource` 对二进制返元数据 + 下载 URL;`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a`)。
+- [x] **PDF 独立滚动窗口**:`PDFViewer` 加 `max-height:80vh`,长文档页内翻页不再撑宿主(5 页实测 614px 窗/5292px 内滚)(`5b9d2c39e9`)。
+- [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist,图床分支与 REST 同语义);`read_resource` 对二进制返元数据 + 下载 URL;`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a` + `8ce32511`)。
 - [x] **思源同步一则**:思源 `20261123063714-akbgu1t`(计算摄影,9338 字纯 md,无子文档/附件)→ pergame `01a21180-…`(Photography 子文档,保留思源原时间戳,metadata 记 imported 来源;tsv 生成列自动生效,读端空 compiled 即时编译,无 refs 需回填)。
+- [x] **目录块刷新机制(问答)**:无刷新按钮,靠 store 响应式自动刷新——本会话写操作走 `refreshDir` 回填可见页,跨 tab/他人写入需切容器或重进(无轮询/推送)。
+- [x] **刷新按钮**:表头加文字刷新键,重拉全部已持目录页 + 本树 refs,保留选择/展开/排序;外部改名实测点按即新(`6f67b422`)。
 
 ## 目录树吸纳 siyuan-auto-directory(2026-11-24)
 
