@@ -5,6 +5,13 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## 目录树后续 + MCP 二进制资源(2026-11-25)
+
+- [x] **批量栏统一文字按钮**:克隆/移动/复制链接图标改小 secondary 文字按钮,与删除一致(`5e67d9b5`)。
+- [x] **PDF 独立滚动窗口**:`PDFViewer` 加 `max-height:80vh`,长文档页内翻页不再撑长宿主(5 页实测 614px 窗/5292px 内滚)(`5b9d2c39e9`)。
+- [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist);`read_resource` 对二进制返元数据 + 下载 URL;`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a`)。
+- [x] **思源同步一则**:思源 `20261123063714-akbgu1t`(计算摄影,9338 字纯 md,无子文档/附件)→ pergame `01a21180-…`(Photography 子文档,保留思源原时间戳,metadata 记 imported 来源;tsv 生成列自动生效,读端空 compiled 即时编译,无 refs 需回填)。
+
 ## 目录树吸纳 siyuan-auto-directory(2026-11-24)
 
 - [x] **A refs 索引**:migration `0014_node_refs`(FK 双向 cascade + SQL 回填),写时 reconcile(挂 repo insert/update,restore 事务回填),`GET /nodes/refs?ids`(100 锚点批量)+`/nodes/:id/refs`(双向,可见性过滤);自链/资源/legacy 数字号跳过。`refs_lifecycle` 集成绿(`3f499ddb`)。
