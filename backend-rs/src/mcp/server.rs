@@ -881,11 +881,7 @@ impl PergameMcp {
             }
         }
         let metadata = metadata_json;
-        let mut name = filename.clone();
-        if name.len() > 50 {
-            // Byte-boundary parity with REST, then trim to a char edge.
-            name = name.chars().take(50).collect();
-        }
+        let name = filename.clone();
         let write = node_repo::NodeWrite {
             parent_id: parent,
             name: name.clone(),

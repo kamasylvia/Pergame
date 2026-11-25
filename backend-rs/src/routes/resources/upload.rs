@@ -305,11 +305,7 @@ pub async fn upload_file(
         }
     }
 
-    let mut name = file.filename.clone();
-    if name.len() > 50 {
-        // Go slices bytes; keep byte-boundary parity then trim to a char edge.
-        name = name.chars().take(50).collect();
-    }
+    let name = file.filename.clone();
     let accessibility = Some(1);
 
     let write = node_repo::NodeWrite {

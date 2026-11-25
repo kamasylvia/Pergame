@@ -6,7 +6,7 @@
         <span class="sec-title">{{ t('nodes.modals.metadata.labelOrganization') }}</span>
         <template v-if="node.role == 1 || node.role == 2">
           <label for="category">{{ t('common.labels.name') }}</label>
-          <input id="category" v-model="node.name" maxlength="50" />
+          <input id="category" v-model="node.name" />
           <label>{{ t('common.labels.role') }}</label>
           <AppRadio v-model="node.role" :items="CATEGORY_ROLES" />
         </template>

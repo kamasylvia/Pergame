@@ -2,7 +2,7 @@
   <form class="modal" @submit.prevent>
     <h2>{{ role == 0 ? 'Create team' : role == 1 ? t('nodes.workspace.new') : t('nodes.category.new') }}</h2>
     <label for="name">{{ t('common.labels.name') }}</label>
-    <input id="name" v-model="category.name" type="text" required maxlength="50" :placeholder="t('common.labels.name')" />
+    <input id="name" v-model="category.name" type="text" required :placeholder="t('common.labels.name')" />
     <template v-if="role !== 0">
       <label>{{ t('common.labels.parent') }}</label>
       <div>

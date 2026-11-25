@@ -21,7 +21,7 @@
         </div>
       </div>
       <label for="name">Name</label>
-      <input id="name" v-model="document.name" maxlength="50" />
+      <input id="name" v-model="document.name" />
 
       <label for="description">Description</label>
       <input id="description" v-model="document.description" maxlength="250" />

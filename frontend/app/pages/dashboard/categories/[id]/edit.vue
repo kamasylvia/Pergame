@@ -9,7 +9,7 @@
       <div class="form-row">
         <div class="form-column">
           <label>{{ t('common.labels.name') }}</label>
-          <input id="name" v-model="category.name" type="text" required maxlength="50" />
+          <input id="name" v-model="category.name" type="text" required />
         </div>
         <div class="form-column">
           <label>{{ t('common.labels.role') }}</label>

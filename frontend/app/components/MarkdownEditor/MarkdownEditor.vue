@@ -18,7 +18,6 @@
             :placeholder="t('components.editor.placeholder.title')"
             class="meta-title"
             required
-            maxlength="50"
             @input="autoSaveConditional"
           />
           <input

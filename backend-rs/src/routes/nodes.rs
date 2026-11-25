@@ -507,12 +507,11 @@ pub struct NodeInput {
 
 impl NodeInput {
     /// VARCHAR ceilings from `migrations/0001_init.sql`, mirroring the Go
-    /// model's `binding:"required,max=50"` / `omitempty,max=250` tags.
-    /// Without this the INSERT/UPDATE dies in the driver and surfaces as an
-    /// opaque 500 (seen live: a 51-char clip title).
+    /// model's `omitempty,max=250` tags. (The old `max=50` name ceiling was
+    /// lifted by migration 0015.) Without this the INSERT/UPDATE dies in
+    /// the driver and surfaces as an opaque 500.
     fn validate_lengths(&self) -> Result<(), ApiError> {
         for (field, value, max) in [
-            ("Name", Some(self.name.as_str()), 50),
             ("Description", self.description.as_deref(), 250),
             ("Tags", self.tags.as_deref(), 250),
         ] {
