@@ -83,6 +83,14 @@ export const DEFAULT_PREFERENCES = {
   editorSimplifiedViewOnMobile: true as boolean,
   developerMode: false as boolean,
   directoryConfirmMove: true as boolean,
+  directoryAutoExpand: true as boolean,
+  directoryExpandedDepth: 4 as number,
+  directoryMaxDepth: 0 as number, // 0 = unlimited
+  directoryShowCount: true as boolean,
+  directoryShowUpdated: true as boolean,
+  directoryShowCreated: false as boolean,
+  directoryShowRefs: true as boolean,
+  directoryShowTags: true as boolean,
   sortKey: 'name' as 'name' | 'created' | 'modified',
   sortOrder: 'ascending' as 'ascending' | 'descending',
   stylesInjectionEnabled: false as boolean,
@@ -117,6 +125,14 @@ export const GENERAL_KEYS: PreferenceKey[] = [
   'sidebarItems',
   'navbarItems',
   'directoryConfirmMove',
+  'directoryAutoExpand',
+  'directoryExpandedDepth',
+  'directoryMaxDepth',
+  'directoryShowCount',
+  'directoryShowUpdated',
+  'directoryShowCreated',
+  'directoryShowRefs',
+  'directoryShowTags',
 ];
 
 export const EDITOR_KEYS: PreferenceKey[] = [

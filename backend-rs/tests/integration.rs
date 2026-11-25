@@ -2935,6 +2935,30 @@ async fn paged_tree_reads() {
     let (status, _) = get(&client_b, &format!("/nodes/{w}/children")).await;
     assert!(status == 403 || status == 404, "unexpected {status}");
 
+    // Resources never grow chevrons: a doc holding only an attachment
+    // reports has_children=false (trees don't render resource rows).
+    let (status, up) = upload_file(&client, "attach.txt", "text/plain", b"data").await;
+    assert_eq!(status, 200, "upload failed: {:?}", up.message);
+    let rid = result_id_string(&up);
+    let (status, _) = put_json(
+        &client,
+        &format!("/nodes/{rid}"),
+        &json!({"name": "attach.txt", "role": 4, "parent_id": nc}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/nodes/{f1}/children?limit=10")).await;
+    assert_eq!(status, 200);
+    let nc_row = r.result["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["id"] == json!(nc))
+        .unwrap();
+    assert_eq!(nc_row["has_children"], json!(false));
+    let (status, r) = get(&client, &format!("/nodes/{nc}/children?limit=10")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["total"], json!(1));
     cleanup_user(&user_a).await;
     cleanup_user(&user_b).await;
 }
@@ -3028,11 +3052,60 @@ async fn mcp_resource_binary_roundtrip() {
     let rid = up["id"].as_str().expect("resource id").to_string();
     assert!(up["embed_url"].as_str().unwrap().ends_with("/dot.png"));
 
-    // Binary read returns metadata with URLs, not bytes.
+    // Binary read returns a base64 window plus metadata with URLs.
     let meta = tool_payload(&mcp_tool(&mcp, &token, &sid, 12, "read_resource", json!({"id": rid})).await);
     assert_eq!(meta["kind"], json!("binary"));
     assert_eq!(meta["filetype"], json!("image/png"));
     assert!(meta["url"].as_str().unwrap().contains(&rid));
+    assert_eq!(meta["content_base64"], json!(DOT_PNG_B64));
+    assert_eq!(meta["truncated"], json!(false));
+    assert_eq!(meta["byte_offset"], json!(0));
+
+    // Paging: slice roundtrip + offset past the end rejected.
+    use base64::Engine as _;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(DOT_PNG_B64)
+        .unwrap();
+    let total = raw.len() as i64;
+    let win = tool_payload(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            22,
+            "read_resource",
+            json!({"id": rid, "offset": 1, "max_bytes": 4}),
+        )
+        .await,
+    );
+    let expect = base64::engine::general_purpose::STANDARD.encode(&raw[1..5]);
+    assert_eq!(win["content_base64"], json!(expect));
+    assert_eq!(win["byte_offset"], json!(1));
+    assert_eq!(win["truncated"], json!(true));
+    let (code, _) = tool_error(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            23,
+            "read_resource",
+            json!({"id": rid, "offset": total}),
+        )
+        .await,
+    );
+    assert_eq!(code, -32602);
+    let (code, _) = tool_error(
+        &mcp_tool(
+            &mcp,
+            &token,
+            &sid,
+            24,
+            "read_resource",
+            json!({"id": rid, "offset": -1}),
+        )
+        .await,
+    );
+    assert_eq!(code, -32602);
 
     // Rename ok; content rewrite on a resource refused.
     let ren = tool_payload(&mcp_tool(&mcp, &token, &sid, 13, "update_note", json!({"id": rid, "name": "dot2.png"})).await);

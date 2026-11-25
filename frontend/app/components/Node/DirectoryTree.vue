@@ -12,6 +12,7 @@
         </AppButton>
         <AppButton type="secondary" small :disabled="refreshing" @click="refresh">{{ t('nodes.directory.refresh') }}</AppButton>
         <AppSelect v-model="sortId" :items="sortOptions" size="170px" />
+        <AppBtnIcon icon="settings" :tooltip="t('nodes.directory.settings')" @click="openSettings" />
       </div>
     </div>
     <div v-if="loading && !children.length" class="tree-loading">{{ t('common.status.loading') }}</div>
@@ -21,13 +22,13 @@
           <AppCheck :model-value="selection.has(node.id)" @change="toggle(node.id)" @click.stop />
         </template>
         <template #below="{ node, depth }">
-          <div v-if="visibleOutgoing(node).length" class="refs-line" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
+          <div v-if="showRefs && visibleOutgoing(node).length" class="refs-line" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
             <Icon name="link" display="xsm" class="refs-icon" />
             <span class="refs-label">{{ t('nodes.directory.references') }}</span>
             <a v-for="ref in visibleOutgoing(node)" :key="ref.id" href="#" @click.prevent="openRef(ref)">{{ ref.name }}</a>
             <button v-if="hiddenOutgoing(node) > 0" class="refs-more" @click="outFull.add(node.id)">+{{ hiddenOutgoing(node) }}</button>
           </div>
-          <div v-if="visibleIncoming(node).length" class="refs-line refs-incoming" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
+          <div v-if="showRefs && visibleIncoming(node).length" class="refs-line refs-incoming" :style="{ paddingLeft: `${depth * 18 + 30}px` }">
             <Icon name="link" display="xsm" class="refs-icon" />
             <span class="refs-label">{{ t('nodes.directory.referencedBy') }}</span>
             <a v-for="ref in visibleIncoming(node)" :key="ref.id" href="#" @click.prevent="openRef(ref)">{{ ref.name }}</a>
@@ -51,6 +52,7 @@
 <script setup lang="ts">
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
 import NodeCloneModal from '~/components/Node/Modals/CloneTo.vue';
+import DirectorySettingsModal from '~/components/Node/Modals/DirectorySettings.vue';
 import { TREE_SORT, useDirectoryLevel, type DirectorySort } from '~/composables/useDirectoryLevel';
 import { resolveNodeLink } from '~/helpers/node';
 import type { Node, NodeRefs, RefNode } from '~/stores';
@@ -58,9 +60,30 @@ import type { Node, NodeRefs, RefNode } from '~/stores';
 const props = defineProps<{ containerId: string }>();
 
 const nodesStore = useNodesStore();
+const preferences = usePreferencesStore();
 const modals = useModal();
 const router = useRouter();
 const { t } = useI18nT();
+
+const showRefs = preferences.get('directoryShowRefs');
+
+const openSettings = () => {
+  modals.add(new Modal(shallowRef(DirectorySettingsModal), { size: 'small' }));
+};
+
+// Auto-expand seeding (plugin parity: depth limit + 48-node budget).
+// Rows consume the budget on mount; changing the auto-expand prefs
+// re-seeds (turning it off collapses everything).
+const seed = ref(0);
+const autoBudget = reactive({ remaining: 48 });
+provide('directorySeed', seed);
+provide('directoryAutoBudget', autoBudget);
+const autoExpandPref = preferences.get('directoryAutoExpand');
+const expandedDepthPref = preferences.get('directoryExpandedDepth');
+watch([autoExpandPref, expandedDepthPref], () => {
+  autoBudget.remaining = 48;
+  seed.value++;
+});
 
 type SortId = 'tree' | 'name-asc' | 'name-desc' | 'created-asc' | 'created-desc' | 'modified-asc' | 'modified-desc';
 
@@ -274,6 +297,8 @@ watch(
     outFull.value = new Set();
     inFull.value = new Set();
     docTotal.value = -1;
+    autoBudget.remaining = 48;
+    seed.value++;
     ensure();
     void reloadTotal();
   },

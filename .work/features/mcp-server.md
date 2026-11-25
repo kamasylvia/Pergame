@@ -21,7 +21,7 @@
 - `search_notes(query, limit?)` — 全文搜索(pg FTS,role=3,owner 域,固定含 snippet)
 - `list_children(folder_id?, limit?, offset?)` — 列子节点(空 = 根;owner + shared 合并;`{id,name,role,updated_timestamp,access}`;懒加载批次加分页 + total)
 - `read_note(id)` — 读 md 正文(`require_node_action` Read 放行即返 `content`,不限 role)
-- `read_resource(id)` — 文本/代码资源返全文(2 MiB 上限);图片/音视频/PDF 等二进制返元数据 + 下载 URL(不再拒绝)
+- `read_resource(id, offset?, max_bytes?)` — 文本/代码资源返全文(2 MiB 上限);图片/音视频/PDF 等二进制返 base64 窗口(`content_base64`,默认 256 KiB,单次至多 2 MiB,Range 直取)+ 元数据与下载 URL
 - `create_note(folder_id, name, content?)` — 建 document(role=3,`content_compiled=None`)
 - `create_folder(folder_id, name)` — 建目录(role=2;2026-11-23 增补,迁移建树用)
 - `update_note(id, content?, name?)` — 改 content/name;资源仅改名(content 必拒,重传换字节)

@@ -104,6 +104,10 @@ pub struct DeleteNodeArgs {
 pub struct ReadResourceArgs {
     /// Resource (uploaded file) id.
     pub id: String,
+    /// Binary-only: first byte to return (default 0).
+    pub offset: Option<i64>,
+    /// Binary-only: window size in bytes (default 262144, clamped to 1..=2097152).
+    pub max_bytes: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, rmcp::schemars::JsonSchema)]
@@ -347,7 +351,7 @@ impl PergameMcp {
     }
 
     #[tool(
-        description = "Read an uploaded resource (role-4 node): code/text files return name, language and full UTF-8 content (2 MiB cap); images/video/audio/PDF and other binaries return metadata with download URLs instead of bytes."
+        description = "Read an uploaded resource (role-4 node): code/text files return name, language and full UTF-8 content (2 MiB cap); images/video/audio/PDF and other binaries return a base64 window (`content_base64`, `offset`/`max_bytes` paging, default 256 KiB, at most 2 MiB per call) plus metadata with download URLs."
     )]
     async fn read_resource(
         &self,
@@ -377,6 +381,56 @@ impl PergameMcp {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("");
         if !crate::utils::is_text_resource(&filename, filetype) {
+            const DEFAULT_WINDOW: usize = 256 * 1024;
+            let offset = args.offset.unwrap_or(0);
+            if offset < 0 {
+                return Err(McpError::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "offset must be >= 0",
+                    None,
+                ));
+            }
+            if let Some(size) = node.size
+                && offset >= size
+            {
+                return Err(McpError::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    format!("offset {offset} beyond the end ({size} bytes)",),
+                    None,
+                ));
+            }
+            let want = args
+                .max_bytes
+                .unwrap_or(DEFAULT_WINDOW as i32)
+                .clamp(1, MAX_TEXT_BYTES as i32) as usize;
+            let storage = self.state.storage.clone().ok_or_else(|| {
+                McpError::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    "storage not configured",
+                    None,
+                )
+            })?;
+            let bytes = match meta
+                .get("content_sha256")
+                .and_then(serde_json::Value::as_str)
+            {
+                Some(sha) => storage.get_blob_range(sha, offset as u64, want).await,
+                None => {
+                    let key = meta
+                        .get("transformed_path")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    storage
+                        .get_user_object_range(actor.user_id, &key, offset as u64, want)
+                        .await
+                }
+            }
+            .map_err(mcp_error)?;
+            use base64::Engine;
+            let got = bytes.len();
+            let end = offset.saturating_add(got as i64);
+            let truncated = node.size.map(|s| s.gt(&end)).unwrap_or(got == want);
             return text(&serde_json::json!({
                 "id": node.id,
                 "name": node.name,
@@ -384,6 +438,9 @@ impl PergameMcp {
                 "kind": "binary",
                 "filetype": filetype,
                 "size": node.size,
+                "byte_offset": offset,
+                "content_base64": base64::engine::general_purpose::STANDARD.encode(&bytes),
+                "truncated": truncated,
                 "parent_id": node.parent_id,
                 "updated_timestamp": node.updated_timestamp,
                 "url": format!("/api/resources/{}/file", node.id),

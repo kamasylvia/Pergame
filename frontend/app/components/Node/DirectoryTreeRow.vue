@@ -18,9 +18,10 @@
         <Icon :name="node.icon || resolveIcon(node)" display="xsm" class="row-icon" />
         <span class="row-name">{{ node.name || '(untitled)' }}</span>
       </a>
-      <span v-if="total >= 0 && hasKids" class="child-count">{{ total }}</span>
-      <span v-if="singleTag" class="tag tag-single">{{ singleTag }}</span>
-      <span class="row-time">{{ dateCell(node.updated_timestamp) }}</span>
+      <span v-if="showCount && total >= 0 && hasKids" class="child-count">{{ total }}</span>
+      <span v-if="showTags && singleTag" class="tag tag-single">{{ singleTag }}</span>
+      <span v-if="showCreated" class="row-time" :title="titleTip">{{ dateCell(node.created_timestamp) }}</span>
+      <span v-if="showUpdated" class="row-time">{{ dateCell(node.updated_timestamp) }}</span>
       <button
         class="pin-btn"
         :class="{ pinned: node.order === -1 }"
@@ -30,7 +31,7 @@
         <Icon :name="node.order === -1 ? 'pin_off' : 'pin'" display="xsm" />
       </button>
     </div>
-    <div v-if="multiTags.length" class="row-tags">
+    <div v-if="showTags && multiTags.length" class="row-tags">
       <span v-for="tag in multiTags" :key="tag" class="tag">{{ tag }}</span>
     </div>
     <slot name="below" :node="node" :depth="depth" />
@@ -76,18 +77,54 @@ const { t } = useI18nT();
 const resetSort = inject<() => void>('directoryResetSort', () => {});
 const registerRow = inject<(id: string) => void>('directoryRegister', () => {});
 const unregisterRow = inject<(id: string) => void>('directoryUnregister', () => {});
+const seed = inject<Ref<number>>('directorySeed', ref(0));
+const autoBudget = inject<{ remaining: number }>('directoryAutoBudget', { remaining: 48 });
+
+const showCount = preferences.get('directoryShowCount');
+const showUpdated = preferences.get('directoryShowUpdated');
+const showCreated = preferences.get('directoryShowCreated');
+const showTags = preferences.get('directoryShowTags');
+const autoExpandPref = preferences.get('directoryAutoExpand');
+const expandedDepthPref = preferences.get('directoryExpandedDepth');
+const maxDepthPref = preferences.get('directoryMaxDepth');
+
+// Depth cap (plugin parity: maxDepth 0 = unlimited; a capped row is a leaf).
+const capped = computed(() => {
+  const max = maxDepthPref.value ?? 0;
+  return max > 0 && props.depth + 1 >= max;
+});
 
 const expanded = ref(false);
 
-onMounted(() => registerRow(props.node.id));
+const tryAutoExpand = () => {
+  if (!autoExpandPref.value || capped.value) return;
+  if (props.depth < (expandedDepthPref.value ?? 0) && autoBudget.remaining > 0) {
+    autoBudget.remaining--;
+    expanded.value = true;
+    ensure();
+  }
+};
+
+onMounted(() => {
+  registerRow(props.node.id);
+  tryAutoExpand();
+});
 onUnmounted(() => unregisterRow(props.node.id));
+
+// Re-seed on settings change (turning auto-expand off collapses all rows).
+watch(seed, () => {
+  if (!autoExpandPref.value) expanded.value = false;
+  else if (!expanded.value) tryAutoExpand();
+});
 
 const { children, total, complete, loading, ensure, loadMore } = useDirectoryLevel(
   () => props.node.id,
   () => props.sort,
 );
 
-const hasKids = computed(() => children.value.length > 0 || nodesStore.hasChildren.get(props.node.id) === true);
+const hasKids = computed(
+  () => !capped.value && (children.value.length > 0 || nodesStore.hasChildren.get(props.node.id) === true),
+);
 
 const tags = computed(() => (props.node.tags ? parseTags(props.node.tags) : []));
 const singleTag = computed(() => (tags.value.length === 1 ? tags.value[0] : ''));

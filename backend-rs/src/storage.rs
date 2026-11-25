@@ -198,6 +198,66 @@ impl S3Storage {
         Ok(bytes.to_vec())
     }
 
+    /// Range GET collected to bytes (MCP binary paging): `offset` is the
+    /// first byte, `len` the window. S3 answers 416 past the end, which
+    /// surfaces here as a BadRequest the caller maps to INVALID_PARAMS.
+    async fn get_key_range(
+        &self,
+        object_key: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, ApiError> {
+        let range = format!(
+            "bytes={}-{}",
+            offset,
+            offset.saturating_add(len as u64).saturating_sub(1)
+        );
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(object_key)
+            .range(range)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(object_key, error = %e, "get_key_range failed");
+                ApiError::BadRequest("offset beyond the end of the object".into())
+            })?;
+        let bytes = resp
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                tracing::error!(object_key, error = %e, "ranged body read failed");
+                ApiError::BadRequest("failed to read object".into())
+            })?
+            .into_bytes();
+        Ok(bytes.to_vec())
+    }
+
+    /// Range GET from `blobs/{sha256}` (see `get_key_range`).
+    pub async fn get_blob_range(
+        &self,
+        sha: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, ApiError> {
+        let object_key = format!("{}/{}", crate::blobs::BLOBS_PREFIX, sha);
+        self.get_key_range(&object_key, offset, len).await
+    }
+
+    /// Range GET from the legacy per-user path (see `get_key_range`).
+    pub async fn get_user_object_range(
+        &self,
+        user_id: Uuid,
+        key: &str,
+        offset: u64,
+        len: usize,
+    ) -> Result<Vec<u8>, ApiError> {
+        let object_key = format!("{}/{}", user_id, key);
+        self.get_key_range(&object_key, offset, len).await
+    }
     /// Streaming GET from `blobs/{sha256}` with optional Range. Mirrors
     /// `get_user_object_stream` return shape (body, len, range, etag).
     pub async fn get_blob_stream(

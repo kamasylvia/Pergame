@@ -11,9 +11,13 @@
 - [x] **批量栏统一文字按钮**:克隆/移动/复制链接图标改小 secondary 文字按钮,与删除一致(`5e67d9b5`)。
 - [x] **Copy to 替复制链接 + 表头计数**:CloneTo 加 copy 模式(递归深拷贝,子快照防自吞,附件留原);表头 `目录 共N篇`(stats.documents)+ Copy/Clone/Move/Delete/Refresh 文字栏;顺手补 sidebarItemsPrefs 缺失声明(消 warning,导航显隐遵设置)(`852f0905`).
 - [x] **PDF 独立滚动窗口**:`PDFViewer` 加 `max-height:80vh`,长文档页内翻页不再撑宿主(5 页实测 614px 窗/5292px 内滚)(`5b9d2c39e9`)。
-- [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist,图床分支与 REST 同语义);`read_resource` 对二进制返元数据 + 下载 URL;`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a` + `8ce32511`)。
-- [x] **思源计算摄影整树同步( supersedes 单篇 `01a21180`,已删)**:思源 `20261123063714-akbgu1t` 子树 36 篇 → pergame 新目录 `计算摄影`(folder `01a211ac-e5b5`)+ root-body 文档持 `人像/通用` 两支,全标题(最长 98 字)/正文/时间戳/imported 标记;导出内无内部链接 refs=0;3 PDF 附件(原文重下,思源 file API 只走文本)经 blob 通道入库 + 文档内改命名路由,S3 字节与 db size 对齐。
+- [x] **MCP 二进制资源(必需)**:`upload_resource` 加 `content_base64`(与 `content` 二选一,mime 按扩展名推断或显式,走 REST 同 allowlist,图床分支与 REST 同语义);`read_resource` 对二进制返元数据 + 下载 URL(后加 base64 分页见下);`update_note` 拒资源改 content(仅改名);单测 + `mcp_resource_binary_roundtrip` 集成绿;spec 同步(`5f49424a` + `8ce32511`)。
+- [x] **思源计算摄影整树同步( supersedes 单篇 `01a21180`,已删;后整形见下)**:思源 `20261123063714-akbgu1t` 子树 36 篇 → pergame 新目录 `计算摄影`(folder `01a211ac-e5b5`)+ root-body 文档,全标题(最长 98 字)/正文/时间戳/imported 标记;导出内无内部链接 refs=0;3 PDF 附件(原文重下,思源 file API 只走文本)经 blob 通道入库 + 文档内改命名路由,S3 字节与 db size 对齐。
 - [x] **标题 50 字上限解除**:`nodes.name` VARCHAR(50)→TEXT(迁移 0015,search_tsv 重建);REST 校验/MCP+REST 上传截断/前端 8 处 maxlength 同批去;140 字标题 API roundtrip 实测 + FTS 健康;Go 遗留不动,web-clipper 仍自截 50(`b45fb2ec`)。
+- [x] **MCP 二进制分页读**:`read_resource` 二进制返 base64 窗口(`offset`/`max_bytes`,默认 256 KiB/单次至多 2 MiB,S3 Range 直取,blob+legacy 双路径)+ 元数据与 URL;文本分支不动;3 PDF 经 MCP 验 magic `%PDF-`;集成测试加切片 roundtrip + 越界拒(`mcp_resource_binary_roundtrip` 绿)。
+- [x] **思源树整形(目录文档→folder)**:20 个空容器文档 role 翻 folder(内容留存可逆),根改 folder 直挂[body-doc(0), 人像(1), 通用(2)];终态 21 folder + 16 doc + 3 res,无文档挂非资源子节点;MCP 视角核对。
+- [x] **资源不再长箭头**:`has_children` 排除 role 4(children/roots 双查询;目录树与侧栏本就不渲染资源行,删确认走 stats 不受影响);ABPN/Pores 两行箭头消;`paged_tree_reads` 加回归(纯附件文档 `has_children=false`)。
+- [x] **目录设置齿轮(复刻 siyuan-auto-directory)**:表头齿轮弹窗,实时生效:最大层级(0 不限)/默认展开层级/默认展开/子计数/修改时间/创建时间/引用行/标签/移动确认(复用既有键);自动展开按深度+48 节点预算逐层懒载;八语 i18n;快捷键项不做(CommandCenter 重叠)。
 - [x] **目录块刷新机制(问答)**:无刷新按钮,靠 store 响应式自动刷新——本会话写操作走 `refreshDir` 回填可见页,跨 tab/他人写入需切容器或重进(无轮询/推送)。
 - [x] **刷新按钮**:表头加文字刷新键,重拉全部已持目录页 + 本树 refs,保留选择/展开/排序;外部改名实测点按即新(`6f67b422`)。
 

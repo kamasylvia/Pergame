@@ -9,9 +9,10 @@
 //!
 //! Visibility = owned, directly granted (permission >= READ), or an open
 //! chain (owned/granted ancestor, Go `HasPermission` parity). `has_children`
-//! is deliberately UNFILTERED (canonical children or link positions, live
-//! rows only): a missing chevron would strand reachable data, while an extra
-//! chevron merely expands to an empty list.
+//! counts canonical children plus link positions (live rows only) but NOT
+//! resources (role 4): no tree view renders resource rows (directory tree
+//! and sidebar both filter them; attachments surface in doc footers and
+//! the CDN page), so counting them yields chevrons that expand to nothing.
 
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -212,7 +213,7 @@ pub async fn children_page(
                 OR EXISTS (SELECT 1 FROM chain_open))
         )
         SELECT *, COUNT(*) OVER() AS total,
-            (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = kids.id AND k.deleted_at IS NULL)
+            (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = kids.id AND k.deleted_at IS NULL AND k.role != 4)
              OR EXISTS (SELECT 1 FROM node_links nl WHERE nl.parent_id = kids.id)) AS has_children
         FROM kids
         ORDER BY {order_by}
@@ -262,7 +263,7 @@ pub async fn roots_page(
               AND NOT (n.user_id = $1 AND (n.role <= 1 OR n.parent_id IS NULL))
         )
         SELECT *, COUNT(*) OVER() AS total,
-            (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = roots.id AND k.deleted_at IS NULL)
+            (EXISTS (SELECT 1 FROM nodes k WHERE k.parent_id = roots.id AND k.deleted_at IS NULL AND k.role != 4)
              OR EXISTS (SELECT 1 FROM node_links nl WHERE nl.parent_id = roots.id)) AS has_children
         FROM roots
         WHERE $4::int IS NULL OR role = $4
