@@ -200,11 +200,18 @@
           <p class="upload-hint">{{ t('settings.backups.uploadRestoreHint') }}</p>
         </div>
       </div>
+      <!-- Offsite targets (merged former standalone page) -->
+      <div ref="targetsSection" class="options-section">
+        <h3>{{ t('settings.snapshotTargets.title') }}</h3>
+        <SnapshotTargetsView embedded @change="targetCount = $event" />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import SnapshotTargetsView from './snapshot-targets.vue';
+
 interface BackupJob {
   id: string;
   user_id: string;
@@ -287,6 +294,7 @@ const isRestoring = ref(false);
 const targetCount = ref(-1);
 const targetsChecked = computed(() => targetCount.value >= 0);
 const uploadInput = ref<HTMLInputElement | null>(null);
+const targetsSection = ref<HTMLElement | null>(null);
 
 let restoreConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -528,18 +536,12 @@ function error(message?: string, error?: string) {
 
 onMounted(async () => {
   await loadSnapshots();
-  try {
-    const result = await makeRequest<unknown[]>('backup/targets', 'GET', {});
-    targetCount.value = result.status === 'success' ? (result.result ?? []).length : 0;
-  } catch {
-    targetCount.value = 0;
-  }
+  // targetCount arrives via the embedded targets section's change event
+  // (it owns the backup/targets fetch; no duplicate request here).
 });
 
 function goToTargets() {
-  const router = useRouter();
-  const route = useRoute();
-  router.push({ query: { ...route.query, p: 'snapshotTargets' } });
+  targetsSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Cleanup on unmount

@@ -1,8 +1,9 @@
 <template>
   <div>
-    <h2 class="page-title">{{ t('settings.snapshotTargets.title') }}</h2>
-    <p class="page-subtitle">{{ t('settings.snapshotTargets.subtitle') }}</p>
-
+    <template v-if="!embedded">
+      <h2 class="page-title">{{ t('settings.snapshotTargets.title') }}</h2>
+      <p class="page-subtitle">{{ t('settings.snapshotTargets.subtitle') }}</p>
+    </template>
     <div class="main">
       <p v-if="loadError" class="error-message">{{ loadError }}</p>
 
@@ -150,6 +151,9 @@
 </template>
 
 <script setup lang="ts">
+defineProps<{ embedded?: boolean }>();
+const emit = defineEmits<{ (e: 'change', count: number): void }>();
+
 interface Target {
   id: string;
   kind: string;
@@ -270,6 +274,7 @@ async function load() {
   } else {
     loadError.value = result.message || t('settings.snapshotTargets.loadFailed');
   }
+  emit('change', targets.value.length);
 }
 
 async function loadUsers() {

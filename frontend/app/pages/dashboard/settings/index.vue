@@ -37,7 +37,6 @@ import DocumentsView from './_views/documents.vue';
 import EditorView from './_views/editor.vue';
 import SecurityView from './_views/security.vue';
 import BackupView from './_views/backups.vue';
-import SnapshotTargetsView from './_views/snapshot-targets.vue';
 import McpView from './_views/mcp.vue';
 import ShortcutsView from './_views/shortcuts.vue';
 import SnippetsView from './_views/snippets.vue';
@@ -74,7 +73,9 @@ const pages = {
   editor: EditorView,
   security: SecurityView,
   backup: BackupView,
-  snapshotTargets: SnapshotTargetsView,
+  // Merged into Backup (section at the bottom); alias keeps stale
+  // ?p=snapshotTargets deep links rendering instead of a blank page.
+  snapshotTargets: BackupView,
   mcp: McpView,
   shortcuts: ShortcutsView,
   snippets: SnippetsView,
@@ -130,7 +131,6 @@ const navSections = computed<NavSection[]>(() => [
     items: [
       { key: 'snippets', label: t('settings.pages.snippets'), icon: 'snippets' },
       { key: 'backup', label: t('settings.pages.backup'), icon: 'backup' },
-      { key: 'snapshotTargets', label: t('settings.pages.snapshotTargets'), icon: 'cdn' },
       { key: 'mcp', label: t('settings.pages.mcp'), icon: 'security' },
       { key: 'plugins', label: t('settings.pages.plugins'), icon: 'snippets' },
       { key: 'advanced', label: t('settings.pages.advanced'), icon: 'build' },
