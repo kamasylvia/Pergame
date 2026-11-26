@@ -39,8 +39,8 @@ const live = computed(() => nodesStore.getById(props.doc.id) ?? props.doc);
 
   .metadata-panel-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
     gap: 8px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--border-color);
@@ -52,22 +52,22 @@ const live = computed(() => nodesStore.getById(props.doc.id) ?? props.doc);
     gap: 6px;
     font-size: 13px;
     font-weight: 600;
-    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    overflow: hidden;
   }
 
   .metadata-panel-actions {
     display: flex;
-    gap: 4px;
     flex-shrink: 0;
+    gap: 4px;
   }
 
   .metadata-panel-body {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     padding: 8px 12px;
+    overflow-y: auto;
   }
 }
 </style>

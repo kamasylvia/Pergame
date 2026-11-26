@@ -325,8 +325,8 @@ onUnmounted(() => {
 
   .pdf-panel-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
     gap: 8px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--border-color);
@@ -335,15 +335,15 @@ onUnmounted(() => {
   .pdf-panel-title {
     font-size: 13px;
     font-weight: 600;
-    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    overflow: hidden;
   }
 
   .pdf-panel-actions {
     display: flex;
-    gap: 4px;
     flex-shrink: 0;
+    gap: 4px;
   }
 
   .pdf-panel-loading,
@@ -355,48 +355,48 @@ onUnmounted(() => {
 
   .pdf-panel-frame {
     flex: 1;
-    min-height: 0;
     width: 100%;
+    min-height: 0;
     border: 0;
     background: #fff;
   }
 
   .pdf-panel-editor {
-    border-top: 1px solid var(--border-color);
-    padding: 8px 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     max-height: 40%;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border-color);
     overflow-y: auto;
   }
 
   .pdf-editor-quote {
+    display: -webkit-box;
     margin: 0;
+    padding-left: 8px;
+    border-left: 3px solid var(--primary-color);
     font-size: 12px;
     color: var(--text-secondary);
-    border-left: 3px solid var(--primary-color);
-    padding-left: 8px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
     overflow: hidden;
   }
 
   .pdf-editor-comment {
     width: 100%;
-    font-size: 13px;
     padding: 6px 8px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    background: var(--bg-color);
+    font-size: 13px;
     color: var(--text-color);
+    background: var(--bg-color);
   }
 
   .pdf-editor-row {
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
     gap: 8px;
   }
 
@@ -408,10 +408,10 @@ onUnmounted(() => {
   .pdf-color-dot {
     width: 18px;
     height: 18px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
     padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
 
     &.active {
       border-color: var(--text-color);
@@ -426,9 +426,9 @@ onUnmounted(() => {
   .pdf-editor-refs {
     display: flex;
     flex-wrap: wrap;
+    align-items: baseline;
     gap: 4px 8px;
     font-size: 12px;
-    align-items: baseline;
   }
 
   .pdf-refs-label {
