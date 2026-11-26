@@ -30,6 +30,7 @@
 import NodeContextMenu from '~/components/Node/Action/ContextMenu.vue';
 import NodeDocumentContentCompiled from '~/components/Node/Document/ContentCompiled.vue';
 import DeleteNodeModal from '~/components/Node/Modals/Delete.vue';
+import { resolveDocSize } from '~/helpers/node';
 
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { Node } from '~/stores';
@@ -84,8 +85,9 @@ const node = computed<Node | undefined>(() => {
 });
 
 const width = computed(() => {
-  if (docSize.value == 2) return '980px';
-  if (docSize.value == 1) return '800px';
+  const size = resolveDocSize(node.value, docSize.value ?? 1);
+  if (size == 2) return '980px';
+  if (size == 1) return '800px';
   return '700px';
 });
 

@@ -36,6 +36,8 @@
           <AppSelect v-model="node.theme" :items="DOCUMENT_THEMES" :nullable="true" :placeholder="t('settings.documents.theme')" />
           <label>{{ t('nodes.pdf.preview') }}</label>
           <AppSelect v-model="pdfPreviewSel" :items="pdfPreviewOptions" />
+          <label>{{ t('settings.documents.documentSize') }}</label>
+          <AppSelect v-model="docSizeSel" :items="docSizeOptions" />
         </template>
         <div class="setting-row">
           <label for="accessibility">{{ t('common.labels.color') }}</label>
@@ -55,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { DOCUMENT_THEMES, CATEGORY_ROLES } from '~/helpers/constants';
+import { DOCUMENT_THEMES, CATEGORY_ROLES, DOCUMENT_SIZES } from '~/helpers/constants';
 import type { Node } from '~/stores';
 import type { TreeItem } from '~/helpers/TreeBuilder';
 
@@ -93,6 +95,21 @@ const pdfPreviewSel = computed({
     const meta = { ...(node.value.metadata ?? {}) };
     if (v === 'side' || v === 'inline') meta.pdfPreview = v;
     else delete meta.pdfPreview;
+    node.value.metadata = meta;
+  },
+});
+
+// Per-note doc size (undefined = follow the global default).
+const docSizeOptions = computed(() => [
+  { id: 'default', label: t('nodes.pdf.previewFollowDefault') },
+  ...DOCUMENT_SIZES,
+]);
+const docSizeSel = computed({
+  get: (): string | number => node.value.metadata?.docSize ?? 'default',
+  set: (v: string | number) => {
+    const meta = { ...(node.value.metadata ?? {}) };
+    if (v === 0 || v === 1 || v === 2) meta.docSize = v;
+    else delete meta.docSize;
     node.value.metadata = meta;
   },
 });

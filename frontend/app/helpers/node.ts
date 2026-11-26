@@ -139,3 +139,9 @@ export function mergeNode(node: Node, full_node: Node): Node {
   return result;
 }
 
+/** Effective doc width class: per-note metadata wins, else the default. */
+export function resolveDocSize(node: Partial<Node> | undefined, fallback: number): number {
+  const override = node?.metadata?.docSize;
+  return override === 0 || override === 1 || override === 2 ? override : fallback;
+}
+

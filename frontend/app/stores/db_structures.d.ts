@@ -23,6 +23,7 @@ export interface DB_Node {
     transformed_path?: string;
     drawio?: boolean;
     pdfPreview?: 'side' | 'inline';
+    docSize?: number;
   };
   created_timestamp: number;
   updated_timestamp: number;
