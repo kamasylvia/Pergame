@@ -9,18 +9,20 @@
         <NodeDocumentFooter :document="node" :next="next" :previous="previous" />
       </div>
 
-      <div v-if="!devise.isTablet.value && !hideTOC && !pdfPanel" class="toc">
+      <div v-if="!devise.isTablet.value && !hideTOC && !sidePanel" class="toc">
         <NodeTOC :doc="node" :element="element" style="width: 320px; margin-left: 20px" />
       </div>
-      <div v-if="pdfPanel" class="pdf-side">
+      <div v-if="sidePanel" class="doc-side">
         <NodeResourcePdfSidePanel
-          :resource-id="pdfPanel.resourceId"
-          :file-url="pdfPanel.fileUrl"
-          :title="pdfPanel.title"
-          :page="pdfPanel.page"
-          :annotation-id="pdfPanel.annotationId"
-          @close="pdfPanel = null"
+          v-if="sidePanel.kind === 'pdf'"
+          :resource-id="sidePanel.resourceId"
+          :file-url="sidePanel.fileUrl"
+          :title="sidePanel.title"
+          :page="sidePanel.page"
+          :annotation-id="sidePanel.annotationId"
+          @close="sidePanel = null"
         />
+        <NodeDocumentMetadataPanel v-else-if="node" :doc="node" @close="sidePanel = null" />
       </div>
     </div>
     <Error v-else :error="error" />
@@ -178,8 +180,8 @@ function handleDocumentKeydown(e: KeyboardEvent) {
     router.push(`/dashboard/docs/${previous.value.id}`);
   }
   if (e.key === 'Escape') {
-    if (pdfPanel.value) {
-      pdfPanel.value = null;
+    if (sidePanel.value) {
+      sidePanel.value = null;
       return;
     }
     // Close context menu on Escape
@@ -200,21 +202,27 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
 });
 
-// PDF side panel (SiYuan mode): plain PDF / annotation link clicks land
-// here via ContentCompiled; closed on navigation.
+// Right side panel: PDF viewer xor doc settings (one slot, TOC yields).
+// Plain PDF / annotation link clicks land here via ContentCompiled;
+// the header Metadata action lands here too. Closed on navigation.
 interface PdfPanelState {
+  kind: 'pdf';
   resourceId: string;
   fileUrl: string;
   title: string;
   page?: number;
   annotationId?: string | null;
 }
-const pdfPanel = ref<PdfPanelState | null>(null);
-provide('openPdfPanel', (p: PdfPanelState) => {
-  pdfPanel.value = p;
+type SidePanelState = PdfPanelState | { kind: 'meta' };
+const sidePanel = ref<SidePanelState | null>(null);
+provide('openPdfPanel', (p: Omit<PdfPanelState, 'kind'>) => {
+  sidePanel.value = { ...p, kind: 'pdf' };
+});
+provide('openMetadataPanel', () => {
+  sidePanel.value = { kind: 'meta' };
 });
 watch(documentId, () => {
-  pdfPanel.value = null;
+  sidePanel.value = null;
 });
 </script>
 
@@ -222,7 +230,7 @@ watch(documentId, () => {
 .doc-container {
   width: 100%;
   margin: 0 auto;
-  // Pinned size: the PDF panel (flex-grow) absorbs all leftover instead.
+  // Pinned size: the side panel (flex-grow) absorbs all leftover instead.
   flex: 0 1 auto;
 }
 
@@ -242,7 +250,7 @@ watch(documentId, () => {
   }
 }
 
-.pdf-side {
+.doc-side {
   // Grow into freed space (hidden sidebar, wide screens); never squeeze
   // the doc below its basis, never collapse below usable width.
   flex: 1 1 560px;

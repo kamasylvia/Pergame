@@ -1,146 +1,19 @@
 <template>
   <div class="modal-content">
-    <h2><Icon :name="node.icon || 'files'" display="xl" :class="['parent-icon', getAppAccent(node.color as number, true)]" /> {{ node.name }}</h2>
-    <form @submit.prevent>
-      <section>
-        <span class="sec-title">{{ t('nodes.modals.metadata.labelOrganization') }}</span>
-        <template v-if="node.role == 1 || node.role == 2">
-          <label for="category">{{ t('common.labels.name') }}</label>
-          <input id="category" v-model="node.name" />
-          <label>{{ t('common.labels.role') }}</label>
-          <AppRadio v-model="node.role" :items="CATEGORY_ROLES" />
-        </template>
-
-        <label for="parent">{{ t('common.labels.parent') }}</label>
-        <AppSelect
-          v-model="node.parent_id"
-          :items="parentsTree"
-          :placeholder="t('common.labels.parent')"
-          nullable
-          :disabled="i => i.id == node.id || descendantIds.has(String(i.id))"
-        />
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pinned">{{ t('common.labels.pinned') }}</label>
-            <span class="setting-description">{{ t('nodes.modals.metadata.pinDescription') }}</span>
-          </div>
-          <AppToggle id="pinned" v-model="pinnedToggle" />
-        </div>
-      </section>
-
-      <section>
-        <span class="sec-title">{{ t('nodes.modals.metadata.labelAppearance') }}</span>
-        <template v-if="node.role == 3">
-          <label for="category">{{ t('settings.documents.theme') }}</label>
-          <AppSelect v-model="node.theme" :items="DOCUMENT_THEMES" :nullable="true" :placeholder="t('settings.documents.theme')" />
-          <label>{{ t('nodes.pdf.preview') }}</label>
-          <AppSelect v-model="pdfPreviewSel" :items="pdfPreviewOptions" />
-          <label>{{ t('settings.documents.documentSize') }}</label>
-          <AppSelect v-model="docSizeSel" :items="docSizeOptions" />
-        </template>
-        <div class="setting-row">
-          <label for="accessibility">{{ t('common.labels.color') }}</label>
-          <AppColorPicker v-model="node.color" nullable />
-        </div>
-      </section>
-
-      <section>
-        <span class="sec-title">{{ t('nodes.modals.metadata.labelMedia') }}</span>
-        <label for="icon">{{ t('nodes.modals.metadata.emojiOrIcon') }} <AppHint :text="t('nodes.modals.metadata.emojiOrIconHint')" /></label>
-        <textarea id="icon" v-model="node.icon"></textarea>
-        <label for="thumbnail">{{ t('nodes.modals.metadata.thumbnail') }} <AppHint :text="t('nodes.modals.metadata.thumbnailHint')" /></label>
-        <textarea id="thumbnail" v-model="node.thumbnail"></textarea>
-      </section>
-    </form>
+    <h2><Icon :name="live?.icon || 'files'" display="xl" :class="['parent-icon', getAppAccent((live?.color ?? 0) as number, true)]" /> {{ live?.name }}</h2>
+    <NodeModalsMetadataForm :doc="doc" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { DOCUMENT_THEMES, CATEGORY_ROLES, DOCUMENT_SIZES } from '~/helpers/constants';
 import type { Node } from '~/stores';
-import type { TreeItem } from '~/helpers/TreeBuilder';
 
 const props = defineProps<{ doc: Node }>();
 
-const nodeStore = useNodesStore();
-const parentsTree = ref<TreeItem<Node>[]>([]);
-
-const { t } = useI18nT();
+const nodesStore = useNodesStore();
 const { getAppAccent } = useAppColors();
 
-const node = ref<Node>({ ...props.doc });
-const pinnedToggle = ref(node.value.order == -1);
-const descendantIds = ref<Set<string>>(new Set());
-
-onBeforeMount(async () => {
-  const latestNode = await nodeStore.fetch({ id: node.value.id });
-  if (latestNode) node.value = { ...latestNode }; // CLONE
-  parentsTree.value = await nodeStore.fetchFolderTree(node.value.role ?? 2).catch(() => []);
-  const sub = await nodeStore.fetchFlatAll(undefined, node.value.id).catch(() => ({ rows: [] as Node[] }));
-  descendantIds.value = new Set(sub.rows.map(n => n.id));
-});
-
-watch(pinnedToggle, val => (node.value.order = val ? -1 : 0));
-
-// Per-note PDF mode (undefined = follow the global default).
-const pdfPreviewOptions = computed(() => [
-  { id: 'default', label: t('nodes.pdf.previewFollowDefault') },
-  { id: 'side', label: t('nodes.pdf.previewSide') },
-  { id: 'inline', label: t('nodes.pdf.previewInline') },
-]);
-const pdfPreviewSel = computed({
-  get: () => node.value.metadata?.pdfPreview ?? 'default',
-  set: (v: string) => {
-    const meta = { ...(node.value.metadata ?? {}) };
-    if (v === 'side' || v === 'inline') meta.pdfPreview = v;
-    else delete meta.pdfPreview;
-    setMetadata(meta);
-  },
-});
-
-// Per-note doc size (undefined = follow the global default).
-const docSizeOptions = computed(() => [
-  { id: 'default', label: t('nodes.pdf.previewFollowDefault') },
-  ...DOCUMENT_SIZES,
-]);
-const docSizeSel = computed({
-  get: (): string | number => node.value.metadata?.docSize ?? 'default',
-  set: (v: string | number) => {
-    const meta = { ...(node.value.metadata ?? {}) };
-    if (v === 0 || v === 1 || v === 2) meta.docSize = v;
-    else delete meta.docSize;
-    setMetadata(meta);
-  },
-});
-
-// Metadata edits render instantly (this modal's clone is a true snapshot,
-// so patching the store row can't clobber anything); the debounced PUT
-// below persists. A failed PUT leaves the optimistic value until the
-// next fetch — same as the offline path.
-const setMetadata = (meta: Node['metadata']) => {
-  node.value.metadata = meta;
-  const current = nodeStore.getById(node.value.id);
-  if (current) nodeStore.nodes.set(current.id, { ...current, metadata: meta }, true);
-};
-watch(
-  node,
-  debounce(async val => {
-    const v = val as Node;
-    const current = nodeStore.getById(v.id);
-    // This modal edits a private clone: listing fields equal the store
-    // row unless this edit touched them (name/parent/order/role moves
-    // rows or re-sorts; metadata/theme/icon/color/display render from
-    // the merged row and need no re-pull).
-    const listingTouched = !current
-      || (current.parent_id ?? null) !== (v.parent_id ?? null)
-      || current.name !== v.name
-      || (current.order ?? 0) !== (v.order ?? 0)
-      || current.role !== v.role;
-    await nodeStore.update({ ...v }, { skipRefresh: !listingTouched }); // clone → avoid mutating the original object which is still used in the parent component
-  }, 500),
-  { deep: true },
-);
+const live = computed(() => nodesStore.getById(props.doc.id) ?? props.doc);
 </script>
 
 <style scoped lang="scss">
@@ -152,25 +25,5 @@ watch(
 
 h2 {
   display: flex;
-}
-
-form {
-  flex: 1;
-  padding-bottom: 10px;
-  overflow-y: auto;
-}
-
-label {
-  display: flex;
-  align-items: center;
-  margin: 5px 0;
-}
-
-textarea {
-  height: 50px;
-  min-height: 50px;
-  max-height: 50px;
-  font-size: 14px;
-  resize: none;
 }
 </style>

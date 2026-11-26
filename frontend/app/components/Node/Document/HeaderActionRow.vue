@@ -35,6 +35,10 @@ const props = defineProps<{ doc: Node; isPublic?: boolean }>();
 
 const nodesPermissionsStore = useNodesPermissionsStore();
 
+// Doc page provides a right-side settings panel; elsewhere (public docs)
+// the Metadata modal stays.
+const openMetadataPanel = inject<(() => void) | undefined>('openMetadataPanel', undefined);
+
 const { t } = useI18nT();
 const modals = useModal();
 const notifications = useNotifications();
@@ -68,7 +72,13 @@ const openDeleteModal = () =>
       size: 'small',
     }),
   );
-const openEditModal = () => modals.add(new Modal(shallowRef(DocumentMeta), { props: { doc: props.doc }, size: 'small' }));
+const openEditModal = () => {
+  if (openMetadataPanel) {
+    openMetadataPanel();
+    return;
+  }
+  modals.add(new Modal(shallowRef(DocumentMeta), { props: { doc: props.doc }, size: 'small' }));
+};
 const openPermissionsModal = () => modals.add(new Modal(shallowRef(NodePermissions), { props: { node: props.doc }, size: 'small' }));
 const openRemoveShareModal = () => modals.add(new Modal(shallowRef(RemoveSharedNode), { props: { nodeId: props.doc.id }, size: 'small' }));
 
