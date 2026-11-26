@@ -12,7 +12,7 @@
 - [x] **覆盖层桥**:同源 iframe 注入——官方编辑器按钮 CSS 藏＋事件卫栏锁 NONE;高亮 div 逐页绘制(zoom/rotate 重绘);划选转 quads(单页,64 上限);悬浮看 comment,点开编辑器(改色/改注/复制链接/删/反链跳文档)。
 - [x] **两种预览方式**:右侧面板(560px sticky,TOC 让位,Esc 关,跳文档关)为默认;内嵌(链接就地变 viewer,保留静态标题);全局默认设置＋单篇 Metadata 下拉。
 - [x] **阅读器打磨**:Metadata 内 PDF 预览改 AppSelect 下拉(与 Parent/Theme 一致);页眉切换钮删(只留文档级设置,顺手删 `previewMode` 死键);内嵌 viewer 上方保留原文标题(静态 div,不可点)。
-- [ ] **设置页偶发打不开**(TypeError `__vnode` null,Firefox 措辞):10 余轮无头复现无果;本仓无 `__vnode` 读取点(Vue core 只写,dev-tool 皆守卫);待用户点开报错浮层(⤢)贴完整堆栈定位。
+- [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **下载含批注**:pdf-lib 现场烧标准 `/Highlight`(QuadPoints＋Contents＋颜色＋Print 标记)副本下载,原文件恒干净;viewer 自带下载=不带批注。
 - [x] **坑**:viewer 自带 CSP 杀内联 `<style>`(静态规则改外部 link 注入,CSSOM 写活着);`annotationEditorMode={-1}` setter 不认 DISABLE(改事件卫栏);v6 无 `convertToViewportRectangle`(用 Point 版);`contentFrame().evaluate` 上下文错位(探针改父上下文)。
 - [x] **实测**:临时用户全链——划选建批注→落库→重载绘高亮→点高亮开编辑→文档 `#annotation:` 深链跳面板闪烁→内嵌切换→下载复 parse 1 annot→zoom 重绘;探针已删。

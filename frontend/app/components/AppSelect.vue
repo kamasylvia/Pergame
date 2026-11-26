@@ -139,6 +139,14 @@ const trigger = ref<HTMLElement | null>(null);
 const portalList = ref<HTMLElement | null>(null);
 const dropdownStyle = ref<Record<string, string>>({});
 
+// Async items arrive undefined on first render; render empty instead of
+// throwing ("items is not iterable" nukes the whole page).
+const safeItems = computed((): ANode[] => {
+  if (Array.isArray(props.items)) return props.items;
+  if (import.meta.dev) console.warn('[AppSelect] items is not an array:', props.items);
+  return [];
+});
+
 const selected = computed(() => {
   const findSelected = (items: ANode[]): ANode | null => {
     for (const item of items) {
@@ -150,7 +158,7 @@ const selected = computed(() => {
     }
     return null;
   };
-  return findSelected(props.items);
+  return findSelected(safeItems.value);
 });
 
 const clearSelection = () => {
@@ -159,8 +167,8 @@ const clearSelection = () => {
 };
 
 const filteredItems = computed(() => {
-  if (!search.value.trim()) return props.items;
-  return filterRecursive(props.items, search);
+  if (!search.value.trim()) return safeItems.value;
+  return filterRecursive(safeItems.value, search);
 });
 
 function updatePosition() {
