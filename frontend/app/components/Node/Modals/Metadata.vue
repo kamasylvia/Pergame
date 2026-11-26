@@ -95,7 +95,7 @@ const pdfPreviewSel = computed({
     const meta = { ...(node.value.metadata ?? {}) };
     if (v === 'side' || v === 'inline') meta.pdfPreview = v;
     else delete meta.pdfPreview;
-    node.value.metadata = meta;
+    setMetadata(meta);
   },
 });
 
@@ -110,13 +110,34 @@ const docSizeSel = computed({
     const meta = { ...(node.value.metadata ?? {}) };
     if (v === 0 || v === 1 || v === 2) meta.docSize = v;
     else delete meta.docSize;
-    node.value.metadata = meta;
+    setMetadata(meta);
   },
 });
+
+// Metadata edits render instantly (this modal's clone is a true snapshot,
+// so patching the store row can't clobber anything); the debounced PUT
+// below persists. A failed PUT leaves the optimistic value until the
+// next fetch — same as the offline path.
+const setMetadata = (meta: Node['metadata']) => {
+  node.value.metadata = meta;
+  const current = nodeStore.getById(node.value.id);
+  if (current) nodeStore.nodes.set(current.id, { ...current, metadata: meta }, true);
+};
 watch(
   node,
   debounce(async val => {
-    await nodeStore.update({ ...(val as Node) }); // clone → avoid mutating the original object which is still used in the parent component
+    const v = val as Node;
+    const current = nodeStore.getById(v.id);
+    // This modal edits a private clone: listing fields equal the store
+    // row unless this edit touched them (name/parent/order/role moves
+    // rows or re-sorts; metadata/theme/icon/color/display render from
+    // the merged row and need no re-pull).
+    const listingTouched = !current
+      || (current.parent_id ?? null) !== (v.parent_id ?? null)
+      || current.name !== v.name
+      || (current.order ?? 0) !== (v.order ?? 0)
+      || current.role !== v.role;
+    await nodeStore.update({ ...v }, { skipRefresh: !listingTouched }); // clone → avoid mutating the original object which is still used in the parent component
   }, 500),
   { deep: true },
 );

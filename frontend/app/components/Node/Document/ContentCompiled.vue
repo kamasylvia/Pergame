@@ -74,7 +74,8 @@ const html = computed(() => {
 defineExpose({ rootElement });
 
 const updateDocumentContent = debounce(() => {
-  nodesStore.update(nodesStore.nodes.get(props.node!.id!) as Node);
+  // Content-only: never moves rows, skip the directory re-pulls.
+  nodesStore.update(nodesStore.nodes.get(props.node!.id!) as Node, { skipRefresh: true });
 }, 1000);
 
 const updateMarkdownCheckbox = (markdown: string, indexToTarget: number, shouldCheck: boolean): string => {

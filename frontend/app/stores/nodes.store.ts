@@ -349,7 +349,7 @@ export const useNodesStore = defineStore('nodes', () => {
     throw response.message || 'Failed to create node';
   }
 
-  async function update(node: Node): Promise<void> {
+  async function update(node: Node, opts?: { skipRefresh?: boolean }): Promise<void> {
     if (node.partial) {
       console.debug('[store/nodes] Node looks partial, cannot update it directly.');
       const full_node = await fetch({ id: node.id });
@@ -365,8 +365,14 @@ export const useNodesStore = defineStore('nodes', () => {
       // Never detach an unloaded parent (see fetch()); order/name edits
       // re-sort the directory, moves touch two.
       nodes.value.set(node.id, node, true);
-      await refreshDir(oldParent);
-      await refreshDir(node.parent_id ?? null);
+      // skipRefresh: caller certifies the edit can't move rows between
+      // directories or change listing order (content/metadata-only edits);
+      // each refreshDir is a server roundtrip (content autosave hits this
+      // constantly). Default keeps the old always-refresh behavior.
+      if (!opts?.skipRefresh) {
+        await refreshDir(oldParent);
+        await refreshDir(node.parent_id ?? null);
+      }
     } else if (isNetworkError(response)) {
       await LocalDbService.saveUpdateDelta(node);
       node.synced = false;
