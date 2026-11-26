@@ -99,5 +99,19 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
       },
     ],
   },
+  {
+    label: t('nodes.pdf.settingsSection'),
+    options: [
+      {
+        label: t('nodes.pdf.previewDefault'),
+        type: 'select',
+        key: 'pdfPreviewDefault',
+        choices: [
+          { label: t('nodes.pdf.previewSide'), id: 'side' },
+          { label: t('nodes.pdf.previewInline'), id: 'inline' },
+        ],
+      },
+    ],
+  },
 ]);
 </script>
