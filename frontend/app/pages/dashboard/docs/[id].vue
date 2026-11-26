@@ -1,7 +1,7 @@
 <template>
   <div style="width: 100%; padding: 1rem 0" @contextmenu.prevent="openContextMenu">
     <div v-if="!error" style="display: flex; justify-content: space-between">
-      <div :style="{ maxWidth: width }" class="doc-container">
+      <div :style="{ maxWidth: width, flexBasis: width }" class="doc-container">
         <NodeDocumentHeader :doc="node" style="margin-bottom: 20px" />
 
         <NodeDocumentContentCompiled v-if="node && !node.partial" ref="elementComponent" :node="node" />
@@ -220,6 +220,8 @@ watch(documentId, () => {
 .doc-container {
   width: 100%;
   margin: 0 auto;
+  // Pinned size: the PDF panel (flex-grow) absorbs all leftover instead.
+  flex: 0 1 auto;
 }
 
 @media screen and (width >= 810px) {
@@ -239,8 +241,9 @@ watch(documentId, () => {
 }
 
 .pdf-side {
-  flex: 0 0 560px;
-  max-width: 48%;
+  // Grow into freed space (hidden sidebar, wide screens); never squeeze
+  // the doc below its basis, never collapse below usable width.
+  flex: 1 1 560px;
   min-width: 380px;
   height: calc(100vh - 140px);
   position: sticky;

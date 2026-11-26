@@ -54,7 +54,9 @@ function parsePdfHref(href: string, ctx: InlinePdfCtx): PdfHref | null {
   return { resourceId, fileUrl: `/api/resources/${resourceId}/file/${encodeURIComponent(ctx.fileNameOf(resourceId))}`, named: false };
 }
 
-const FRAME_HEIGHT = '620px';
+// A full page at doc-column width (Letter 1:1.294 + viewer chrome): the
+// frame scales with the column instead of a fixed pixel height.
+const FRAME_ASPECT = '10 / 13.6';
 
 function fileBase(fileUrl: string): string {
   try {
@@ -86,7 +88,7 @@ function inlineFrame(fileUrl: string, title: string): HTMLIFrameElement {
   frame.title = title;
   frame.className = 'pdf-inline-frame';
   frame.style.width = '100%';
-  frame.style.height = FRAME_HEIGHT;
+  frame.style.aspectRatio = FRAME_ASPECT;
   frame.style.border = '1px solid var(--border-color)';
   frame.style.borderRadius = '8px';
   frame.style.background = '#fff';
