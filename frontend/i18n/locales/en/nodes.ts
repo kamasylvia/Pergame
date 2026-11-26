@@ -153,7 +153,6 @@ export default {
     previewDefault: 'Default PDF preview',
     previewFollowDefault: 'Follow default',
     previewInline: 'Inline',
-    previewMode: 'PDF preview: {mode}',
     previewSide: 'Side panel',
     refs: 'Linked from',
     selectionHint: 'Select text in the PDF to create an annotation',

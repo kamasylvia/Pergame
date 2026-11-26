@@ -56,6 +56,30 @@ function parsePdfHref(href: string, ctx: InlinePdfCtx): PdfHref | null {
 
 const FRAME_HEIGHT = '620px';
 
+function fileBase(fileUrl: string): string {
+  try {
+    const seg = new URL(fileUrl, window.location.origin).pathname.split('/').pop() ?? '';
+    return decodeURIComponent(seg) || 'PDF';
+  } catch {
+    return 'PDF';
+  }
+}
+
+/** Static (non-clickable) title kept above inline viewers. */
+function titleDiv(title: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'pdf-inline-title';
+  el.textContent = title;
+  el.style.fontSize = '13px';
+  el.style.fontWeight = '600';
+  el.style.color = 'var(--text-secondary)';
+  el.style.margin = '8px 0 4px';
+  el.style.overflow = 'hidden';
+  el.style.textOverflow = 'ellipsis';
+  el.style.whiteSpace = 'nowrap';
+  return el;
+}
+
 function inlineFrame(fileUrl: string, title: string): HTMLIFrameElement {
   const frame = document.createElement('iframe');
   frame.src = pdfViewerUrl(fileUrl);
@@ -114,7 +138,7 @@ export function createInlinePdf(root: HTMLElement, ctx: InlinePdfCtx) {
     }
   };
 
-  /** `![]()` embeds -> viewer iframes (both modes; idempotent). */
+  /** `![]()` embeds -> titled viewer iframes (both modes; idempotent). */
   const mountEmbeds = () => {
     if (dead) return;
     const holders = root.querySelectorAll<HTMLElement>('.pdf-embed[data-src]:not([data-pg-mounted])');
@@ -124,7 +148,9 @@ export function createInlinePdf(root: HTMLElement, ctx: InlinePdfCtx) {
       if (!parsed) continue;
       holder.dataset.pgMounted = '1';
       holder.textContent = '';
-      const frame = inlineFrame(parsed.fileUrl, holder.dataset.alt || 'PDF');
+      const title = holder.dataset.alt || fileBase(parsed.fileUrl);
+      holder.appendChild(titleDiv(title));
+      const frame = inlineFrame(parsed.fileUrl, title);
       frame.dataset.fileUrl = parsed.fileUrl;
       holder.appendChild(frame);
       embedFrames.push(frame);
@@ -141,7 +167,9 @@ export function createInlinePdf(root: HTMLElement, ctx: InlinePdfCtx) {
       const marker = document.createComment('pdf-inline');
       const block = document.createElement('div');
       block.className = 'pdf-inline-block';
-      const frame = inlineFrame(parsed.fileUrl, a.textContent?.trim() || 'PDF');
+      const title = a.textContent?.trim() || fileBase(parsed.fileUrl);
+      block.appendChild(titleDiv(title));
+      const frame = inlineFrame(parsed.fileUrl, title);
       frame.dataset.fileUrl = parsed.fileUrl;
       block.appendChild(frame);
       a.replaceWith(marker);
@@ -185,6 +213,7 @@ export function createInlinePdf(root: HTMLElement, ctx: InlinePdfCtx) {
     }
     for (const f of embedFrames.splice(0)) f.remove();
     root.querySelectorAll('.pdf-embed[data-pg-mounted]').forEach(el => {
+      el.textContent = '';
       el.removeAttribute('data-pg-mounted');
     });
   };

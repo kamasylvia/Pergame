@@ -2,7 +2,6 @@
   <AppBtnIcon v-if="isPublic" nav icon="link" :tooltip="t('nodes.actions.copyPublicLink')" @click="copyPublicLink" />
   <AppBtnIcon v-if="isPublic" nav icon="share" :tooltip="t('nodes.actions.share')" @click="share" />
   <AppBtnIcon v-if="doc.accessibility == 3 && !isPublic" nav icon="link" :tooltip="t('nodes.actions.publicLink')" :to="`/doc/${doc.id}`" :blank="true" />
-  <AppBtnIcon v-if="!isPublic && doc.role === 3" nav icon="preview" :tooltip="pdfModeTip" @click="cyclePdfMode" />
   <AppBtnIcon
     v-if="nodesPermissionsStore.hasPermissions(doc, 2)"
     nav
@@ -30,14 +29,11 @@ import DocumentMeta from '~/components/Node/Modals/Metadata.vue';
 import NodePermissions from '~/components/Node/Modals/Permissions.vue';
 import RemoveSharedNode from '~/components/Node/Modals/RemoveShared.vue';
 import { generateMarkdownWithMetadata } from '~/helpers/node';
-import { resolvePdfMode } from '~/helpers/pdf-mode';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ doc: Node; isPublic?: boolean }>();
 
 const nodesPermissionsStore = useNodesPermissionsStore();
-const nodesStore = useNodesStore();
-const preferences = usePreferencesStore();
 
 const { t } = useI18nT();
 const modals = useModal();
@@ -45,22 +41,6 @@ const notifications = useNotifications();
 const requestUrl = useRequestURL();
 
 const publicUrl = computed(() => `${requestUrl.origin}/doc/${props.doc.id}`);
-
-// Per-note PDF mode toggle (side <-> inline, explicit override; reset to
-// the global default in the Metadata modal).
-const pdfModeTip = computed(() => {
-  const mode = resolvePdfMode(props.doc, preferences.get('pdfPreviewDefault').value ?? 'side');
-  const label = mode === 'side' ? t('nodes.pdf.previewSide') : t('nodes.pdf.previewInline');
-  return t('nodes.pdf.previewMode', { mode: label });
-});
-const cyclePdfMode = async () => {
-  const next = resolvePdfMode(props.doc, preferences.get('pdfPreviewDefault').value ?? 'side') === 'side' ? 'inline' : 'side';
-  try {
-    await nodesStore.update({ ...props.doc, metadata: { ...(props.doc.metadata ?? {}), pdfPreview: next } });
-  } catch (e) {
-    notifications.add({ type: 'error', title: t('common.errors.generic'), message: String(e) });
-  }
-};
 
 // Actions
 const copyPublicLink = async () => {

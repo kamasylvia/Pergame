@@ -35,7 +35,7 @@
           <label for="category">{{ t('settings.documents.theme') }}</label>
           <AppSelect v-model="node.theme" :items="DOCUMENT_THEMES" :nullable="true" :placeholder="t('settings.documents.theme')" />
           <label>{{ t('nodes.pdf.preview') }}</label>
-          <AppRadio v-model="pdfPreviewSel" :items="pdfPreviewOptions" />
+          <AppSelect v-model="pdfPreviewSel" :items="pdfPreviewOptions" />
         </template>
         <div class="setting-row">
           <label for="accessibility">{{ t('common.labels.color') }}</label>

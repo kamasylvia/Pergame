@@ -152,7 +152,6 @@ export default {
     previewDefault: '預設 PDF 預覽方式',
     previewFollowDefault: '跟隨預設',
     previewInline: '內嵌',
-    previewMode: 'PDF 預覽：{mode}',
     previewSide: '右側面板',
     refs: '引用此批註的文件',
     selectionHint: '在 PDF 中劃選文字以建立批註',

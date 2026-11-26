@@ -153,7 +153,6 @@ export default {
     previewDefault: 'Standard-PDF-Vorschau',
     previewFollowDefault: 'Standard folgen',
     previewInline: 'Eingebettet',
-    previewMode: 'PDF-Vorschau: {mode}',
     previewSide: 'Seitenleiste',
     refs: 'Verlinkt aus',
     selectionHint: 'Text im PDF markieren, um eine Anmerkung zu erstellen',

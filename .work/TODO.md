@@ -10,7 +10,9 @@
 - [x] **官方 viewer 整页**:mozilla/pdf.js v6.5.438 `gulp generic` vendor 到 `public/pdfjs`(裁 locale/测试/debug,8MB,布局照搬);`ResourcePreviewModal` 止损删(存活半天,被面板取代);`![pdf]` 与内嵌模式改整页 iframe。
 - [x] **思源式批注(只做双链,不写文件)**:`pdf_annotations`＋`annotation_refs`(migration 0016,quads=PDF 点坐标);CRUD/refs API(读=文件 Read,写=创建者或文件 Update,create 限 PDF);`#annotation:` reconcile  ride `reconcile_refs`＋restore 回填;`pdf_annotations_lifecycle` 绿。
 - [x] **覆盖层桥**:同源 iframe 注入——官方编辑器按钮 CSS 藏＋事件卫栏锁 NONE;高亮 div 逐页绘制(zoom/rotate 重绘);划选转 quads(单页,64 上限);悬浮看 comment,点开编辑器(改色/改注/复制链接/删/反链跳文档)。
-- [x] **两种预览方式**:右侧面板(560px sticky,TOC 让位,Esc 关,跳文档关)为默认;内嵌(链接就地变 viewer);全局默认设置＋单篇页眉切换＋Metadata 回跟随默认。
+- [x] **两种预览方式**:右侧面板(560px sticky,TOC 让位,Esc 关,跳文档关)为默认;内嵌(链接就地变 viewer,保留静态标题);全局默认设置＋单篇 Metadata 下拉。
+- [x] **阅读器打磨**:Metadata 内 PDF 预览改 AppSelect 下拉(与 Parent/Theme 一致);页眉切换钮删(只留文档级设置,顺手删 `previewMode` 死键);内嵌 viewer 上方保留原文标题(静态 div,不可点)。
+- [ ] **设置页偶发打不开**(TypeError `__vnode` null,Firefox 措辞):10 余轮无头复现无果;本仓无 `__vnode` 读取点(Vue core 只写,dev-tool 皆守卫);待用户点开报错浮层(⤢)贴完整堆栈定位。
 - [x] **下载含批注**:pdf-lib 现场烧标准 `/Highlight`(QuadPoints＋Contents＋颜色＋Print 标记)副本下载,原文件恒干净;viewer 自带下载=不带批注。
 - [x] **坑**:viewer 自带 CSP 杀内联 `<style>`(静态规则改外部 link 注入,CSSOM 写活着);`annotationEditorMode={-1}` setter 不认 DISABLE(改事件卫栏);v6 无 `convertToViewportRectangle`(用 Point 版);`contentFrame().evaluate` 上下文错位(探针改父上下文)。
 - [x] **实测**:临时用户全链——划选建批注→落库→重载绘高亮→点高亮开编辑→文档 `#annotation:` 深链跳面板闪烁→内嵌切换→下载复 parse 1 annot→zoom 重绘;探针已删。

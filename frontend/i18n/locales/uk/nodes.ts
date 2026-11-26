@@ -153,7 +153,6 @@ export default {
     previewDefault: 'Типовий перегляд PDF',
     previewFollowDefault: 'За замовчуванням',
     previewInline: 'Вбудований',
-    previewMode: 'Перегляд PDF: {mode}',
     previewSide: 'Бічна панель',
     refs: 'Посилання звідси',
     selectionHint: 'Виділіть текст у PDF, щоб створити анотацію',

@@ -153,7 +153,6 @@ export default {
     previewDefault: 'Aperçu PDF par défaut',
     previewFollowDefault: 'Suivre le défaut',
     previewInline: 'En ligne',
-    previewMode: 'Aperçu PDF : {mode}',
     previewSide: 'Panneau latéral',
     refs: 'Lié depuis',
     selectionHint: 'Sélectionnez du texte dans le PDF pour créer une annotation',

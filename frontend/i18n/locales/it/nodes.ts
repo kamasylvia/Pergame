@@ -153,7 +153,6 @@ export default {
     previewDefault: 'Anteprima PDF predefinita',
     previewFollowDefault: 'Segui predefinita',
     previewInline: 'In linea',
-    previewMode: 'Anteprima PDF: {mode}',
     previewSide: 'Pannello laterale',
     refs: 'Collegato da',
     selectionHint: 'Seleziona il testo nel PDF per creare un’annotazione',

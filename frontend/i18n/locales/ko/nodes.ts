@@ -152,7 +152,6 @@ export default {
     previewDefault: '기본 PDF 미리보기',
     previewFollowDefault: '기본값 따르기',
     previewInline: '인라인',
-    previewMode: 'PDF 미리보기: {mode}',
     previewSide: '사이드 패널',
     refs: '연결된 문서',
     selectionHint: 'PDF에서 텍스트를 선택하여 주석 만들기',
