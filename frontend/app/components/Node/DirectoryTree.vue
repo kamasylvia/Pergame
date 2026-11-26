@@ -330,16 +330,23 @@ watch(
     gap: 10px;
   }
 
-  // Labels for the row time columns (created/modified), right-anchored
-  // over the date cluster: right padding = pin button (~19px) + row gap
-  // (6px) + row right padding (4px), mirroring .row-main geometry.
+  // Labels for the row time columns (created/modified). Each label is the
+  // same fixed width as its .row-time cell (12ch, tabular nums, right
+  // aligned), so both column edges line up exactly; the cluster's right
+  // padding mirrors .row-main's trailing pin button (~19px) + gap + padding.
   .cols-header {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
     padding: 0 29px 2px 0;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     color: var(--text-tertiary, var(--text-secondary));
+
+    span {
+      min-width: 12ch;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
   }
 
   .refs-line {

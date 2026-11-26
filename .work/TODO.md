@@ -17,6 +17,7 @@
 - [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **文件夹 loading 误导**:ContainerView 空数组即判空(抓取中也显示“无文档”插画);加 `loading` prop,三调用页(分类/文档/团队)传抓取态,加载中显示 spinner＋Loading,空才显示 NoContent;三态浏览器实测。另:用户截到的 CSS 报错是编辑中途 HMR 瞬态(已自愈,现状 lint 全绿)。
+- [x] **目录树标头对齐返工**:首版标字比日期窄、右对齐后整组左偏(用户截屏指正)。改标＋日期同宽 `12ch`＋等宽数字＋右对齐,四条边像素对齐;这次按尺子验收(getBoundingClientRect 双列四边 0px 误差),非肉眼。
 - [x] **目录树时间列标头**:列表头加右对齐 Created/Modified 双标(跟 `directoryShow*` 开关走,复用 `components.filter` key 零翻译 churn);updated 列补 tooltip;日期加 tabular-nums。浏览器实测:单列/双列标头＋对齐。
 - [x] **生产 v0.0.15 上线**(2026-11-26):manifests 重跟 release 线(package.json/Cargo.toml/lock 0.0.11→0.0.15,About/MCP 报 0.0.15)→ release v0.0.15 → build 11 分 ✓ → 预拉 → stack 42 双 v0.0.15,health ok。**GHCR 清理**:删旧版 149 个,两包各只留 v0.0.15＋latest(及同窗 attestation)。⚠️ 无旧镜像可回滚,回滚须重新打 tag 构建。
 - [x] **Backup＋Offsite targets 合并**:targets 降为 Backup 页底部 section(`embedded` 去页头,复用 `options-section`),sidebar 入口删;`Configure targets` 改页内滚动;`snapshotTargets` view key 别名 Backup(旧深链不白屏);targetCount 改子组件 `change` 事件驱动(省一次重复 GET,增删即时刷新)。浏览器实测:单入口、section、滚动定位、旧 `?p=` 兼容。

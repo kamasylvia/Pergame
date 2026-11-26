@@ -320,6 +320,8 @@ const doMove = async (draggedId: string, zone: DropZone) => {
   white-space: nowrap;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  min-width: 12ch;
+  text-align: right;
 }
 
 .pin-btn {
