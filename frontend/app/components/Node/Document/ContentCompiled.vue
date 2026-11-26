@@ -28,11 +28,13 @@ import { renderDataviewBlocks } from '~/helpers/dataview-render';
 import { renderCodeEmbeds } from '~/helpers/code-embed';
 import { resolveNodeLink } from '~/helpers/node';
 import type { Node } from '~/stores';
+import ResourcePreviewModal from '~/components/Node/Modals/ResourcePreviewModal.vue';
 
 const props = defineProps<{ node?: Partial<Node> }>();
 
 const preferences = usePreferencesStore();
 const nodesStore = useNodesStore();
+const modals = useModal();
 const router = useRouter();
 const colorMode = useColorMode();
 
@@ -121,6 +123,61 @@ const handleCodeToggleClick = (e: MouseEvent) => {
   btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 };
 
+// Plain PDF links to our own resources open an in-page preview modal
+// instead of navigating away (modifier/middle clicks still open a tab).
+// Named URLs match by extension; legacy bare /file URLs resolve the
+// stored mime through the nodes store (same fallback as the image rule).
+const handlePdfLinkClick = (event: MouseEvent) => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+  if (!link || link.hasAttribute('data-internal-link')) return;
+  const href = link.getAttribute('href') ?? '';
+  let url: URL;
+  try {
+    url = new URL(href, window.location.origin);
+  } catch {
+    return;
+  }
+  if (url.origin !== window.location.origin) return;
+  const path = url.pathname;
+  if (!path.startsWith('/api/resources/')) return;
+  const openPreview = () => {
+    modals.add(
+      new Modal(shallowRef(ResourcePreviewModal), {
+        props: { title: link.textContent?.trim() || href, src: href },
+        size: 'large',
+      }),
+    );
+  };
+  if (/\.pdf([?#].*)?$/i.test(href)) {
+    event.preventDefault();
+    openPreview();
+    return;
+  }
+  const bare = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file\/?$/);
+  const id = bare?.[1];
+  if (!bare || !id) return;
+  event.preventDefault();
+  const node = nodesStore.getById(id);
+  const isPdf = (n: { metadata?: Record<string, unknown> } | undefined) =>
+    n?.metadata && typeof n.metadata === 'object' && (n.metadata as Record<string, unknown>).filetype === 'application/pdf';
+  if (isPdf(node)) {
+    openPreview();
+    return;
+  }
+  if (!node) {
+    void nodesStore.fetch({ id }).then(
+      () => {
+        if (isPdf(nodesStore.getById(id))) openPreview();
+        else window.open(href, '_blank', 'noopener');
+      },
+      () => window.open(href, '_blank', 'noopener'),
+    );
+    return;
+  }
+  window.open(href, '_blank', 'noopener');
+};
+
 // Navigate internal document links (#<id>) through the router, without a full page reload
 const handleInternalLinkClick = (event: MouseEvent) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -138,6 +195,7 @@ const handleClick = (event: MouseEvent) => {
   handleCodeCopyClick(event);
   handleCodeToggleClick(event);
   handleInternalLinkClick(event);
+  handlePdfLinkClick(event);
 };
 
 const handleCheckboxChange = (event: Event) => {
