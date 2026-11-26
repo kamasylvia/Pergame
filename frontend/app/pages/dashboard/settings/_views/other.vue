@@ -24,30 +24,6 @@ onMounted(async () => {
 
 const options = computed<Array<{ label: string; options: InterfaceOption[] }>>(() => [
   {
-    label: t('settings.other.datatable'),
-    options: [
-      {
-        label: t('settings.other.defaultItemsCount'),
-        type: 'select',
-        key: 'datatableItemsCount',
-        choices: [
-          { label: '10', id: 10 },
-          { label: '30', id: 30 },
-          { label: '50', id: 50 },
-          { label: '100', id: 100 },
-          { label: '250', id: 250 },
-        ],
-      },
-      {
-        label: t('settings.other.advancedView'),
-        description: t('settings.other.advancedViewDesc'),
-        type: 'toggle',
-        key: 'advancedView',
-        tag: t('settings.nav.new'),
-      },
-    ],
-  },
-  {
     label: t('settings.other.uploads'),
     options: [
       {
@@ -56,23 +32,6 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         type: 'select',
         key: 'defaultUploadFolder',
         choices: categories,
-      },
-    ],
-  },
-  {
-    label: t('settings.other.otherSection'),
-    options: [
-      {
-        label: t('settings.other.developerMode'),
-        description: t('settings.other.developerModeDesc'),
-        type: 'toggle',
-        key: 'developerMode',
-      },
-      {
-        label: t('settings.other.confirmDirectoryMove'),
-        description: t('settings.other.confirmDirectoryMoveDesc'),
-        type: 'toggle',
-        key: 'directoryConfirmMove',
       },
     ],
   },

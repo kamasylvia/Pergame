@@ -97,6 +97,24 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         type: 'number',
         key: 'codeBlockCollapseThreshold',
       },
+      {
+        label: t('settings.other.defaultItemsCount'),
+        type: 'select',
+        key: 'datatableItemsCount',
+        choices: [
+          { label: '10', id: 10 },
+          { label: '30', id: 30 },
+          { label: '50', id: 50 },
+          { label: '100', id: 100 },
+          { label: '250', id: 250 },
+        ],
+      },
+      {
+        label: t('settings.other.advancedView'),
+        description: t('settings.other.advancedViewDesc'),
+        type: 'toggle',
+        key: 'advancedView',
+      },
     ],
   },
   {

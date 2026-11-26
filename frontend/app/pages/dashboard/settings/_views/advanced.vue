@@ -9,6 +9,11 @@
       <AppButton type="danger" @click="preferences.reset">{{ t('settings.advanced.resetPreferencesBtn') }}</AppButton>
     </div>
     <div>
+      <h3>{{ t('settings.other.developerMode') }}</h3>
+      <p>{{ t('settings.other.developerModeDesc') }}</p>
+      <AppToggle v-model="developerMode.value" />
+    </div>
+    <div>
       <h3>{{ t('settings.advanced.resetLocalStorage') }}</h3>
       <p>{{ t('settings.advanced.resetLocalStorageDesc') }}</p>
       <AppButton type="danger" @click="deleteLocalStorage">{{ t('settings.advanced.resetLocalStorageBtn') }}</AppButton>
@@ -20,6 +25,8 @@
 import localForage from 'localforage';
 
 const preferences = usePreferencesStore();
+
+const developerMode = preferences.get('developerMode');
 
 const { t } = useI18nT();
 
