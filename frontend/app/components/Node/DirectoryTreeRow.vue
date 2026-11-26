@@ -21,7 +21,7 @@
       <span v-if="showCount && total >= 0 && hasKids" class="child-count">{{ total }}</span>
       <span v-if="showTags && singleTag" class="tag tag-single">{{ singleTag }}</span>
       <span v-if="showCreated" class="row-time" :title="titleTip">{{ dateCell(node.created_timestamp) }}</span>
-      <span v-if="showUpdated" class="row-time">{{ dateCell(node.updated_timestamp) }}</span>
+      <span v-if="showUpdated" class="row-time" :title="updatedTip">{{ dateCell(node.updated_timestamp) }}</span>
       <button
         class="pin-btn"
         :class="{ pinned: node.order === -1 }"
@@ -131,6 +131,7 @@ const singleTag = computed(() => (tags.value.length === 1 ? tags.value[0] : ''))
 const multiTags = computed(() => (tags.value.length > 1 ? tags.value : []));
 
 const titleTip = computed(() => `${t('components.filter.created')}: ${dateCell(props.node.created_timestamp)}`);
+const updatedTip = computed(() => `${t('components.filter.modified')}: ${dateCell(props.node.updated_timestamp)}`);
 
 const open = () => router.push(resolveNodeLink(props.node));
 
@@ -318,6 +319,7 @@ const doMove = async (draggedId: string, zone: DropZone) => {
   color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .pin-btn {

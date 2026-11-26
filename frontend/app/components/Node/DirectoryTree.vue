@@ -16,7 +16,12 @@
       </div>
     </div>
     <div v-if="loading && !children.length" class="tree-loading">{{ t('common.status.loading') }}</div>
-    <ul v-else-if="children.length" class="tree-roots">
+    <template v-else-if="children.length">
+      <div v-if="showCreated || showUpdated" class="cols-header">
+        <span v-if="showCreated">{{ t('components.filter.created') }}</span>
+        <span v-if="showUpdated">{{ t('components.filter.modified') }}</span>
+      </div>
+      <ul class="tree-roots">
       <NodeDirectoryTreeRow v-for="child in children" :key="child.id" :node="child" :depth="0" :sort="sort">
         <template #leading="{ node }">
           <AppCheck :model-value="selection.has(node.id)" @change="toggle(node.id)" @click.stop />
@@ -45,6 +50,7 @@
         </AppButton>
       </li>
     </ul>
+    </template>
     <span v-else class="dataview-empty">No results</span>
   </section>
 </template>
@@ -66,6 +72,8 @@ const router = useRouter();
 const { t } = useI18nT();
 
 const showRefs = preferences.get('directoryShowRefs');
+const showCreated = preferences.get('directoryShowCreated');
+const showUpdated = preferences.get('directoryShowUpdated');
 
 const openSettings = () => {
   modals.add(new Modal(shallowRef(DirectorySettingsModal), { size: 'small' }));
@@ -320,6 +328,18 @@ watch(
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  // Labels for the row time columns (created/modified), right-anchored
+  // over the date cluster: right padding = pin button (~19px) + row gap
+  // (6px) + row right padding (4px), mirroring .row-main geometry.
+  .cols-header {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 0 29px 2px 0;
+    font-size: 0.72rem;
+    color: var(--text-tertiary, var(--text-secondary));
   }
 
   .refs-line {
