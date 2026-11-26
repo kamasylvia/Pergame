@@ -70,6 +70,7 @@ const { t } = useI18nT();
 const resourcesStore = useResourcesStore();
 const nodesStore = useNodesStore();
 const preferences = usePreferencesStore();
+const notifications = useNotifications();
 
 const props = defineProps<{ public?: boolean; autofocusTitle?: boolean }>();
 const emit = defineEmits<{
@@ -108,6 +109,7 @@ const uploadsHandlers = createUploadsHandlers({
   resourcesStore,
   nodeId: document.value.id,
   insertText: (t: string) => commands.exec('insertText', t),
+  notifyError: (message: string) => notifications.add({ type: 'error', title: t('common.status.error'), message }),
 });
 
 const referencedDrawioResources = computed(() => {
