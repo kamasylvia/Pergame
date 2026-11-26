@@ -1,5 +1,5 @@
 <template>
-  <NodeContainerView :parent="parent" :nodes="rows" :total="total" />
+  <NodeContainerView :parent="parent" :nodes="rows" :total="total" :loading="loading" />
 </template>
 
 <script setup lang="ts">
@@ -23,18 +23,23 @@ const parentId = route.params.id as string;
 const parent = computed(() => nodesStore.getById(parentId));
 const rows = ref<Node[]>([]);
 const total = ref(0);
+const loading = ref(true);
 
 onMounted(async () => {
-  if (!nodesStore.getById(parentId)) {
-    try {
-      await nodesStore.fetch({ id: parentId });
-    } catch {
-      /* parent stays undefined; container renders the empty state */
+  try {
+    if (!nodesStore.getById(parentId)) {
+      try {
+        await nodesStore.fetch({ id: parentId });
+      } catch {
+        /* parent stays undefined; container renders the empty state */
+      }
     }
+    const page = await nodesStore.fetchFlatAll(3, parentId).catch(() => ({ rows: [], total: 0 }));
+    rows.value = page.rows;
+    total.value = page.total;
+  } finally {
+    loading.value = false;
   }
-  const page = await nodesStore.fetchFlatAll(3, parentId).catch(() => ({ rows: [], total: 0 }));
-  rows.value = page.rows;
-  total.value = page.total;
 });
 
 const openDeleteModal = () => {

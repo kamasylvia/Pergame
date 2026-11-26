@@ -58,8 +58,11 @@
     <!-- Content based on view mode -->
     <div class="container-body">
       <div class="container-main">
-    <div v-if="filteredNodes.length" class="node-content">
-      <!-- Overview (index template v2 inlined): children + recently viewed -->
+    <div v-if="loading" class="node-loading">
+      <Loader />
+      <span>{{ t('common.status.loading') }}</span>
+    </div>
+    <div v-else-if="filteredNodes.length" class="node-content">
       <NodeOverviewTables v-if="view === 'overview' && parent" :container-id="parent.id" />
 
       <!-- Advanced DataTable View -->
@@ -91,7 +94,7 @@
       </div>
     </div>
 
-    <NoContent v-else-if="!nodesStore.isFetching" :title="t('nodes.container.noDocuments')" :description="t('nodes.container.noDocumentsDescription')">
+    <NoContent v-else :title="t('nodes.container.noDocuments')" :description="t('nodes.container.noDocumentsDescription')">
       <NuxtLink to="/dashboard/docs/new">
         <AppButton type="link">{{ t('nodes.container.createNewDocument') }}</AppButton>
       </NuxtLink>
@@ -114,7 +117,7 @@ import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string; total?: number }>();
+const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string; total?: number; loading?: boolean }>();
 const total = computed(() => props.total ?? props.nodes.length);
 
 const nodesStore = useNodesStore();
@@ -246,6 +249,16 @@ h1 {
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--surface-raised);
+}
+
+.node-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .node-content {

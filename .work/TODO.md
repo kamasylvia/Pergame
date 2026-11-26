@@ -16,6 +16,7 @@
 - [x] **文档级设置改右侧面板**:Metadata 表单抽 `MetadataForm`(弹窗/面板共用),文档页右侧栏 PDF/设置二选一(Esc 关,跳文档关,TOC 让位);页眉齿轮优先开面板(公开页仍弹窗,文件夹页后改面板见下);面板内改宽度即时生效实测。
 - [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
+- [x] **文件夹 loading 误导**:ContainerView 空数组即判空(抓取中也显示“无文档”插画);加 `loading` prop,三调用页(分类/文档/团队)传抓取态,加载中显示 spinner＋Loading,空才显示 NoContent;三态浏览器实测。另:用户截到的 CSS 报错是编辑中途 HMR 瞬态(已自愈,现状 lint 全绿)。
 - [x] **下载含批注**:pdf-lib 现场烧标准 `/Highlight`(QuadPoints＋Contents＋颜色＋Print 标记)副本下载,原文件恒干净;viewer 自带下载=不带批注。
 - [x] **坑**:viewer 自带 CSP 杀内联 `<style>`(静态规则改外部 link 注入,CSSOM 写活着);`annotationEditorMode={-1}` setter 不认 DISABLE(改事件卫栏);v6 无 `convertToViewportRectangle`(用 Point 版);`contentFrame().evaluate` 上下文错位(探针改父上下文)。
 - [x] **实测**:临时用户全链——划选建批注→落库→重载绘高亮→点高亮开编辑→文档 `#annotation:` 深链跳面板闪烁→内嵌切换→下载复 parse 1 annot→zoom 重绘;探针已删。
