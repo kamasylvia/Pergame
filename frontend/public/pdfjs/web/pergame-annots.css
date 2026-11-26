@@ -1,0 +1,44 @@
+/* Pergame annotation overlay for the vendored pdf.js viewer.
+ * Loaded via <link> (the viewer's CSP forbids inline <style>).
+ * Positioning stays in JS (CSSOM writes are CSP-clean); only static rules
+ * live here. */
+
+/* Stock annotation editor: Pergame annotations replace it entirely. */
+#editorModeButtons,
+#editorModeSeparator {
+  display: none !important;
+}
+
+.pg-ann-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.pg-ann {
+  position: absolute;
+  border-radius: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0.45;
+}
+
+.pg-ann:hover {
+  opacity: 0.7;
+}
+
+.pg-ann-flash {
+  animation: pg-ann-flash 0.7s ease-in-out 3;
+}
+
+@keyframes pg-ann-flash {
+  0%,
+  100% {
+    outline: 2px solid transparent;
+  }
+
+  50% {
+    outline: 2px solid #ff8c00;
+  }
+}

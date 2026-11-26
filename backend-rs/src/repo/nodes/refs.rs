@@ -37,6 +37,34 @@ pub fn extract_targets(content: &str) -> Vec<Uuid> {
     }
     out
 }
+
+/// `#annotation:<uuid>` per the PDF side panel (docs link to annotations;
+/// backlinks resolve through `annotation_refs`). Same boundary rule as
+/// `extract_targets`: a trailing hex char voids the match.
+static ANN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"#annotation:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})")
+        .expect("annotation link regex")
+});
+
+/// Distinct annotation targets in a body, in first-seen order.
+pub fn extract_annotation_targets(content: &str) -> Vec<Uuid> {
+    let bytes = content.as_bytes();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for cap in ANN_RE.captures_iter(content) {
+        let m = cap.get(0).map(|m| m.end()).unwrap_or(0);
+        if bytes.get(m).is_some_and(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        let raw = cap.get(1).map(|m| m.as_str()).unwrap_or_default();
+        if let Ok(id) = Uuid::parse_str(raw)
+            && seen.insert(id)
+        {
+            out.push(id);
+        }
+    }
+    out
+}
 /// Resources carry a filename in `content`, not markdown — skipped, as are
 /// self-links and targets that are not live nodes.
 pub async fn reconcile_refs(
@@ -49,6 +77,10 @@ pub async fn reconcile_refs(
         .bind(source_id)
         .execute(pool)
         .await?;
+    sqlx::query("DELETE FROM annotation_refs WHERE source_id = $1")
+        .bind(source_id)
+        .execute(pool)
+        .await?;
     let body = content.unwrap_or_default();
     if role == 4 || body.is_empty() || !body.contains('#') {
         return Ok(());
@@ -57,19 +89,31 @@ pub async fn reconcile_refs(
         .into_iter()
         .filter(|id| *id != source_id)
         .collect();
-    if targets.is_empty() {
-        return Ok(());
+    if !targets.is_empty() {
+        sqlx::query(
+            r#"INSERT INTO node_refs (source_id, target_id)
+               SELECT $1, t.id FROM nodes t
+               WHERE t.id = ANY($2) AND t.deleted_at IS NULL
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(source_id)
+        .bind(&targets)
+        .execute(pool)
+        .await?;
     }
-    sqlx::query(
-        r#"INSERT INTO node_refs (source_id, target_id)
-           SELECT $1, t.id FROM nodes t
-           WHERE t.id = ANY($2) AND t.deleted_at IS NULL
-           ON CONFLICT DO NOTHING"#,
-    )
-    .bind(source_id)
-    .bind(&targets)
-    .execute(pool)
-    .await?;
+    let anns: Vec<Uuid> = extract_annotation_targets(body);
+    if !anns.is_empty() {
+        sqlx::query(
+            r#"INSERT INTO annotation_refs (source_id, annotation_id)
+               SELECT $1, a.id FROM pdf_annotations a
+               WHERE a.id = ANY($2)
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(source_id)
+        .bind(&anns)
+        .execute(pool)
+        .await?;
+    }
     Ok(())
 }
 
@@ -83,16 +127,33 @@ where
     if ids.is_empty() {
         return Ok(());
     }
+    // One statement (two CTE inserts): the generic executor moves on use.
     sqlx::query(
-        r#"INSERT INTO node_refs (source_id, target_id)
-           SELECT DISTINCT n.id, m.hit::uuid
-           FROM nodes n
-           CROSS JOIN LATERAL (
-               SELECT (regexp_matches(n.content, '#([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})', 'g'))[1] AS hit
-           ) m
-           JOIN nodes t ON t.id = m.hit::uuid AND t.deleted_at IS NULL
-           WHERE n.id = ANY($1) AND n.content IS NOT NULL AND n.role <> 4 AND n.deleted_at IS NULL
-           ON CONFLICT DO NOTHING"#,
+        r#"WITH ins_node AS (
+               INSERT INTO node_refs (source_id, target_id)
+               SELECT DISTINCT n.id, m.hit::uuid
+               FROM nodes n
+               CROSS JOIN LATERAL (
+                   SELECT (regexp_matches(n.content, '#([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})', 'g'))[1] AS hit
+               ) m
+               JOIN nodes t ON t.id = m.hit::uuid AND t.deleted_at IS NULL
+               WHERE n.id = ANY($1) AND n.content IS NOT NULL AND n.role <> 4 AND n.deleted_at IS NULL
+               ON CONFLICT DO NOTHING
+               RETURNING 1
+           ),
+           ins_ann AS (
+               INSERT INTO annotation_refs (source_id, annotation_id)
+               SELECT DISTINCT n.id, m.hit::uuid
+               FROM nodes n
+               CROSS JOIN LATERAL (
+                   SELECT (regexp_matches(n.content, '#annotation:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})', 'g'))[1] AS hit
+               ) m
+               JOIN pdf_annotations a ON a.id = m.hit::uuid
+               WHERE n.id = ANY($1) AND n.content IS NOT NULL AND n.role <> 4 AND n.deleted_at IS NULL
+               ON CONFLICT DO NOTHING
+               RETURNING 1
+           )
+           SELECT 1"#,
     )
     .bind(ids)
     .execute(exec)

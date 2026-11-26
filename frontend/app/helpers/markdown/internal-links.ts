@@ -8,7 +8,8 @@ const LEGACY_BODY = '\\d{15,20}';
 export const INTERNAL_LINK_REGEX = new RegExp(`#(${UUID_BODY}(?![0-9a-fA-F])|${LEGACY_BODY}(?!\\d))`, 'g');
 /** Same alternation anchored for single-position matching (inline ruler). */
 export const INTERNAL_LINK_ANCHORED = new RegExp(`^(?:${UUID_BODY}(?![0-9a-fA-F])|${LEGACY_BODY}(?!\\d))`);
-
+/** Bare `#annotation:<uuid>` (typed by hand; pasted links carry their own text). */
+export const ANNOTATION_LINK_ANCHORED = new RegExp(`^annotation:(${UUID_BODY})(?![0-9a-fA-F])`);
 export interface InternalLinkEnv {
   resolveNode?: (id: string) => string | undefined;
 }
@@ -22,7 +23,18 @@ export function internalLinkPlugin(md: MarkdownIt) {
     const prev = start > 0 ? state.src[start - 1] : '';
     if (prev && /[\w#&]/.test(prev)) return false;
 
-    const match = INTERNAL_LINK_ANCHORED.exec(state.src.slice(start + 1, state.posMax));
+    const rest = state.src.slice(start + 1, state.posMax);
+    const ann = ANNOTATION_LINK_ANCHORED.exec(rest);
+    if (ann) {
+      if (!silent) {
+        const token = state.push('internal_link', '', 0);
+        token.meta = { id: ann[1], annotation: true };
+      }
+      state.pos = start + 1 + ann[0].length;
+      return true;
+    }
+
+    const match = INTERNAL_LINK_ANCHORED.exec(rest);
     if (!match) return false;
     const end = start + 1 + match[0].length;
 
@@ -37,6 +49,10 @@ export function internalLinkPlugin(md: MarkdownIt) {
 
   md.renderer.rules.internal_link = (tokens, idx, options, env) => {
     const id = String(tokens[idx]?.meta?.id ?? '');
+    if (tokens[idx]?.meta?.annotation) {
+      const short = id.slice(0, 8);
+      return `<a href="#annotation:${id}" class="internal-link annotation-link" data-annotation-link="${id}">#annotation:${short}</a>`;
+    }
     const name = (env as InternalLinkEnv)?.resolveNode?.(id);
     const label = md.utils.escapeHtml(name ? `#${name}` : `#${id}`);
     return `<a href="/dashboard/docs/${id}" class="internal-link" data-internal-link="${id}">${label}</a>`;

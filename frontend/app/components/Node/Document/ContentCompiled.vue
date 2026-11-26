@@ -21,22 +21,32 @@ import compile from '~/helpers/markdown';
 import { parseFrontmatter } from '~/helpers/markdown/frontmatter';
 import { rerenderImages } from '~/helpers/DOM';
 import { renderMermaidDiagrams } from '~/helpers/mermaid-render';
-import { renderPdfEmbeds, unmountPdfEmbeds } from '~/helpers/pdf-embed';
 import { renderExtEmbeds } from '~/helpers/markdown/embeds';
 import { renderAbcBlocks } from '~/helpers/abc-render';
 import { renderDataviewBlocks } from '~/helpers/dataview-render';
 import { renderCodeEmbeds } from '~/helpers/code-embed';
 import { resolveNodeLink } from '~/helpers/node';
+import { createInlinePdf, type PdfPanelPayload } from '~/helpers/pdf-inline';
+import { PDF_ANNOT_COLORS, resolvePdfMode } from '~/helpers/pdf-mode';
+import type { PdfAnn } from '~/helpers/pdf-annots';
+import { makeRequest } from '~/stores/_utils';
 import type { Node } from '~/stores';
-import ResourcePreviewModal from '~/components/Node/Modals/ResourcePreviewModal.vue';
 
 const props = defineProps<{ node?: Partial<Node> }>();
 
 const preferences = usePreferencesStore();
 const nodesStore = useNodesStore();
-const modals = useModal();
 const router = useRouter();
 const colorMode = useColorMode();
+const notifications = useNotifications();
+const { t } = useI18nT();
+
+// Provided by the doc page; absent on surfaces without a side panel
+// (public docs), where PDF/annotation links open a new tab instead.
+const openPdfPanel = inject<((p: PdfPanelPayload) => void) | undefined>('openPdfPanel', undefined);
+
+const pdfDefault = preferences.get('pdfPreviewDefault');
+const pdfMode = computed(() => resolvePdfMode(props.node, pdfDefault.value ?? 'side'));
 
 const theme = computed(() => {
   if (props.node?.theme) return props.node.theme;
@@ -123,14 +133,13 @@ const handleCodeToggleClick = (e: MouseEvent) => {
   btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 };
 
-// Plain PDF links to our own resources open an in-page preview modal
-// instead of navigating away (modifier/middle clicks still open a tab).
-// Named URLs match by extension; legacy bare /file URLs resolve the
-// stored mime through the nodes store (same fallback as the image rule).
+// Plain PDF links to our own resources open the side panel (or a new tab
+// where no panel exists). Named URLs match by extension; legacy bare
+// /file URLs resolve the stored mime through the nodes store.
 const handlePdfLinkClick = (event: MouseEvent) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
-  if (!link || link.hasAttribute('data-internal-link')) return;
+  if (!link || link.hasAttribute('data-internal-link') || link.hasAttribute('data-annotation-link')) return;
   const href = link.getAttribute('href') ?? '';
   let url: URL;
   try {
@@ -141,17 +150,16 @@ const handlePdfLinkClick = (event: MouseEvent) => {
   if (url.origin !== window.location.origin) return;
   const path = url.pathname;
   if (!path.startsWith('/api/resources/')) return;
-  const openPreview = () => {
-    modals.add(
-      new Modal(shallowRef(ResourcePreviewModal), {
-        props: { title: link.textContent?.trim() || href, src: href },
-        size: 'large',
-      }),
-    );
+  const title = link.textContent?.trim() || href;
+  const open = (resourceId: string, fileUrl: string) => {
+    if (openPdfPanel) openPdfPanel({ resourceId, fileUrl, title });
+    else window.open(fileUrl, '_blank', 'noopener');
   };
   if (/\.pdf([?#].*)?$/i.test(href)) {
+    const id = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file/)?.[1];
+    if (!id) return;
     event.preventDefault();
-    openPreview();
+    open(id, href);
     return;
   }
   const bare = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file\/?$/);
@@ -159,16 +167,14 @@ const handlePdfLinkClick = (event: MouseEvent) => {
   if (!bare || !id) return;
   event.preventDefault();
   const node = nodesStore.getById(id);
-  const isPdf = (n: { metadata?: Record<string, unknown> } | undefined) =>
-    n?.metadata && typeof n.metadata === 'object' && (n.metadata as Record<string, unknown>).filetype === 'application/pdf';
-  if (isPdf(node)) {
-    openPreview();
+  if (isPdfNode(node)) {
+    open(id, namedFileUrl(id));
     return;
   }
   if (!node) {
     void nodesStore.fetch({ id }).then(
       () => {
-        if (isPdf(nodesStore.getById(id))) openPreview();
+        if (isPdfNode(nodesStore.getById(id))) open(id, namedFileUrl(id));
         else window.open(href, '_blank', 'noopener');
       },
       () => window.open(href, '_blank', 'noopener'),
@@ -176,6 +182,44 @@ const handlePdfLinkClick = (event: MouseEvent) => {
     return;
   }
   window.open(href, '_blank', 'noopener');
+};
+
+const isPdfNode = (n: Partial<Node> | undefined): boolean => {
+  const meta = n?.metadata;
+  return !!meta && typeof meta === 'object' && (meta as Record<string, unknown>).filetype === 'application/pdf';
+};
+
+const namedFileUrl = (id: string): string => {
+  const name = nodesStore.getById(id)?.name || 'file.pdf';
+  return `/api/resources/${id}/file/${encodeURIComponent(name)}`;
+};
+
+// Annotation links (`#annotation:<uuid>`, bare or pasted with text) open
+// the side panel at the annotation (or the file at its page elsewhere).
+const handleAnnotationLinkClick = (event: MouseEvent) => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+  if (!link) return;
+  const id = link.dataset.annotationLink || /^#annotation:([0-9a-fA-F-]{36})$/.exec(link.getAttribute('href') ?? '')?.[1];
+  if (!id) return;
+  event.preventDefault();
+  void (async () => {
+    try {
+      const res = await makeRequest<PdfAnn>(`annotations/${id}`, 'GET', {});
+      if (res.status !== 'success' || !res.result) throw new Error(res.message || 'annotation load failed');
+      const ann = res.result;
+      let node = nodesStore.getById(ann.resource_id);
+      if (!node) node = await nodesStore.fetch({ id: ann.resource_id }).catch(() => undefined);
+      const fileUrl = `/api/resources/${ann.resource_id}/file/${encodeURIComponent(node?.name || 'file.pdf')}`;
+      if (openPdfPanel) {
+        openPdfPanel({ resourceId: ann.resource_id, fileUrl, title: node?.name || 'PDF', page: ann.page, annotationId: ann.id });
+      } else {
+        window.open(`${fileUrl}#page=${ann.page}`, '_blank', 'noopener');
+      }
+    } catch (e) {
+      notifications.add({ type: 'error', title: t('common.status.error'), message: String(e) });
+    }
+  })();
 };
 
 // Navigate internal document links (#<id>) through the router, without a full page reload
@@ -195,6 +239,7 @@ const handleClick = (event: MouseEvent) => {
   handleCodeCopyClick(event);
   handleCodeToggleClick(event);
   handleInternalLinkClick(event);
+  handleAnnotationLinkClick(event);
   handlePdfLinkClick(event);
 };
 
@@ -225,9 +270,30 @@ function runMermaidRender() {
   renderMermaidDiagrams(rootElement.value, { dark: colorMode.value === 'dark' });
 }
 
+// Inline PDFs (stock viewer iframes + view-only overlays): embeds always,
+// plain links only in inline mode. Rebuilt when the HTML re-renders.
+let inlinePdf: ReturnType<typeof createInlinePdf> | null = null;
+
 function runPdfEmbeds() {
   if (!rootElement.value) return;
-  renderPdfEmbeds(rootElement.value);
+  inlinePdf?.destroy();
+  inlinePdf = createInlinePdf(rootElement.value, {
+    mode: () => pdfMode.value,
+    openPanel: payload => {
+      if (openPdfPanel) openPdfPanel(payload);
+      else window.open(payload.fileUrl, '_blank', 'noopener');
+    },
+    listAnnotations: async resourceId => {
+      const res = await makeRequest<PdfAnn[]>(`resources/${resourceId}/annotations`, 'GET', {});
+      if (res.status !== 'success' || !res.result) throw new Error(res.message || 'annotations load failed');
+      return res.result;
+    },
+    colorOf: i => PDF_ANNOT_COLORS[i] ?? PDF_ANNOT_COLORS[0]!,
+    isPdfResource: id => isPdfNode(nodesStore.getById(id)),
+    fileNameOf: id => nodesStore.getById(id)?.name || 'file.pdf',
+  });
+  inlinePdf.mountEmbeds();
+  inlinePdf.ensureLinkMode();
   renderExtEmbeds(rootElement.value);
 }
 
@@ -258,10 +324,10 @@ onMounted(() => {
   });
   onUnmounted(() => {
     unsub();
-    if (rootElement.value) unmountPdfEmbeds(rootElement.value);
+    inlinePdf?.destroy();
+    inlinePdf = null;
   });
 });
-
 watch(
   html,
   async () => {
@@ -282,6 +348,12 @@ watch(
     runMermaidRender();
   },
 );
+
+// Per-note / global PDF mode flips re-render plain links (inline viewers
+// mount or restore to links); embeds are mode-independent.
+watch(pdfMode, () => {
+  inlinePdf?.ensureLinkMode();
+});
 </script>
 
 <style lang="scss" scoped>

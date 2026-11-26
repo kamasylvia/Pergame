@@ -146,6 +146,20 @@ export default {
     linkCopied: 'Lien copié dans le presse-papiers',
   },
 
+  pdf: {
+    commentPlaceholder: 'Écrire un commentaire…',
+    downloadWithAnnotations: 'Télécharger une copie annotée',
+    preview: 'Aperçu PDF',
+    previewDefault: 'Aperçu PDF par défaut',
+    previewFollowDefault: 'Suivre le défaut',
+    previewInline: 'En ligne',
+    previewMode: 'Aperçu PDF : {mode}',
+    previewSide: 'Panneau latéral',
+    refs: 'Lié depuis',
+    selectionHint: 'Sélectionnez du texte dans le PDF pour créer une annotation',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: 'Que voulez-vous faire ?',

@@ -91,6 +91,7 @@ export const DEFAULT_PREFERENCES = {
   directoryShowCreated: false as boolean,
   directoryShowRefs: true as boolean,
   directoryShowTags: true as boolean,
+  pdfPreviewDefault: 'side' as 'side' | 'inline',
   sortKey: 'name' as 'name' | 'created' | 'modified',
   sortOrder: 'ascending' as 'ascending' | 'descending',
   stylesInjectionEnabled: false as boolean,
@@ -133,6 +134,7 @@ export const GENERAL_KEYS: PreferenceKey[] = [
   'directoryShowCreated',
   'directoryShowRefs',
   'directoryShowTags',
+  'pdfPreviewDefault',
 ];
 
 export const EDITOR_KEYS: PreferenceKey[] = [

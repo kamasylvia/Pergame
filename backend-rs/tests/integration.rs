@@ -3132,3 +3132,132 @@ async fn mcp_resource_binary_roundtrip() {
 
     cleanup_user(&user_id).await;
 }
+
+/// PDF annotations: create/list/update/delete on a PDF resource, doc links
+/// (`#annotation:<uuid>`) reconcile into annotation_refs, gates hold.
+#[tokio::test]
+#[ignore = "requires a running backend-rs with PostgreSQL + S3 storage"]
+async fn pdf_annotations_lifecycle() {
+    let client = Client::new();
+    let (user_id, _) = signup_and_login_tagged(&client, "pdfann").await;
+    let stranger = Client::new();
+    let (user_b, _) = signup_and_login_tagged(&stranger, "pdfannb").await;
+
+    // A PDF resource to annotate (bytes never parsed server-side).
+    let (status, up) = upload_file(&client, "paper.pdf", "application/pdf", b"%PDF-1.4 fake").await;
+    assert_eq!(status, 200, "upload failed: {:?}", up.message);
+    let rid = result_id_string(&up);
+    let quad = json!([{"x0": 10.0, "y0": 20.0, "x1": 110.0, "y1": 40.0}]);
+
+    let (status, r) = post_json(
+        &client,
+        &format!("/resources/{rid}/annotations"),
+        &json!({"page": 3, "quads": quad, "quote": "some claim", "comment": "check this", "color": 2}),
+    )
+    .await;
+    assert_eq!(status, 200, "create failed: {:?}", r.message);
+    let aid = r.result["id"].as_str().unwrap().to_string();
+    assert_eq!(r.result["page"], json!(3));
+    assert_eq!(r.result["color"], json!(2));
+
+    let (status, r) = get(&client, &format!("/resources/{rid}/annotations")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 1);
+    assert_eq!(r.result[0]["quote"], json!("some claim"));
+
+    let (status, r) = patch_json(
+        &client,
+        &format!("/annotations/{aid}"),
+        &json!({"comment": "verified", "color": 5}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["comment"], json!("verified"));
+    assert_eq!(r.result["color"], json!(5));
+    let (status, r) = get(&client, &format!("/annotations/{aid}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["resource_id"], json!(rid));
+    // Doc links reconcile: link, refs show it; unlink, refs clear.
+    let (status, r) = post_json(
+        &client,
+        "/nodes",
+        &json!({"name": "N", "role": 3, "content": format!("see [mark](#annotation:{aid})")}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let nid = result_id_string(&r);
+    let (status, r) = get(&client, &format!("/annotations/{aid}/refs")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 1);
+    assert_eq!(r.result[0]["id"], json!(nid));
+    let (status, _) = put_json(
+        &client,
+        &format!("/nodes/{nid}"),
+        &json!({"name": "N", "role": 3, "content": "no links here"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, r) = get(&client, &format!("/annotations/{aid}/refs")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 0);
+
+    // Gates: bad geometry, bad page/color, non-PDF target, strangers.
+    let (status, _) = post_json(
+        &client,
+        &format!("/resources/{rid}/annotations"),
+        &json!({"page": 1, "quads": []}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = post_json(
+        &client,
+        &format!("/resources/{rid}/annotations"),
+        &json!({"page": 0, "quads": quad}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = post_json(
+        &client,
+        &format!("/resources/{rid}/annotations"),
+        &json!({"page": 1, "quads": quad, "color": 8}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = post_json(
+        &client,
+        &format!("/resources/{nid}/annotations"),
+        &json!({"page": 1, "quads": quad}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, upng) = upload_file(&stranger, "img.png", "image/png", b"data").await;
+    assert_eq!(status, 200);
+    let pngid = result_id_string(&upng);
+    let (status, _) = post_json(
+        &stranger,
+        &format!("/resources/{pngid}/annotations"),
+        &json!({"page": 1, "quads": quad}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = get(&stranger, &format!("/resources/{rid}/annotations")).await;
+    assert!(status == 403 || status == 404, "unexpected {status}");
+    let (status, _) = post_json(
+        &stranger,
+        &format!("/resources/{rid}/annotations"),
+        &json!({"page": 1, "quads": quad}),
+    )
+    .await;
+    assert!(status == 403 || status == 404, "unexpected {status}");
+
+    // Delete cascades the annotation (refs already unlinked above).
+    let (status, r) = del(&client, &format!("/annotations/{aid}")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result["deleted"], json!(true));
+    let (status, r) = get(&client, &format!("/resources/{rid}/annotations")).await;
+    assert_eq!(status, 200);
+    assert_eq!(r.result.as_array().unwrap().len(), 0);
+
+    cleanup_user(&user_id).await;
+    cleanup_user(&user_b).await;
+}

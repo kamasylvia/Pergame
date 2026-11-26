@@ -145,6 +145,20 @@ export default {
     linkCopied: '已複製連結到剪貼簿',
   },
 
+  pdf: {
+    commentPlaceholder: '寫下批註…',
+    downloadWithAnnotations: '下載含批註副本',
+    preview: 'PDF 預覽',
+    previewDefault: '預設 PDF 預覽方式',
+    previewFollowDefault: '跟隨預設',
+    previewInline: '內嵌',
+    previewMode: 'PDF 預覽：{mode}',
+    previewSide: '右側面板',
+    refs: '引用此批註的文件',
+    selectionHint: '在 PDF 中劃選文字以建立批註',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: '你想要做什麼？',

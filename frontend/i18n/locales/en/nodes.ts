@@ -146,6 +146,20 @@ export default {
     linkCopied: 'Link copied to clipboard',
   },
 
+  pdf: {
+    commentPlaceholder: 'Write a comment…',
+    downloadWithAnnotations: 'Download copy with annotations',
+    preview: 'PDF preview',
+    previewDefault: 'Default PDF preview',
+    previewFollowDefault: 'Follow default',
+    previewInline: 'Inline',
+    previewMode: 'PDF preview: {mode}',
+    previewSide: 'Side panel',
+    refs: 'Linked from',
+    selectionHint: 'Select text in the PDF to create an annotation',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: 'What do you want to do?',

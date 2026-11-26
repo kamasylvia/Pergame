@@ -1,0 +1,1 @@
+BUILD-SOURCE: pdf.js v6.5.438 tag, npx gulp generic; layout mirrors build/generic/{web,build}; dropped: test pdf/debugger/sourcemaps/locales(except en-US,zh-CN,zh-TW)

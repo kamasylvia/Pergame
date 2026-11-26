@@ -146,6 +146,20 @@ export default {
     linkCopied: 'Link in die Zwischenablage kopiert',
   },
 
+  pdf: {
+    commentPlaceholder: 'Kommentar schreiben…',
+    downloadWithAnnotations: 'Kopie mit Anmerkungen herunterladen',
+    preview: 'PDF-Vorschau',
+    previewDefault: 'Standard-PDF-Vorschau',
+    previewFollowDefault: 'Standard folgen',
+    previewInline: 'Eingebettet',
+    previewMode: 'PDF-Vorschau: {mode}',
+    previewSide: 'Seitenleiste',
+    refs: 'Verlinkt aus',
+    selectionHint: 'Text im PDF markieren, um eine Anmerkung zu erstellen',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: 'Was möchtest du tun?',

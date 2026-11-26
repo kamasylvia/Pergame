@@ -32,6 +32,7 @@
     "mermaid": "^12.2.0",
     "nuxt": "^4.6.2",
     "pathe": "^2.0.3",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "pinia": "^4.1.0",
     "postcss-scss": "^4.0.9",

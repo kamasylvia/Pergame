@@ -34,6 +34,8 @@
         <template v-if="node.role == 3">
           <label for="category">{{ t('settings.documents.theme') }}</label>
           <AppSelect v-model="node.theme" :items="DOCUMENT_THEMES" :nullable="true" :placeholder="t('settings.documents.theme')" />
+          <label>{{ t('nodes.pdf.preview') }}</label>
+          <AppRadio v-model="pdfPreviewSel" :items="pdfPreviewOptions" />
         </template>
         <div class="setting-row">
           <label for="accessibility">{{ t('common.labels.color') }}</label>
@@ -78,6 +80,22 @@ onBeforeMount(async () => {
 });
 
 watch(pinnedToggle, val => (node.value.order = val ? -1 : 0));
+
+// Per-note PDF mode (undefined = follow the global default).
+const pdfPreviewOptions = computed(() => [
+  { id: 'default', label: t('nodes.pdf.previewFollowDefault') },
+  { id: 'side', label: t('nodes.pdf.previewSide') },
+  { id: 'inline', label: t('nodes.pdf.previewInline') },
+]);
+const pdfPreviewSel = computed({
+  get: () => node.value.metadata?.pdfPreview ?? 'default',
+  set: (v: string) => {
+    const meta = { ...(node.value.metadata ?? {}) };
+    if (v === 'side' || v === 'inline') meta.pdfPreview = v;
+    else delete meta.pdfPreview;
+    node.value.metadata = meta;
+  },
+});
 watch(
   node,
   debounce(async val => {

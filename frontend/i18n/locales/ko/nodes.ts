@@ -145,6 +145,20 @@ export default {
     linkCopied: '링크가 클립보드에 복사되었습니다',
   },
 
+  pdf: {
+    commentPlaceholder: '주석 작성…',
+    downloadWithAnnotations: '주석 포함 사본 다운로드',
+    preview: 'PDF 미리보기',
+    previewDefault: '기본 PDF 미리보기',
+    previewFollowDefault: '기본값 따르기',
+    previewInline: '인라인',
+    previewMode: 'PDF 미리보기: {mode}',
+    previewSide: '사이드 패널',
+    refs: '연결된 문서',
+    selectionHint: 'PDF에서 텍스트를 선택하여 주석 만들기',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: '무엇을 하시겠습니까?',

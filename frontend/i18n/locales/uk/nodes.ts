@@ -146,6 +146,20 @@ export default {
     linkCopied: 'Посилання скопійовано в буфер обміну',
   },
 
+  pdf: {
+    commentPlaceholder: 'Написати коментар…',
+    downloadWithAnnotations: 'Завантажити копію з анотаціями',
+    preview: 'Перегляд PDF',
+    previewDefault: 'Типовий перегляд PDF',
+    previewFollowDefault: 'За замовчуванням',
+    previewInline: 'Вбудований',
+    previewMode: 'Перегляд PDF: {mode}',
+    previewSide: 'Бічна панель',
+    refs: 'Посилання звідси',
+    selectionHint: 'Виділіть текст у PDF, щоб створити анотацію',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: 'Що ви хочете зробити?',

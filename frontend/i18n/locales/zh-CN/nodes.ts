@@ -145,6 +145,20 @@ export default {
     linkCopied: '已复制链接到剪贴板',
   },
 
+  pdf: {
+    commentPlaceholder: '写下批注…',
+    downloadWithAnnotations: '下载含批注副本',
+    preview: 'PDF 预览',
+    previewDefault: '默认 PDF 预览方式',
+    previewFollowDefault: '跟随默认',
+    previewInline: '内嵌',
+    previewMode: 'PDF 预览：{mode}',
+    previewSide: '右侧面板',
+    refs: '引用此批注的文档',
+    selectionHint: '在 PDF 中划选文字以创建批注',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: '你想要做什么？',

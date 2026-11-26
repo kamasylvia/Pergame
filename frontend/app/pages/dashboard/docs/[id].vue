@@ -9,8 +9,18 @@
         <NodeDocumentFooter :document="node" :next="next" :previous="previous" />
       </div>
 
-      <div v-if="!devise.isTablet.value && !hideTOC" class="toc">
+      <div v-if="!devise.isTablet.value && !hideTOC && !pdfPanel" class="toc">
         <NodeTOC :doc="node" :element="element" style="width: 320px; margin-left: 20px" />
+      </div>
+      <div v-if="pdfPanel" class="pdf-side">
+        <NodeResourcePdfSidePanel
+          :resource-id="pdfPanel.resourceId"
+          :file-url="pdfPanel.fileUrl"
+          :title="pdfPanel.title"
+          :page="pdfPanel.page"
+          :annotation-id="pdfPanel.annotationId"
+          @close="pdfPanel = null"
+        />
       </div>
     </div>
     <Error v-else :error="error" />
@@ -166,6 +176,10 @@ function handleDocumentKeydown(e: KeyboardEvent) {
     router.push(`/dashboard/docs/${previous.value.id}`);
   }
   if (e.key === 'Escape') {
+    if (pdfPanel.value) {
+      pdfPanel.value = null;
+      return;
+    }
     // Close context menu on Escape
     contextMenu.close();
   }
@@ -182,6 +196,23 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
+});
+
+// PDF side panel (SiYuan mode): plain PDF / annotation link clicks land
+// here via ContentCompiled; closed on navigation.
+interface PdfPanelState {
+  resourceId: string;
+  fileUrl: string;
+  title: string;
+  page?: number;
+  annotationId?: string | null;
+}
+const pdfPanel = ref<PdfPanelState | null>(null);
+provide('openPdfPanel', (p: PdfPanelState) => {
+  pdfPanel.value = p;
+});
+watch(documentId, () => {
+  pdfPanel.value = null;
 });
 </script>
 
@@ -205,5 +236,15 @@ onUnmounted(() => {
   .toc {
     display: none;
   }
+}
+
+.pdf-side {
+  flex: 0 0 560px;
+  max-width: 48%;
+  min-width: 380px;
+  height: calc(100vh - 140px);
+  position: sticky;
+  top: 70px;
+  margin-left: 20px;
 }
 </style>

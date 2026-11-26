@@ -146,6 +146,20 @@ export default {
     linkCopied: 'Link copiato negli appunti',
   },
 
+  pdf: {
+    commentPlaceholder: 'Scrivi un commento…',
+    downloadWithAnnotations: 'Scarica copia con annotazioni',
+    preview: 'Anteprima PDF',
+    previewDefault: 'Anteprima PDF predefinita',
+    previewFollowDefault: 'Segui predefinita',
+    previewInline: 'In linea',
+    previewMode: 'Anteprima PDF: {mode}',
+    previewSide: 'Pannello laterale',
+    refs: 'Collegato da',
+    selectionHint: 'Seleziona il testo nel PDF per creare un’annotazione',
+    settingsSection: 'PDF',
+  },
+
   // From the shared_target api (PWA)
   share: {
     actionChoose: 'Cosa vuoi fare?',

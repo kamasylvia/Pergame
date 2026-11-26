@@ -484,6 +484,21 @@ async fn main() {
             "/api/resources/{id}/file/{name}",
             get(routes::resources::download_file_named),
         )
+        // PDF annotations (SiYuan-style rows; file bytes stay clean).
+        .route(
+            "/api/resources/{id}/annotations",
+            get(routes::annotations::list_annotations).post(routes::annotations::create_annotation),
+        )
+        .route(
+            "/api/annotations/{id}",
+            get(routes::annotations::get_annotation)
+                .patch(routes::annotations::update_annotation)
+                .delete(routes::annotations::delete_annotation),
+        )
+        .route(
+            "/api/annotations/{id}/refs",
+            get(routes::annotations::annotation_refs),
+        )
         // Orphan cleanup: objects nothing references any more (SiYuan's
         // "unused assets"), scoped to the caller's own prefix.
         .route(

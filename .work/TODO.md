@@ -5,9 +5,19 @@
 
 > 2026-11-07 重构:双批次结构。已完成事项入 commit 历史 + AGENTS.md 决策记录,不留在本文件。
 
+## PDF 阅读器整页 + 思源式批注(2026-11-26)
+
+- [x] **官方 viewer 整页**:mozilla/pdf.js v6.5.438 `gulp generic` vendor 到 `public/pdfjs`(裁 locale/测试/debug,8MB,布局照搬);`ResourcePreviewModal` 止损删(存活半天,被面板取代);`![pdf]` 与内嵌模式改整页 iframe。
+- [x] **思源式批注(只做双链,不写文件)**:`pdf_annotations`＋`annotation_refs`(migration 0016,quads=PDF 点坐标);CRUD/refs API(读=文件 Read,写=创建者或文件 Update,create 限 PDF);`#annotation:` reconcile  ride `reconcile_refs`＋restore 回填;`pdf_annotations_lifecycle` 绿。
+- [x] **覆盖层桥**:同源 iframe 注入——官方编辑器按钮 CSS 藏＋事件卫栏锁 NONE;高亮 div 逐页绘制(zoom/rotate 重绘);划选转 quads(单页,64 上限);悬浮看 comment,点开编辑器(改色/改注/复制链接/删/反链跳文档)。
+- [x] **两种预览方式**:右侧面板(560px sticky,TOC 让位,Esc 关,跳文档关)为默认;内嵌(链接就地变 viewer);全局默认设置＋单篇页眉切换＋Metadata 回跟随默认。
+- [x] **下载含批注**:pdf-lib 现场烧标准 `/Highlight`(QuadPoints＋Contents＋颜色＋Print 标记)副本下载,原文件恒干净;viewer 自带下载=不带批注。
+- [x] **坑**:viewer 自带 CSP 杀内联 `<style>`(静态规则改外部 link 注入,CSSOM 写活着);`annotationEditorMode={-1}` setter 不认 DISABLE(改事件卫栏);v6 无 `convertToViewportRectangle`(用 Point 版);`contentFrame().evaluate` 上下文错位(探针改父上下文)。
+- [x] **实测**:临时用户全链——划选建批注→落库→重载绘高亮→点高亮开编辑→文档 `#annotation:` 深链跳面板闪烁→内嵌切换→下载复 parse 1 annot→zoom 重绘;探针已删。
+
 ## PDF 页内预览 + 本地栈修复(2026-11-26)
 
-- [x] **普通 PDF 链接页内预览**:正文普通 `[]()` PDF 链接(之前点开跳走)现拦截弹大窗 `ResourcePreviewModal`(标题 + `LazyPDFViewer` + 关闭);命名 URL 按扩展名判,老裸 `/file` URL 查库 mime(缺行即拉,非 PDF 回退新标签页);修饰键/中键仍开新标签;外部 PDF 不拦截。临时用户浏览器实测 5 页 PDF 窗内渲染。
+- [x] **普通 PDF 链接页内预览**(已被整页面板取代,见上):正文普通 `[]()` PDF 链接拦截弹大窗 `ResourcePreviewModal`(已删);命名 URL 按扩展名判,老裸 `/file` URL 查库 mime;修饰键/中键开新标签;外部 PDF 不拦截。临时用户浏览器实测 5 页 PDF 窗内渲染。
 - [x] **本地栈修复**:后端 session 退出后未拉(补起,`:8201` 200);前端 dev 只绑 IPv6(`[::1]:3000`,v4 拒绝致浏览器刷不出),改 `--host` 双栈(`*:3000`,v4 200)。
 
 ## 目录树后续 + MCP 二进制资源(2026-11-25)
