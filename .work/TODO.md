@@ -13,7 +13,8 @@
 - [x] **两种预览方式**:右侧面板(560px sticky,TOC 让位,Esc 关,跳文档关)为默认;内嵌(链接就地变 viewer,保留静态标题);全局默认设置＋单篇 Metadata 下拉。
 - [x] **阅读器打磨**:Metadata 内 PDF 预览改 AppSelect 下拉(与 Parent/Theme 一致);页眉切换钮删(只留文档级设置,顺手删 `previewMode` 死键);内嵌 viewer 上方保留原文标题(静态 div,不可点);默认方式设置 Other→Documents 页(用户审批);Other 续清(用户审批):开发者模式→Advanced、高级视图＋每页条数→Documents、移动确认只留目录齿轮(删 Other 侧),排序＋上传目录留守,死键 `datatable`/`otherSection` 八语同删;面板 flex 吸留白(文档钉宽,面板 460→728,隐藏侧栏时;无面板 800 不变);内嵌改 aspect-ratio 高(一整页,736×1001 实测);Document size 进文档级 Metadata 下拉(跟随默认/S/M/L),全局变默认项(`resolveDocSize`;700 与跟随默认渲染实测,Large 同路未单独渲染)。
 - [x] **文档级设置即时生效**:Metadata 选中直写 store 行(PDF/宽度选中→渲染 0ms 实测),防抖 PUT 后台持久;store.update 加 `skipRefresh`(调用方声明 listing 无关),目录块自动保存 ride;编辑器活体绑定保持原样(防目录排序回退)。
-- [x] **文档级设置改右侧面板**:Metadata 表单抽 `MetadataForm`(弹窗/面板共用),文档页右侧栏 PDF/设置二选一(Esc 关,跳文档关,TOC 让位);页眉齿轮优先开面板(公开页/文件夹页仍弹窗);面板内改宽度即时生效实测。
+- [x] **文档级设置改右侧面板**:Metadata 表单抽 `MetadataForm`(弹窗/面板共用),文档页右侧栏 PDF/设置二选一(Esc 关,跳文档关,TOC 让位);页眉齿轮优先开面板(公开页仍弹窗,文件夹页后改面板见下);面板内改宽度即时生效实测。
+- [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **下载含批注**:pdf-lib 现场烧标准 `/Highlight`(QuadPoints＋Contents＋颜色＋Print 标记)副本下载,原文件恒干净;viewer 自带下载=不带批注。
 - [x] **坑**:viewer 自带 CSP 杀内联 `<style>`(静态规则改外部 link 注入,CSSOM 写活着);`annotationEditorMode={-1}` setter 不认 DISABLE(改事件卫栏);v6 无 `convertToViewportRectangle`(用 Point 版);`contentFrame().evaluate` 上下文错位(探针改父上下文)。

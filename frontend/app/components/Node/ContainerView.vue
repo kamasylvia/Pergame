@@ -56,6 +56,8 @@
       </header>
     </Teleport>
     <!-- Content based on view mode -->
+    <div class="container-body">
+      <div class="container-main">
     <div v-if="filteredNodes.length" class="node-content">
       <!-- Overview (index template v2 inlined): children + recently viewed -->
       <NodeOverviewTables v-if="view === 'overview' && parent" :container-id="parent.id" />
@@ -94,6 +96,11 @@
         <AppButton type="link">{{ t('nodes.container.createNewDocument') }}</AppButton>
       </NuxtLink>
     </NoContent>
+      </div>
+      <div v-if="metaOpen && parent" class="doc-side">
+        <NodeDocumentMetadataPanel :doc="parent" @close="metaOpen = false" />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -101,7 +108,6 @@
 import NodePermissions from '~/components/Node/Modals/Permissions.vue';
 import NodeDeleteModal from '~/components/Node/Modals/Delete.vue';
 import RemoveSharedNode from '~/components/Node/Modals/RemoveShared.vue';
-import NodeMetadataModal from '~/components/Node/Modals/Metadata.vue';
 import NodeOverviewTables from '~/components/Node/OverviewTables.vue';
 import KanbanBoard, { type KanbanMetadata } from '~/components/Kanban/Board.vue';
 import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
@@ -153,7 +159,18 @@ const openPermissionsModal = () => {
 const openRemoveShareModal = () => {
   if (props.parent) modals.add(new Modal(shallowRef(RemoveSharedNode), { props: { nodeId: props.parent.id }, size: 'small' }));
 };
-const openEditModal = () => modals.add(new Modal(shallowRef(NodeMetadataModal), { props: { doc: props.parent }, size: 'small' }));
+// Doc settings live in the right-side panel (same slot style as the doc
+// page PDF panel); closed when the container changes.
+const metaOpen = ref(false);
+const openEditModal = () => {
+  metaOpen.value = true;
+};
+watch(
+  () => props.parent?.id,
+  () => {
+    metaOpen.value = false;
+  },
+);
 
 const openDeleteModal = () => {
   if (props.parent) modals.add(new Modal(shallowRef(NodeDeleteModal), { size: 'small', props: { node: props.parent, redirect: '/dashboard' } }));
@@ -189,6 +206,25 @@ function createDocumentInColumn(columnId: string) {
 </script>
 
 <style scoped lang="scss">
+.container-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.container-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-side {
+  position: sticky;
+  top: 70px;
+  flex: 0 1 480px;
+  min-width: 340px;
+  height: calc(100vh - 140px);
+}
+
 header {
   display: flex;
   flex-wrap: wrap;
