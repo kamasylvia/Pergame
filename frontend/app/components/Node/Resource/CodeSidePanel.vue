@@ -125,10 +125,28 @@ function download() {
   // itself so short files don't leave a gap below the code.
   background: var(--code-bg);
   font-size: 0.85rem;
+  // Thin neutral scrollbars: with always-visible OS scrollbars the native
+  // light track used to sit as a pale strip at the panel bottom.
+  scrollbar-width: thin;
+  scrollbar-color: rgb(127 127 127 / 45%) transparent;
 
   // Single scroll container on the pre (doc-block parity).
   code.hljs {
     overflow-x: visible;
+  }
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: rgb(127 127 127 / 45%);
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 </style>
