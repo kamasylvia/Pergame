@@ -147,6 +147,13 @@ export default {
     linkCopied: '링크가 클립보드에 복사되었습니다',
   },
 
+  code: {
+    tooLarge: '미리보기에는 파일이 너무 큽니다.',
+    binary: '텍스트가 아닌 바이너리 파일로 보입니다.',
+    loadFailed: '파일을 불러오지 못했습니다.',
+    copied: '코드가 복사되었습니다',
+  },
+
   pdf: {
     commentPlaceholder: '주석 작성…',
     downloadWithAnnotations: '주석 포함 사본 다운로드',

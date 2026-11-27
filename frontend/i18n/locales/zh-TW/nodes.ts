@@ -147,6 +147,13 @@ export default {
     linkCopied: '已複製連結到剪貼簿',
   },
 
+  code: {
+    tooLarge: '檔案太大，無法預覽。',
+    binary: '該檔案疑似二進位，不是文字。',
+    loadFailed: '檔案載入失敗。',
+    copied: '程式碼已複製',
+  },
+
   pdf: {
     commentPlaceholder: '寫下批註…',
     downloadWithAnnotations: '下載含批註副本',

@@ -148,6 +148,13 @@ export default {
     linkCopied: 'Link copiato negli appunti',
   },
 
+  code: {
+    tooLarge: 'File troppo grande per l’anteprima.',
+    binary: 'Il file sembra binario, non testo.',
+    loadFailed: 'Impossibile caricare il file.',
+    copied: 'Codice copiato negli appunti',
+  },
+
   pdf: {
     commentPlaceholder: 'Scrivi un commento…',
     downloadWithAnnotations: 'Scarica copia con annotazioni',

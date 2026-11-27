@@ -25,6 +25,7 @@ import { renderExtEmbeds } from '~/helpers/markdown/embeds';
 import { renderAbcBlocks } from '~/helpers/abc-render';
 import { renderDataviewBlocks } from '~/helpers/dataview-render';
 import { renderCodeEmbeds } from '~/helpers/code-embed';
+import { isCodeFile } from '~/helpers/resources';
 import { resolveNodeLink } from '~/helpers/node';
 import { createInlinePdf, type PdfPanelPayload } from '~/helpers/pdf-inline';
 import { PDF_ANNOT_COLORS, resolvePdfMode } from '~/helpers/pdf-mode';
@@ -42,8 +43,9 @@ const notifications = useNotifications();
 const { t } = useI18nT();
 
 // Provided by the doc page; absent on surfaces without a side panel
-// (public docs), where PDF/annotation links open a new tab instead.
+// (public docs), where PDF/code/annotation links open a new tab instead.
 const openPdfPanel = inject<((p: PdfPanelPayload) => void) | undefined>('openPdfPanel', undefined);
+const openCodePanel = inject<((p: { fileUrl: string; title: string }) => void) | undefined>('openCodePanel', undefined);
 
 const pdfDefault = preferences.get('pdfPreviewDefault');
 const pdfMode = computed(() => resolvePdfMode(props.node, pdfDefault.value ?? 'side'));
@@ -134,9 +136,9 @@ const handleCodeToggleClick = (e: MouseEvent) => {
   btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
 };
 
-// Plain PDF links to our own resources open the side panel (or a new tab
-// where no panel exists). Named URLs match by extension; legacy bare
-// /file URLs resolve the stored mime through the nodes store.
+// Plain PDF/code links to our own resources open the side panel (or a new
+// tab where no panel exists). Named URLs match by extension; legacy bare
+// /file URLs resolve the stored name through the nodes store.
 const handlePdfLinkClick = (event: MouseEvent) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
@@ -156,11 +158,21 @@ const handlePdfLinkClick = (event: MouseEvent) => {
     if (openPdfPanel) openPdfPanel({ resourceId, fileUrl, title });
     else window.open(fileUrl, '_blank', 'noopener');
   };
+  const openCode = (fileUrl: string) => {
+    if (openCodePanel) openCodePanel({ fileUrl, title });
+    else window.open(fileUrl, '_blank', 'noopener');
+  };
+  const namedId = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file/)?.[1];
   if (/\.pdf([?#].*)?$/i.test(href)) {
-    const id = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file/)?.[1];
-    if (!id) return;
+    if (!namedId) return;
     event.preventDefault();
-    open(id, href);
+    open(namedId, href);
+    return;
+  }
+  const fileName = decodeURIComponent(path.split('/').pop() ?? '');
+  if (namedId && fileName && isCodeFile(fileName)) {
+    event.preventDefault();
+    openCode(href);
     return;
   }
   const bare = path.match(/^\/api\/resources\/([0-9a-fA-F-]{36})\/file\/?$/);
@@ -172,10 +184,16 @@ const handlePdfLinkClick = (event: MouseEvent) => {
     open(id, namedFileUrl(id));
     return;
   }
+  if (isCodeNode(node)) {
+    openCode(namedFileUrl(id));
+    return;
+  }
   if (!node) {
     void nodesStore.fetch({ id }).then(
       () => {
-        if (isPdfNode(nodesStore.getById(id))) open(id, namedFileUrl(id));
+        const fetched = nodesStore.getById(id);
+        if (isPdfNode(fetched)) open(id, namedFileUrl(id));
+        else if (isCodeNode(fetched)) openCode(namedFileUrl(id));
         else window.open(href, '_blank', 'noopener');
       },
       () => window.open(href, '_blank', 'noopener'),
@@ -189,6 +207,8 @@ const isPdfNode = (n: Partial<Node> | undefined): boolean => {
   const meta = n?.metadata;
   return !!meta && typeof meta === 'object' && (meta as Record<string, unknown>).filetype === 'application/pdf';
 };
+
+const isCodeNode = (n: Partial<Node> | undefined): boolean => !!n?.name && isCodeFile(n.name);
 
 const namedFileUrl = (id: string): string => {
   const name = nodesStore.getById(id)?.name || 'file.pdf';

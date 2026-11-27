@@ -148,6 +148,13 @@ export default {
     linkCopied: 'Link in die Zwischenablage kopiert',
   },
 
+  code: {
+    tooLarge: 'Datei ist zu groß für die Vorschau.',
+    binary: 'Die Datei sieht binär aus, nicht wie Text.',
+    loadFailed: 'Datei konnte nicht geladen werden.',
+    copied: 'Code in die Zwischenablage kopiert',
+  },
+
   pdf: {
     commentPlaceholder: 'Kommentar schreiben…',
     downloadWithAnnotations: 'Kopie mit Anmerkungen herunterladen',

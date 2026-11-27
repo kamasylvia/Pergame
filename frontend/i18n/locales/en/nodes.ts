@@ -148,6 +148,13 @@ export default {
     linkCopied: 'Link copied to clipboard',
   },
 
+  code: {
+    tooLarge: 'File is too large to preview.',
+    binary: 'This file looks binary, not text.',
+    loadFailed: 'Could not load the file.',
+    copied: 'Code copied to clipboard',
+  },
+
   pdf: {
     commentPlaceholder: 'Write a comment…',
     downloadWithAnnotations: 'Download copy with annotations',

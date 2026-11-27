@@ -20,14 +20,19 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function renderInto(el: HTMLElement, name: string, code: string) {
+/** Highlight once; unknown languages and hljs failures fall back to escaped text. */
+export function highlightCode(name: string, code: string): { lang: string; html: string } {
   const lang = codeLanguage(name);
-  let body: string;
   try {
-    body = lang && hljs.getLanguage(lang) ? hljs.highlight(code, { language: lang }).value : esc(code);
+    if (lang && hljs.getLanguage(lang)) return { lang, html: hljs.highlight(code, { language: lang }).value };
   } catch {
-    body = esc(code);
+    /* fall through to plain text */
   }
+  return { lang: lang || 'plaintext', html: esc(code) };
+}
+
+function renderInto(el: HTMLElement, name: string, code: string) {
+  const { lang, html: body } = highlightCode(name, code);
   const lines = code.replace(/\n$/, '').split('\n').length;
   const collapsible = lines > COLLAPSE_THRESHOLD;
   const footer = collapsible
@@ -56,6 +61,22 @@ function fallbackLink(el: HTMLElement, src: string, name: string) {
 }
 
 /**
+ * Fetches a resource as text for code display. Rejects when the body is
+ * missing, beyond MAX_BYTES, or looks binary (lone replacement char).
+ */
+export async function fetchCodeText(src: string): Promise<string> {
+  const resp = await fetch(src, { credentials: 'include' });
+  if (!resp.ok) throw new Error(`fetch ${resp.status}`);
+  const len = Number(resp.headers.get('content-length') || '0');
+  if (len > MAX_BYTES) throw new Error('too large');
+  const text = await resp.text();
+  if (text.length > MAX_BYTES || (text.length > 0 && text.includes('\uFFFD'))) {
+    throw new Error(text.length > MAX_BYTES ? 'too large' : 'binary');
+  }
+  return text;
+}
+
+/**
  * Fetches each placeholder's resource text and swaps in the code block.
  * re-render marks handled placeholders with data-code-embed-done.
  */
@@ -67,24 +88,7 @@ export async function renderCodeEmbeds(root: HTMLElement): Promise<void> {
     const name = el.dataset.name || src.split('/').pop() || '';
     if (!src) continue;
     try {
-      const resp = await fetch(src, { credentials: 'include' });
-      if (!resp.ok) {
-        fallbackLink(el, src, name);
-        continue;
-      }
-      const len = Number(resp.headers.get('content-length') || '0');
-      if (len > MAX_BYTES) {
-        fallbackLink(el, src, name);
-        continue;
-      }
-      const text = await resp.text();
-      // Non-UTF-8 bodies read as lossy garbage; a lone replacement char is
-      // the heuristic signal to treat the file as binary.
-      if (text.length > 0 && text.includes('\uFFFD')) {
-        fallbackLink(el, src, name);
-        continue;
-      }
-      renderInto(el, name, text);
+      renderInto(el, name, await fetchCodeText(src));
     } catch {
       fallbackLink(el, src, name);
     }

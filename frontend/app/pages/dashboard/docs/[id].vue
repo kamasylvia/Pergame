@@ -22,6 +22,12 @@
           :annotation-id="sidePanel.annotationId"
           @close="sidePanel = null"
         />
+        <NodeResourceCodeSidePanel
+          v-else-if="sidePanel.kind === 'code'"
+          :file-url="sidePanel.fileUrl"
+          :title="sidePanel.title"
+          @close="sidePanel = null"
+        />
         <NodeDocumentMetadataPanel v-else-if="node" :doc="node" @close="sidePanel = null" />
       </div>
     </div>
@@ -202,8 +208,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
 });
 
-// Right side panel: PDF viewer xor doc settings (one slot, TOC yields).
-// Plain PDF / annotation link clicks land here via ContentCompiled;
+// Right side panel: PDF / code viewer xor doc settings (one slot, TOC yields).
+// Plain PDF / code / annotation link clicks land here via ContentCompiled;
 // the header Metadata action lands here too. Closed on navigation.
 interface PdfPanelState {
   kind: 'pdf';
@@ -213,10 +219,18 @@ interface PdfPanelState {
   page?: number;
   annotationId?: string | null;
 }
-type SidePanelState = PdfPanelState | { kind: 'meta' };
+interface CodePanelState {
+  kind: 'code';
+  fileUrl: string;
+  title: string;
+}
+type SidePanelState = PdfPanelState | CodePanelState | { kind: 'meta' };
 const sidePanel = ref<SidePanelState | null>(null);
 provide('openPdfPanel', (p: Omit<PdfPanelState, 'kind'>) => {
   sidePanel.value = { ...p, kind: 'pdf' };
+});
+provide('openCodePanel', (p: Omit<CodePanelState, 'kind'>) => {
+  sidePanel.value = { ...p, kind: 'code' };
 });
 provide('openMetadataPanel', () => {
   sidePanel.value = { kind: 'meta' };

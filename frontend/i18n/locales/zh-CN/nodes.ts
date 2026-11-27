@@ -147,6 +147,13 @@ export default {
     linkCopied: '已复制链接到剪贴板',
   },
 
+  code: {
+    tooLarge: '文件太大，无法预览。',
+    binary: '该文件疑似二进制，不是文本。',
+    loadFailed: '文件加载失败。',
+    copied: '代码已复制',
+  },
+
   pdf: {
     commentPlaceholder: '写下批注…',
     downloadWithAnnotations: '下载含批注副本',

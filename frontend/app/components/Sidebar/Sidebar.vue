@@ -2,6 +2,10 @@
   <div :class="{ 'sidebar-mask': isMobile && isOpened }" />
   <Resizable>
     <Dock v-if="!isMobile && viewDock" />
+    <!-- One-click way back when the dock is hidden (the sidebar icon alone is undiscoverable). -->
+    <button v-else-if="!isMobile" class="dock-reopen" :title="t('components.sidebar.toggleDock')" :aria-label="t('components.sidebar.toggleDock')" @click="toggleDock">
+      <Icon name="dock" display="sm" />
+    </button>
     <div ref="scroller" class="sidebar" :class="{ compact: compactMode }">
       <section class="header">
         <span class="name">
@@ -252,6 +256,25 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+.dock-reopen {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 30px;
+  padding: 0.8rem 0;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background-color: var(--surface-raised-light);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--primary);
+    background-color: var(--primary-bg);
+  }
+}
+
 .sidebar {
   width: 100%;
   max-height: 100%;

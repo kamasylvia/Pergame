@@ -148,6 +148,13 @@ export default {
     linkCopied: 'Lien copié dans le presse-papiers',
   },
 
+  code: {
+    tooLarge: 'Fichier trop volumineux pour l’aperçu.',
+    binary: 'Ce fichier semble binaire, pas du texte.',
+    loadFailed: 'Impossible de charger le fichier.',
+    copied: 'Code copié dans le presse-papiers',
+  },
+
   pdf: {
     commentPlaceholder: 'Écrire un commentaire…',
     downloadWithAnnotations: 'Télécharger une copie annotée',
