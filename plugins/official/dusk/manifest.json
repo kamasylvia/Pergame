@@ -1,12 +1,38 @@
 {
   "id": "dusk",
   "name": "Dusk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": "1",
   "capabilities": ["themes"],
   "themes": [
     { "id": "dusk", "name": "Dusk", "file": "dusk.css", "darkFile": "dusk-dark.css" }
   ],
+  "codeThemes": [
+    {
+      "id": "ember",
+      "name": "Ember",
+      "vars": {
+        "bg": "#171310",
+        "fg": "#d3c9bb",
+        "comment": "#877b6a",
+        "keyword": "#f0b35c",
+        "type": "#e8c99a",
+        "literal": "#d99a3d",
+        "attr": "#a8c69f",
+        "number": "#d99a3d",
+        "string": "#a8c69f",
+        "function": "#f0b35c",
+        "class": "#e8c99a",
+        "variable": "#e07a5f",
+        "operator": "#f0b35c",
+        "section": "#d99a3d",
+        "addition": "#81b29a",
+        "deletion": "#e07a5f",
+        "meta": "#d99a3d",
+        "tag": "#a89c8a"
+      }
+    }
+  ],
   "author": "Pergame",
-  "description": "Example theme pack: warm copper accent on stone surfaces. No JavaScript — manifest plus two CSS files."
+  "description": "Example theme pack: warm copper accent on stone surfaces, plus the Ember code palette. No JavaScript — manifest plus two CSS files."
 }

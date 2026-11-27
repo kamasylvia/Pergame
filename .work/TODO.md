@@ -17,6 +17,7 @@
 - [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **文件夹 loading 误导**:ContainerView 空数组即判空(抓取中也显示“无文档”插画);加 `loading` prop,三调用页(分类/文档/团队)传抓取态,加载中显示 spinner＋Loading,空才显示 NoContent;三态浏览器实测。另:用户截到的 CSS 报错是编辑中途 HMR 瞬态(已自愈,现状 lint 全绿)。
+- [x] **代码配色分明暗＋插件化**:`codeTheme` 单键拆 `codeThemeLight/Dark`(旧键退役,仅存活 1 天不做迁移),Appearance 双下拉。插件 `codeThemes[]`(18 vars 全必填,值字符集防注入,同 `themes` capability,manifest 内联零抓取),host 动态样式表＋卸载回落。dusk 包加 Ember 配色(v1.1.0)＋docs 教程。浏览器全链实测:安装→授权→双下拉出 Ember→选中 vars 生效→UI 卸载回落 palenight(本地即时＋后端同步)。
 - [x] **代码面板底部留空**:`hljs` 类挂错盒子(pre 上而非 code 上,命中不了 `pre code.hljs` 规则,code 退化成行内样式)+pre 自身无底色。改 code 挂 hljs(块级＋1em 内边距＋配色)、pre 涂 `--code-bg` 兜底全高、横滚收拢到 pre。明暗双主题数值验收(pre 底边＝面板底边,elementFromPoint 底部三采样全落 code 上)。
 - [x] **dock 常驻＋代码主题跟随**:桌面端 dock 删隐藏/复现(dock 关闭钮、侧栏开关、重开条、设置项、`view_dock` 偏好全删,移动端本来就不显示)。代码高亮新增 Auto(默认)跟随深色模式(暗→palenight,亮→github-light),手动四档保留;SSR 同映射防闪烁。浏览器实测:无关闭入口、明暗自动切、手动覆盖钉住。
 - [x] **dock 重开＋脚本右侧预览**:dock 关后只剩侧栏小图标可重开(难发现),现隐藏时左沿留 30px 重开条(一键恢复,浏览器实测)。文档内脚本链接此前直接下载,现走右侧代码面板(CodeSidePanel:256KiB 上限＋二进制识别＋hljs＋复制/下载/关闭),命名/裸 URL 双路径,面板外回退新标签。code-embed 抽 `fetchCodeText/highlightCode` 复用。
