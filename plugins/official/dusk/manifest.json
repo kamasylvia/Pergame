@@ -1,0 +1,12 @@
+{
+  "id": "dusk",
+  "name": "Dusk",
+  "version": "1.0.0",
+  "apiVersion": "1",
+  "capabilities": ["themes"],
+  "themes": [
+    { "id": "dusk", "name": "Dusk", "file": "dusk.css", "darkFile": "dusk-dark.css" }
+  ],
+  "author": "Pergame",
+  "description": "Example theme pack: warm copper accent on stone surfaces. No JavaScript — manifest plus two CSS files."
+}

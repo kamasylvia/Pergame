@@ -137,6 +137,7 @@ async function toggleEnabled(plugin: AdminPluginRow, enabled: boolean) {
   if (response.status === 'success') {
     plugin.enabled = enabled;
     if (!enabled) await unloadHosted(plugin.id);
+    else if (plugin.granted.length) await reloadHosted(plugin);
   } else {
     report(t('settings.plugins.updateFailed'), response.message, 'error');
   }

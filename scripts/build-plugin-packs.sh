@@ -13,6 +13,10 @@ for dir in "$src"/*/; do
   if [ -d "$dir/src" ]; then
     (cd "$dir" && bun build src/main.ts --target browser --format esm --outfile main.mjs >/dev/null)
   fi
-  (cd "$dir" && zip -q "$out/$name.zip" manifest.json main.mjs)
+  # main.mjs only when the plugin ships JS (themes-only packs have none);
+  # plus every theme CSS file (flat or nested, never node_modules).
+  css_files="$(cd "$dir" && find . -name '*.css' -not -path './node_modules/*' | sed 's|^\./||')"
+  # shellcheck disable=SC2086
+  (cd "$dir" && zip -q "$out/$name.zip" manifest.json $([ -f main.mjs ] && echo main.mjs) $css_files)
   echo "packed $name.zip"
 done
