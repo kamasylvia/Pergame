@@ -82,8 +82,8 @@ function download() {
 
 .code-panel-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
@@ -91,16 +91,16 @@ function download() {
 
 .code-panel-title {
   font-weight: 600;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .code-panel-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
 }
 
 .code-panel-loading,
@@ -112,23 +112,24 @@ function download() {
 .code-panel-error {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
   align-items: flex-start;
+  gap: 0.75rem;
 }
 
 .code-panel-body {
   flex: 1;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  font-size: 0.85rem;
   // The inner code.hljs only covers its content height; paint the pre
   // itself so short files don't leave a gap below the code.
   background: var(--code-bg);
-  font-size: 0.85rem;
-  // Thin neutral scrollbars: with always-visible OS scrollbars the native
-  // light track used to sit as a pale strip at the panel bottom.
+  overflow: auto;
+  scrollbar-color: rgb(127 127 127 / 45%) var(--code-bg);
+  // Scrollbar gutter: element backgrounds don't paint under classic
+  // scrollbars, and transparent there reveals the white section beneath
+  // (the pale bottom-right strip). Paint the gutter code-bg instead.
   scrollbar-width: thin;
-  scrollbar-color: rgb(127 127 127 / 45%) transparent;
 
   // Single scroll container on the pre (doc-block parity).
   code.hljs {
@@ -145,12 +146,9 @@ function download() {
     background: rgb(127 127 127 / 45%);
   }
 
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  &::-webkit-scrollbar-track,
   &::-webkit-scrollbar-corner {
-    background: transparent;
+    background: var(--code-bg);
   }
 }
 </style>
