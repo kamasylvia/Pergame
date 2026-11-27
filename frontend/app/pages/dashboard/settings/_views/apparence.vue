@@ -14,6 +14,13 @@ const { t } = useI18nT();
 const colorMode = useColorMode();
 const localeOptions = useLocaleOptions();
 
+const codeThemeChoices = computed(() =>
+  codeThemeRegistry.value.map(palette => ({
+    label: palette.origin === 'builtin' ? palette.name : `${palette.name} (${palette.originName ?? palette.origin})`,
+    id: palette.id,
+  })),
+);
+
 const options = computed(
   () =>
     [
@@ -30,17 +37,18 @@ const options = computed(
             },
           },
           {
-            label: t('settings.appearance.codeTheme'),
-            description: t('settings.appearance.codeThemeDesc'),
+            label: t('settings.appearance.codeThemeLight'),
+            description: t('settings.appearance.codeThemeLightDesc'),
             type: 'select' as const,
-            key: 'codeTheme' as const,
-            choices: [
-              { label: t('settings.appearance.codeThemeAuto'), id: 'auto' },
-              { label: 'Palenight', id: 'palenight' },
-              { label: 'Dracula', id: 'dracula' },
-              { label: 'GitHub Light', id: 'github-light' },
-              { label: 'Solarized Light', id: 'solarized-light' },
-            ],
+            key: 'codeThemeLight' as const,
+            choices: codeThemeChoices.value,
+          },
+          {
+            label: t('settings.appearance.codeThemeDark'),
+            description: t('settings.appearance.codeThemeDarkDesc'),
+            type: 'select' as const,
+            key: 'codeThemeDark' as const,
+            choices: codeThemeChoices.value,
           },
           {
             label: t('settings.appearance.appTheme'),

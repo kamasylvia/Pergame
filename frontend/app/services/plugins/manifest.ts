@@ -4,7 +4,7 @@
  * The host refuses anything it cannot trust to be well-formed *before* an
  * entry is imported: a bad manifest must never reach `import()`.
  */
-import { HOST_API_VERSION, STATIC_CAPABILITIES, type PluginCapability, type PluginManifest, type PluginTheme } from '../../types/plugin';
+import { HOST_API_VERSION, STATIC_CAPABILITIES, type PluginCapability, type PluginCodeTheme, type PluginManifest, type PluginTheme } from '../../types/plugin';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
@@ -27,6 +27,21 @@ function isSafeAsset(path: string, ext: '.mjs' | '.css'): boolean {
   return path
     .split('/')
     .every(segment => segment !== '.' && segment !== '..' && /^[A-Za-z0-9._-]+$/.test(segment));
+}
+
+/** The 18 `--code-*` slots a palette must fill (mirrors code-hljs.scss). */
+export const CODE_VAR_NAMES = [
+  'bg', 'fg', 'comment', 'keyword', 'type', 'literal', 'attr', 'number', 'string', 'function',
+  'class', 'variable', 'operator', 'section', 'addition', 'deletion', 'meta', 'tag',
+] as const;
+
+/**
+ * A CSS var value that cannot break out of its declaration (mirrors the
+ * server's is_safe_css_value): short, colors/functions only.
+ */
+export function isSafeCssValue(value: string): boolean {
+  if (!value || value.length > 64) return false;
+  return /^[a-zA-Z0-9#(),.%/*+ _/-]+$/.test(value);
 }
 
 /**
@@ -140,9 +155,68 @@ export function validateManifest(raw: unknown, hostVersion?: string): ManifestRe
     });
   }
 
+  const codeThemesRaw = m.codeThemes;
+  const codeThemes: PluginCodeTheme[] = [];
+  if (codeThemesRaw !== undefined && !Array.isArray(codeThemesRaw)) {
+    errors.push('codeThemes must be an array');
+  } else if (Array.isArray(codeThemesRaw)) {
+    codeThemesRaw.forEach((item, i) => {
+      const tag = `codeThemes[${i}]`;
+      if (typeof item !== 'object' || item === null) {
+        errors.push(`${tag} must be an object`);
+        return;
+      }
+      const t = item as Record<string, unknown>;
+      const tid = asString(t.id);
+      if (!tid) {
+        errors.push(`${tag}.id is required`);
+        return;
+      } else if (!ID_RE.test(tid)) {
+        errors.push(`${tag}.id must be a lowercase slug`);
+        return;
+      } else if (codeThemes.some(x => x.id === tid)) {
+        errors.push(`${tag}.id '${tid}' is duplicated`);
+        return;
+      }
+      const tname = asString(t.name);
+      if (!tname) {
+        errors.push(`${tag}.name is required`);
+        return;
+      }
+      const varsRaw = t.vars;
+      if (typeof varsRaw !== 'object' || varsRaw === null || Array.isArray(varsRaw)) {
+        errors.push(`${tag}.vars must be an object`);
+        return;
+      }
+      const varsMap = varsRaw as Record<string, unknown>;
+      const vars: Record<string, string> = {};
+      let varsOk = true;
+      for (const name of CODE_VAR_NAMES) {
+        const v = typeof varsMap[name] === 'string' ? (varsMap[name] as string).trim() : '';
+        if (!v) {
+          errors.push(`${tag}.vars.${name} is required`);
+          varsOk = false;
+        } else if (!isSafeCssValue(v)) {
+          errors.push(`${tag}.vars.${name} is not a safe CSS value`);
+          varsOk = false;
+        } else {
+          vars[name] = v;
+        }
+      }
+      for (const key of Object.keys(varsMap)) {
+        if (!(CODE_VAR_NAMES as readonly string[]).includes(key)) {
+          errors.push(`${tag}.vars.${key} is not a known code var`);
+          varsOk = false;
+        }
+      }
+      if (!varsOk) return;
+      codeThemes.push({ id: tid, name: tname, vars });
+    });
+  }
+
   // Themes-only plugins ship no JS: entry may be omitted only then.
   const entryRaw = asString(m.entry);
-  const entry = entryRaw ?? (themes.length ? undefined : 'main.mjs');
+  const entry = entryRaw ?? (themes.length || codeThemes.length ? undefined : 'main.mjs');
   if (entry !== undefined && !isSafeAsset(entry, '.mjs')) errors.push('entry must be a relative .mjs path inside the plugin');
 
   const capabilitiesRaw = m.capabilities;
@@ -177,6 +251,7 @@ export function validateManifest(raw: unknown, hostVersion?: string): ManifestRe
       entry,
       capabilities: [...new Set(capabilities)],
       themes: themes.length ? themes : undefined,
+      codeThemes: codeThemes.length ? codeThemes : undefined,
       minHostVersion,
       author: asString(m.author),
       description: asString(m.description),

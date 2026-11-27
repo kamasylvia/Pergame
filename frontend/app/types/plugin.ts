@@ -31,6 +31,8 @@ export interface PluginManifest {
   capabilities: PluginCapability[];
   /** Manifest-declared app themes (pure CSS, served from the plugin root). */
   themes?: PluginTheme[];
+  /** Manifest-declared code palettes (inline vars, no files). */
+  codeThemes?: PluginCodeTheme[];
   /** Optional semver floor for the host app version. */
   minHostVersion?: string;
   /** Optional author line shown in the settings list. */
@@ -56,6 +58,16 @@ export interface PluginTheme {
   file: string;
   /** Optional dark-mode declaration file (light applies to both when absent). */
   darkFile?: string;
+}
+
+/** One manifest-declared code palette. */
+export interface PluginCodeTheme {
+  /** Slug, unique within the plugin (host qualifies it as `plugin:palette`). */
+  id: string;
+  /** Display name in the palette list. */
+  name: string;
+  /** All 18 code vars (`bg` → `--code-bg`, …). */
+  vars: Record<string, string>;
 }
 
 /** One declarative settings field, rendered as a labelled control. */

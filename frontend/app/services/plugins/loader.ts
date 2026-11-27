@@ -7,7 +7,7 @@
  * the app down with it.
  */
 import { createPluginContext, type PluginHostInfo, type PluginRequest } from './context';
-import { loadPluginThemes, unloadPluginThemes } from './themes';
+import { loadPluginCodeThemes, loadPluginThemes, unloadPluginCodeThemes, unloadPluginThemes } from './themes';
 import { createUiClient, clearPluginUi, type PluginUiClient } from './ui';
 import { createMarkdownClient } from './markdown';
 import { createEditorClient } from './editor';
@@ -155,8 +155,9 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       }
 
       const effective = granted ?? manifest.capabilities;
-      if (assetBase && effective.includes('themes')) {
-        await loadPluginThemes(manifest, assetBase, fetchText);
+      if (effective.includes('themes')) {
+        loadPluginCodeThemes(manifest);
+        if (assetBase) await loadPluginThemes(manifest, assetBase, fetchText);
       }
 
       const loaded: LoadedPlugin = {
@@ -171,6 +172,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           bag.dispose();
           clearPluginUi(manifest.id);
           unloadPluginThemes(manifest);
+          unloadPluginCodeThemes(manifest);
         },
       };
       const entry: PluginHostEntry = { manifest, status: 'loaded', loaded };
@@ -181,6 +183,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       // register before it threw, so a bad plugin cannot poison the session.
       bag.dispose();
       unloadPluginThemes(manifest);
+      unloadPluginCodeThemes(manifest);
       const reason = err instanceof Error ? err.message : String(err);
       console.error(`[plugins] ${manifest.id} failed to load: ${reason}`, err);
       const entry: PluginHostEntry = { manifest, status: 'failed', error: reason };

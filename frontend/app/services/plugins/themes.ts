@@ -1,12 +1,13 @@
 /**
- * Manifest-declared app themes (no-JS theme packs).
+ * Manifest-declared themes (no-JS theme packs).
  *
- * A plugin with the `themes` capability lists `{id, name, file, darkFile?}`
- * in its manifest; the host fetches the declaration files once at load and
- * registers them into the app-theme registry as `<plugin>:<theme>`.
- * Unload unregisters (the registry watcher falls back to Default).
+ * A plugin with the `themes` capability lists app themes (`{id, name, file,
+ * darkFile?}` — CSS fetched once at load) and/or code palettes (`{id, name,
+ * vars}` — manifest-inline) in its manifest; the host registers them as
+ * `<plugin>:<theme>`. Unload unregisters (registry watchers fall back).
  */
 import { registerAppTheme, unregisterAppTheme } from '~/composables/useAppTheme';
+import { registerCodePalette, unregisterCodePalette } from '~/composables/useCodeTheme';
 import type { PluginManifest } from '../../types/plugin';
 
 /** Refuse absurd theme files (install already caps at 2MB per file). */
@@ -55,4 +56,20 @@ export async function loadPluginThemes(
 
 export function unloadPluginThemes(manifest: PluginManifest): void {
   for (const theme of manifest.themes ?? []) unregisterAppTheme(`${manifest.id}:${theme.id}`);
+}
+
+export function loadPluginCodeThemes(manifest: PluginManifest): void {
+  for (const palette of manifest.codeThemes ?? []) {
+    registerCodePalette({
+      id: `${manifest.id}:${palette.id}`,
+      name: palette.name,
+      origin: manifest.id,
+      originName: manifest.name,
+      vars: { ...palette.vars },
+    });
+  }
+}
+
+export function unloadPluginCodeThemes(manifest: PluginManifest): void {
+  for (const palette of manifest.codeThemes ?? []) unregisterCodePalette(`${manifest.id}:${palette.id}`);
 }
