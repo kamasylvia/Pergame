@@ -327,9 +327,10 @@ async fn main() {
         .route("/api/nodes/search", get(routes::nodes::search))
         .route("/api/nodes/search/meta", get(routes::nodes::meta_search))
         .route("/api/nodes/query", post(routes::dql::query))
-        // Plugin registry (PS-D): installs are admin-only, everything else is
-        // per-user (list/grants/settings + the served module).
+        // Plugin registry (PS-D): installs are scoped (users own theirs,
+        // admins install globals), everything else resolves own-first.
         .route("/api/plugins", get(routes::plugins::list_plugins))
+        .route("/api/plugins", post(routes::plugins::install_own_plugin))
         .route(
             "/api/admin/plugins",
             get(routes::plugins::admin_list_plugins),
@@ -379,6 +380,14 @@ async fn main() {
         .route(
             "/api/admin/plugins/{pluginId}",
             delete(routes::plugins::delete_plugin),
+        )
+        .route(
+            "/api/plugins/{pluginId}",
+            patch(routes::plugins::patch_own_plugin),
+        )
+        .route(
+            "/api/plugins/{pluginId}",
+            delete(routes::plugins::delete_own_plugin),
         )
         .route(
             "/api/nodes/user/{userId}",

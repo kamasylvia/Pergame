@@ -68,7 +68,7 @@ async fn effective_grants(
     user_id: uuid::Uuid,
     plugin: &repo::PluginRow,
 ) -> Result<Vec<String>, ApiError> {
-    let granted = repo::grants_for(&state.db, user_id, &plugin.id)
+    let granted = repo::grants_for(&state.db, user_id, plugin.seq)
         .await
         .map_err(ApiError::from)?;
     Ok(granted
@@ -77,15 +77,16 @@ async fn effective_grants(
         .collect())
 }
 
-/// GET /plugins — installed and enabled plugins for the caller.
+/// GET /plugins — installed and enabled plugins visible to the caller.
 ///
 /// `granted` drives the loader: the client only hands a plugin the
 /// capabilities the user approved, and skips plugins with nothing granted.
+/// A forked slug appears once (the user's own row shadows the global one).
 pub async fn list_plugins(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let rows = repo::list(&state.db).await.map_err(ApiError::from)?;
+    let rows = repo::list_visible(&state.db, auth.user_id()).await.map_err(ApiError::from)?;
     let mut out = Vec::new();
     for row in rows.into_iter().filter(|row| row.enabled) {
         let granted = effective_grants(&state, auth.user_id(), &row).await?;
@@ -98,6 +99,7 @@ pub async fn list_plugins(
             "capabilities": row.capabilities,
             "granted": granted,
             "manifest": row.manifest,
+            "scope": if row.owner_id.is_none() { "global" } else { "own" },
             "entry_url": format!("/api/plugins/{}/entry", row.id),
         }));
     }
@@ -106,17 +108,17 @@ pub async fn list_plugins(
 
 /// GET /admin/plugins — every installed plugin, disabled ones included.
 ///
-/// The settings page needs the full table (admins enable, disable and
-/// uninstall); the per-user loader uses `GET /plugins` instead.
+/// The admin settings view needs the full table across all owners; the
+/// per-user loader uses `GET /plugins` instead.
 pub async fn admin_list_plugins(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
-    let rows = repo::list(&state.db).await.map_err(ApiError::from)?;
+    let rows = repo::list_all(&state.db).await.map_err(ApiError::from)?;
     let mut out = Vec::new();
     for row in rows {
-        let granted = repo::grants_for(&state.db, auth.user_id(), &row.id)
+        let granted = repo::grants_for(&state.db, auth.user_id(), row.seq)
             .await
             .map_err(ApiError::from)?;
         out.push(json!({
@@ -127,6 +129,9 @@ pub async fn admin_list_plugins(
             "capabilities": row.capabilities,
             "granted": granted,
             "manifest": row.manifest,
+            "scope": if row.owner_id.is_none() { "global" } else { "user" },
+            "owner_id": row.owner_id,
+            "mine": row.owner_id == Some(auth.user_id()),
         }));
     }
     Ok(ApiOk::ok(json!(out)))
@@ -136,10 +141,10 @@ pub async fn admin_list_plugins(
 /// dynamic `import()` carries the session cookie.
 pub async fn plugin_entry(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Response, ApiError> {
-    let row = repo::get(&state.db, &id)
+    let row = repo::get_visible(&state.db, auth.user_id(), &id)
         .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))?;
@@ -165,13 +170,13 @@ pub async fn plugin_entry(
 /// GET /plugins/{id}/asset/{*path} — styles and other files next to the entry.
 pub async fn plugin_asset(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path((id, path)): Path<(String, String)>,
 ) -> Result<Response, ApiError> {
     if !is_safe_archive_path(&path) {
         return Err(ApiError::BadRequest("invalid asset path".into()));
     }
-    let row = repo::get(&state.db, &id)
+    let row = repo::get_visible(&state.db, auth.user_id(), &id)
         .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))?;
@@ -296,13 +301,40 @@ fn strip_common_root(files: Vec<ArchiveFile>) -> Vec<ArchiveFile> {
         .collect()
 }
 
-/// POST /admin/plugins — install or replace a plugin from a zip archive.
+/// Private plugins per user (storage abuse cap; globals are admin-gated).
+const MAX_USER_PLUGINS: i64 = 50;
+
+/// POST /plugins — install or replace one of the caller's own plugins.
+pub async fn install_own_plugin(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    multipart: Multipart,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let owned = repo::count_owned(&state.db, auth.user_id()).await.map_err(ApiError::from)?;
+    if owned >= MAX_USER_PLUGINS {
+        return Err(ApiError::BadRequest(format!(
+            "plugin limit reached ({MAX_USER_PLUGINS} per user)"
+        )));
+    }
+    install_inner(&state, &auth, Some(auth.user_id()), multipart).await
+}
+
+/// POST /admin/plugins — install or replace a global plugin for everyone.
 pub async fn install_plugin(
     State(state): State<AppState>,
     auth: AuthUser,
     multipart: Multipart,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     require_admin(&auth)?;
+    install_inner(&state, &auth, None, multipart).await
+}
+
+async fn install_inner(
+    state: &AppState,
+    auth: &AuthUser,
+    owner: Option<uuid::Uuid>,
+    multipart: Multipart,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let bytes = read_archive(multipart).await?;
     let files = strip_common_root(unpack_archive(&bytes)?);
     let manifest_bytes = files
@@ -341,10 +373,15 @@ pub async fn install_plugin(
     let storage = state.storage.as_ref().ok_or_else(|| {
         ApiError::Internal(Box::new(std::io::Error::other("storage not configured")))
     })?;
-    let prefix = format!("plugins/{}/{}/", manifest.id, manifest.version);
+    // Global keeps the legacy flat prefix; user rows are namespaced so a
+    // fork can never clobber (or read) another scope's artifacts.
+    let prefix = match owner {
+        None => format!("plugins/{}/{}/", manifest.id, manifest.version),
+        Some(uid) => format!("plugins/u/{uid}/{}/{}/", manifest.id, manifest.version),
+    };
     // Replacing a version leaves the previous prefix behind; drop it first so
     // an uninstall never resurrects stale files.
-    if let Some(existing) = repo::get(&state.db, &manifest.id)
+    if let Some(existing) = repo::get_scoped(&state.db, owner, &manifest.id)
         .await
         .map_err(ApiError::from)?
         && existing.artifact_prefix != prefix
@@ -383,6 +420,7 @@ pub async fn install_plugin(
             .map(|_| auth.user_id());
     repo::upsert(
         &state.db,
+        owner,
         &manifest.id,
         &manifest.name,
         &manifest.version,
@@ -402,11 +440,12 @@ pub async fn install_plugin(
         Some(auth.user_id()),
         "plugin.install",
         &format!(
-            "installed {} {} ({} files, caps: {})",
+            "installed {} {} scope={} ({} files, caps: {})",
             manifest.id,
             manifest.version,
+            if owner.is_none() { "global" } else { "own" },
             files.len(),
-            manifest.capabilities.join(",")
+            manifest.capabilities.join(","),
         ),
     )
     .await;
@@ -418,53 +457,120 @@ pub async fn install_plugin(
             "name": manifest.name,
             "version": manifest.version,
             "capabilities": manifest.capabilities,
+            "scope": if owner.is_none() { "global" } else { "own" },
             "files": files.len(),
         }),
     ))
 }
 
 #[derive(Debug, Deserialize)]
-/// PATCH /admin/plugins/{id} body.
+/// PATCH /plugins/{id} body.
 pub struct PluginPatch {
     pub enabled: bool,
 }
 
-/// PATCH /admin/plugins/{id} — enable or disable an installed plugin.
+/// Resolve one manageable global row (an admin's own fork is managed
+/// through the user path, like everyone else's).
+async fn global_row(
+    state: &AppState,
+    auth: &AuthUser,
+    slug: &str,
+) -> Result<repo::PluginRow, ApiError> {
+    require_admin(auth)?;
+    repo::get_scoped(&state.db, None, slug)
+        .await
+        .map_err(ApiError::from)?
+        .ok_or_else(|| ApiError::NotFound("plugin not found".into()))
+}
+
+/// Resolve one manageable row in the caller's own scope.
+async fn own_row(
+    state: &AppState,
+    auth: &AuthUser,
+    slug: &str,
+) -> Result<repo::PluginRow, ApiError> {
+    repo::get_scoped(&state.db, Some(auth.user_id()), slug)
+        .await
+        .map_err(ApiError::from)?
+        .ok_or_else(|| ApiError::NotFound("plugin not found".into()))
+}
+
+/// PATCH /admin/plugins/{id} — enable or disable a global plugin.
 pub async fn patch_plugin(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
     Json(body): Json<PluginPatch>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_admin(&auth)?;
-    let updated = repo::set_enabled(&state.db, &id, body.enabled, crate::repo::nodes::now_ms())
+    patch_inner(&state, &auth, &id, body.enabled, true).await
+}
+
+/// PATCH /plugins/{id} — enable or disable one of the caller's own plugins.
+pub async fn patch_own_plugin(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(body): Json<PluginPatch>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    patch_inner(&state, &auth, &id, body.enabled, false).await
+}
+
+async fn patch_inner(
+    state: &AppState,
+    auth: &AuthUser,
+    slug: &str,
+    enabled: bool,
+    global: bool,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let row = if global {
+        global_row(state, auth, slug).await?
+    } else {
+        own_row(state, auth, slug).await?
+    };
+    repo::set_enabled(&state.db, row.seq, enabled, crate::repo::nodes::now_ms())
         .await
         .map_err(ApiError::from)?;
-    if !updated {
-        return Err(ApiError::NotFound("plugin not found".into()));
-    }
     crate::mcp::audit(
         &state.db,
         Some(auth.user_id()),
         "plugin.enable",
-        &format!("plugin {id} enabled={}", body.enabled),
+        &format!("plugin {slug} enabled={enabled}"),
     )
     .await;
-    Ok(ApiOk::ok(json!({ "id": id, "enabled": body.enabled })))
+    Ok(ApiOk::ok(json!({ "id": slug, "enabled": enabled })))
 }
 
-/// DELETE /admin/plugins/{id} — uninstall (artifacts, grants and KV go too).
+/// DELETE /admin/plugins/{id} — uninstall a global plugin.
 pub async fn delete_plugin(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_admin(&auth)?;
-    let row = repo::get(&state.db, &id)
-        .await
-        .map_err(ApiError::from)?
-        .ok_or_else(|| ApiError::NotFound("plugin not found".into()))?;
-    repo::delete(&state.db, &id).await.map_err(ApiError::from)?;
+    delete_inner(&state, &auth, &id, true).await
+}
+
+/// DELETE /plugins/{id} — uninstall one of the caller's own plugins.
+pub async fn delete_own_plugin(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    delete_inner(&state, &auth, &id, false).await
+}
+
+/// Uninstall one row (artifacts, grants and KV go too).
+async fn delete_inner(
+    state: &AppState,
+    auth: &AuthUser,
+    slug: &str,
+    global: bool,
+) -> Result<ApiOk<serde_json::Value>, ApiError> {
+    let row = if global {
+        global_row(state, auth, slug).await?
+    } else {
+        own_row(state, auth, slug).await?
+    };
+    repo::delete(&state.db, row.seq).await.map_err(ApiError::from)?;
     if let Some(storage) = state.storage.as_ref() {
         storage.delete_prefix(&row.artifact_prefix).await;
     }
@@ -472,10 +578,10 @@ pub async fn delete_plugin(
         &state.db,
         Some(auth.user_id()),
         "plugin.uninstall",
-        &format!("uninstalled plugin {id}"),
+        &format!("uninstalled plugin {slug}"),
     )
     .await;
-    Ok(ApiOk::ok(json!({ "id": id, "deleted": true })))
+    Ok(ApiOk::ok(json!({ "id": slug, "deleted": true })))
 }
 
 #[derive(Debug, Deserialize)]
@@ -496,7 +602,7 @@ pub async fn put_grants(
     Path(id): Path<String>,
     Json(body): Json<GrantsInput>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let row = repo::get(&state.db, &id)
+    let row = repo::get_visible(&state.db, auth.user_id(), &id)
         .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))?;
@@ -510,7 +616,7 @@ pub async fn put_grants(
     repo::set_grants(
         &state.db,
         auth.user_id(),
-        &id,
+        row.seq,
         &granted,
         crate::repo::nodes::now_ms(),
     )
@@ -532,7 +638,7 @@ async fn require_granted(
     auth: &AuthUser,
     id: &str,
 ) -> Result<repo::PluginRow, ApiError> {
-    let row = repo::get(&state.db, id)
+    let row = repo::get_visible(&state.db, auth.user_id(), id)
         .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))?;
@@ -876,8 +982,8 @@ pub async fn render_page(
     Path(id): Path<String>,
     Json(body): Json<RenderInput>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_granted(&state, &auth, &id).await?;
-    let rows = repo::kv_list(&state.db, auth.user_id(), &id)
+    let row = require_granted(&state, &auth, &id).await?;
+    let rows = repo::kv_list(&state.db, auth.user_id(), row.seq)
         .await
         .map_err(ApiError::from)?;
     let map: HashMap<String, serde_json::Value> = rows.into_iter().collect();
@@ -1070,8 +1176,8 @@ pub async fn list_kv(
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_granted(&state, &auth, &id).await?;
-    let rows = repo::kv_list(&state.db, auth.user_id(), &id)
+    let row = require_granted(&state, &auth, &id).await?;
+    let rows = repo::kv_list(&state.db, auth.user_id(), row.seq)
         .await
         .map_err(ApiError::from)?;
     let map: HashMap<String, serde_json::Value> = rows.into_iter().collect();
@@ -1085,7 +1191,7 @@ pub async fn put_kv(
     Path((id, key)): Path<(String, String)>,
     body: Bytes,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_granted(&state, &auth, &id).await?;
+    let row = require_granted(&state, &auth, &id).await?;
     if key.is_empty() || key.len() > MAX_KV_KEY {
         return Err(ApiError::BadRequest(format!(
             "key must be 1-{MAX_KV_KEY} characters"
@@ -1099,7 +1205,7 @@ pub async fn put_kv(
     repo::kv_set(
         &state.db,
         auth.user_id(),
-        &id,
+        row.seq,
         &key,
         &value,
         crate::repo::nodes::now_ms(),
@@ -1115,8 +1221,8 @@ pub async fn delete_kv(
     auth: AuthUser,
     Path((id, key)): Path<(String, String)>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    require_granted(&state, &auth, &id).await?;
-    let deleted = repo::kv_delete(&state.db, auth.user_id(), &id, &key)
+    let row = require_granted(&state, &auth, &id).await?;
+    let deleted = repo::kv_delete(&state.db, auth.user_id(), row.seq, &key)
         .await
         .map_err(ApiError::from)?;
     Ok(ApiOk::ok(json!({ "key": key, "deleted": deleted })))
