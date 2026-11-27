@@ -22,6 +22,7 @@ interface RegistryEntry {
   entry: string;
   capabilities: string[];
   granted: string[];
+  enabled?: boolean;
   manifest: PluginManifest;
   entry_url: string;
 }
@@ -120,8 +121,8 @@ export default defineNuxtPlugin(async nuxtApp => {
     if (response.status !== 'success' || !response.result) return;
     console.log('[plugin-host] registry rows:', response.result.map(r => `${r.id}@${r.version} granted=${r.granted.length}`));
     for (const row of response.result) {
-      // Nothing granted = the user has not approved this plugin yet.
-      if (!row.granted.length) continue;
+      // Nothing granted, or own row disabled = not approved in this state.
+      if (!row.granted.length || row.enabled === false) continue;
       const entry = await host.load(row.manifest, row.entry_url, row.granted, `/api/plugins/${row.id}/asset`);
       if (entry.status === 'failed') reportFailure(row.name, entry.error);
     }

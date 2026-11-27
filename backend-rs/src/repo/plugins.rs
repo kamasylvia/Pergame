@@ -109,12 +109,13 @@ pub async fn upsert(
     }
 }
 
-/// Rows visible to a user (global + own), oldest first. A forked slug shows
-/// once: the user's own row shadows the global one.
+/// Rows visible to a user: their own rows (any state, so they can manage
+/// disabled ones) plus enabled globals. A forked slug shows once: the
+/// user's own row shadows the global one.
 pub async fn list_visible(pool: &PgPool, user_id: Uuid) -> Result<Vec<PluginRow>, sqlx::Error> {
     sqlx::query_as::<_, PluginRow>(
         "SELECT DISTINCT ON (id) * FROM plugins
-         WHERE owner_id IS NULL OR owner_id = $1
+         WHERE owner_id = $1 OR (owner_id IS NULL AND enabled)
          ORDER BY id, owner_id NULLS LAST, created_timestamp",
     )
     .bind(user_id)

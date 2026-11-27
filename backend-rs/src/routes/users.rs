@@ -226,6 +226,12 @@ pub async fn delete_user(
             crate::blobs::release(&state.db, storage, &sha).await;
         }
         storage.delete_user_prefix(uid).await;
+        // Own plugin artifacts (global rows are untouched; the DB rows
+        // cascade with the user).
+        let prefixes = crate::repo::plugins::owned_prefixes(&state.db, uid).await.unwrap_or_default();
+        for prefix in prefixes {
+            storage.delete_prefix(&prefix).await;
+        }
     }
     let mut db = state.toasty.clone();
     crate::models::User::filter_by_id(uid)

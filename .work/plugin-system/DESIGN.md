@@ -123,6 +123,7 @@ export interface PluginContext {
 - 安装时:manifest.capabilities 逐项展示 → 用户勾选批准 → 存 pg(可后改)
 - 运行时:facade 强制(nodes 客户端本来就 actor 域内;`net.fetch` 白名单外拒;settings 只见自己命名空间)
 - 审计:敏感能力调用记 logs 表(复用现有 log 基建)
+- **作用域(2026-11-27)**:普通用户装自己的(`owner_id`,仅自己可见),管理员装全局(`owner_id NULL`,全员可见);同 slug 自己优先、全局兜底;用户删号级联清自己的插件行+S3 前缀;普通用户 50 个上限。
 
 ## 6. 狗粮计划(证明 API 诚实)
 

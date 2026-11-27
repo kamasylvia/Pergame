@@ -77,18 +77,18 @@ async fn effective_grants(
         .collect())
 }
 
-/// GET /plugins — installed and enabled plugins visible to the caller.
+/// GET /plugins — plugins visible to the caller (own rows any state,
+/// globals only when enabled).
 ///
 /// `granted` drives the loader: the client only hands a plugin the
-/// capabilities the user approved, and skips plugins with nothing granted.
-/// A forked slug appears once (the user's own row shadows the global one).
+/// capabilities the user approved, and skips ungranted or disabled rows.
 pub async fn list_plugins(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
     let rows = repo::list_visible(&state.db, auth.user_id()).await.map_err(ApiError::from)?;
     let mut out = Vec::new();
-    for row in rows.into_iter().filter(|row| row.enabled) {
+    for row in rows {
         let granted = effective_grants(&state, auth.user_id(), &row).await?;
         out.push(json!({
             "id": row.id,
@@ -96,6 +96,7 @@ pub async fn list_plugins(
             "version": row.version,
             "apiVersion": row.api_version,
             "entry": row.entry,
+            "enabled": row.enabled,
             "capabilities": row.capabilities,
             "granted": granted,
             "manifest": row.manifest,
