@@ -1,7 +1,8 @@
 @use "../abstract/static.scss" as *;
 
 /* Selectable code palettes. `data-code-theme` is set on <html> from the
- * `codeTheme` preference (see App.vue); default = palenight. */
+ * effective `codeTheme` preference (see App.vue); `auto` (default) follows
+ * the app: palenight in dark mode, github-light otherwise. */
 html {
 	--code-bg: #292d3e;
 	--code-fg: #abb2bf;

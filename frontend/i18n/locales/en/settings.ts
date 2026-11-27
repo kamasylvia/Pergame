@@ -29,6 +29,7 @@ export default {
     appTheme: 'App theme',
     appThemeDesc: 'Color theme for the whole app (built-in or from a theme plugin).',
     chooseAccentColor: 'Choose accent color',
+    codeThemeAuto: 'Auto (follow app)',
     codeTheme: 'Code block theme',
     codeThemeDesc: 'Syntax highlighting palette used in code blocks and previews.',
     displayFeatureTags: 'Show feature tags',

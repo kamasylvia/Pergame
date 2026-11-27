@@ -31,6 +31,7 @@ export default {
     appTheme: 'Tema app',
     appThemeDesc: 'Tema di colori per l’intera app (integrato o da un plugin di temi).',
     chooseAccentColor: "Scegli il colore d'accento",
+    codeThemeAuto: 'Auto (segue l’app)',
     codeTheme: 'Tema dei blocchi di codice',
     codeThemeDesc: 'Palette di evidenziazione della sintassi per blocchi di codice e anteprime.',
     displayFeatureTags: 'Mostra badge delle funzionalità',

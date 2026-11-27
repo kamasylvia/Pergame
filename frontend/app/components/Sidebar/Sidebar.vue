@@ -1,11 +1,7 @@
 <template>
   <div :class="{ 'sidebar-mask': isMobile && isOpened }" />
   <Resizable>
-    <Dock v-if="!isMobile && viewDock" />
-    <!-- One-click way back when the dock is hidden (the sidebar icon alone is undiscoverable). -->
-    <button v-else-if="!isMobile" class="dock-reopen" :title="t('components.sidebar.toggleDock')" :aria-label="t('components.sidebar.toggleDock')" @click="toggleDock">
-      <Icon name="dock" display="sm" />
-    </button>
+    <Dock v-if="!isMobile" />
     <div ref="scroller" class="sidebar" :class="{ compact: compactMode }">
       <section class="header">
         <span class="name">
@@ -39,10 +35,6 @@
             <NuxtLink v-else class="nav-item" @click.stop="nodesTree.expandAll">
               <Icon name="arrow-expand" />
               <p class="hint-tooltip">{{ t('components.sidebar.openAll') }}</p>
-            </NuxtLink>
-            <NuxtLink class="nav-item" @click="toggleDock">
-              <Icon name="dock" />
-              <p class="hint-tooltip">{{ t('components.sidebar.toggleDock') }}</p>
             </NuxtLink>
           </div>
         </div>
@@ -81,7 +73,6 @@ const { isOpened, hasSidebar, filtered } = useSidebar();
 const { isMobile } = useDevice();
 const modals = useModal();
 
-const viewDock = preferences.get('view_dock');
 const compactMode = preferences.get('compactMode');
 const sidebarItemsPrefs = preferences.get('sidebarItems');
 const route = useRoute();
@@ -232,7 +223,6 @@ watch(
 );
 
 // Actions
-const toggleDock = () => preferences.set('view_dock', !preferences.get('view_dock').value);
 
 const handleClickOutside = (e: MouseEvent) => {
   if (isOpened.value && e.target && !(e.target as Element).closest('.sidebar') && !(e.target as Element).closest('.open-sidebar')) isOpened.value = false;
@@ -256,25 +246,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-.dock-reopen {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  width: 30px;
-  padding: 0.8rem 0;
-  border: 0;
-  border-right: 1px solid var(--border);
-  background-color: var(--surface-raised-light);
-  color: var(--text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-
-  &:hover {
-    color: var(--primary);
-    background-color: var(--primary-bg);
-  }
-}
-
 .sidebar {
   width: 100%;
   max-height: 100%;

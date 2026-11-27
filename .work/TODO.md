@@ -17,6 +17,7 @@
 - [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **文件夹 loading 误导**:ContainerView 空数组即判空(抓取中也显示“无文档”插画);加 `loading` prop,三调用页(分类/文档/团队)传抓取态,加载中显示 spinner＋Loading,空才显示 NoContent;三态浏览器实测。另:用户截到的 CSS 报错是编辑中途 HMR 瞬态(已自愈,现状 lint 全绿)。
+- [x] **dock 常驻＋代码主题跟随**:桌面端 dock 删隐藏/复现(dock 关闭钮、侧栏开关、重开条、设置项、`view_dock` 偏好全删,移动端本来就不显示)。代码高亮新增 Auto(默认)跟随深色模式(暗→palenight,亮→github-light),手动四档保留;SSR 同映射防闪烁。浏览器实测:无关闭入口、明暗自动切、手动覆盖钉住。
 - [x] **dock 重开＋脚本右侧预览**:dock 关后只剩侧栏小图标可重开(难发现),现隐藏时左沿留 30px 重开条(一键恢复,浏览器实测)。文档内脚本链接此前直接下载,现走右侧代码面板(CodeSidePanel:256KiB 上限＋二进制识别＋hljs＋复制/下载/关闭),命名/裸 URL 双路径,面板外回退新标签。code-embed 抽 `fetchCodeText/highlightCode` 复用。
 - [x] **App 主题＋插件主题包**:`appTheme` 偏好＋`data-app-theme`＋专用无 layer 样式表(主题 var 覆盖底色/文字/accent);主题自带 `--primary*` 提出来行内写(跟 setAppColor 同机制,按明暗取对应值),切回 Default 恢复用户 accent。内置 Forest 明暗两套。插件:`themes` capability＋manifest `themes[]`(file/darkFile,无 entry 可纯 CSS 包),asset 路由 serving,host 启动/授权/重载时抓取注册为 `plugin:theme`,禁用/卸载回落 Default。官方示例 `dusk` 包＋docs 教程。浏览器全链实测:安装→授权→选中 vars→禁用回落→重开恢复→全新登录 boot 加载。附带修:插件页重开开关不 reload(此前开后须整页刷新才生效)。
 - [x] **目录树标头改字**:Created→Created at、Modified→Modified at;新 `nodes.directory.createdAt/modifiedAt` key ×8 语言(de/fr/it 按"at"译,中/韩/乌沿用已有时间名词);12ch 列宽不变,最长串(Modificato il)仍装得下。

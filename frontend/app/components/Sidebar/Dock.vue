@@ -19,9 +19,6 @@
       <NuxtLink @click="openSettings">
         <Icon name="settings" display="lg" />
       </NuxtLink>
-      <NuxtLink @click="closeDock">
-        <Icon name="arrow_close" display="lg" />
-      </NuxtLink>
     </div>
   </div>
 </template>
@@ -31,7 +28,6 @@ import SettingsModal from '~/pages/dashboard/settings/index.vue';
 import { usePluginUi } from '~/services/plugins';
 
 const userStore = useUserStore();
-const preferences = usePreferencesStore();
 
 const modals = useModal();
 const mark = useMark();
@@ -53,9 +49,7 @@ const isAdmin = computed(() => userStore.user?.role === 2);
 const openSettings = () => {
   modals.add(new Modal(shallowRef(SettingsModal), { props: { isModal: true }, size: 'medium', noPadding: true }));
 };
-function closeDock() {
-  preferences.set('view_dock', false);
-}
+
 </script>
 
 <style scoped lang="scss">

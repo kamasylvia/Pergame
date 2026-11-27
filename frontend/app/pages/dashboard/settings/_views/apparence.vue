@@ -35,6 +35,7 @@ const options = computed(
             type: 'select' as const,
             key: 'codeTheme' as const,
             choices: [
+              { label: t('settings.appearance.codeThemeAuto'), id: 'auto' },
               { label: 'Palenight', id: 'palenight' },
               { label: 'Dracula', id: 'dracula' },
               { label: 'GitHub Light', id: 'github-light' },
@@ -99,12 +100,6 @@ const options = computed(
             description: t('settings.appearance.enableCompactModeDesc'),
             type: 'toggle' as const,
             key: 'compactMode' as const,
-          },
-          {
-            label: t('settings.appearance.viewDock'),
-            description: t('settings.appearance.viewDockDesc'),
-            type: 'toggle' as const,
-            key: 'view_dock' as const,
           },
           {
             label: t('settings.appearance.normalizeFileIcons'),

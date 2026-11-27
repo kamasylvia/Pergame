@@ -16,13 +16,12 @@ export const DEFAULT_PREFERENCES = {
   displayTabs: false as boolean,
   advancedView: false as boolean,
   datatableItemsCount: 10 as number,
-  view_dock: true as boolean,
   primaryColor: -2 as number, // -2 default primary; -1 unset; >= 0 app color index
   docSize: 1 as number, // 0 = small, 1 = large
   style: 'default' as 'default' | 'glassmorphism',
   theme: 'pergame' as string,
   appTheme: 'default' as string, // app chrome theme id (default = built-in, or plugin theme id)
-  codeTheme: 'palenight' as string, // syntax palette: palenight | dracula | github-light | solarized-light
+  codeTheme: 'auto' as string, // syntax palette: auto (follows dark mode) | palenight | dracula | github-light | solarized-light
   imgbedPrivate: false as boolean, // image host applies to private notes (opt-in)
   documentAutoSave: true as boolean, // Enable automatic saving of documents
   documentFontSize: 16 as number,
@@ -117,7 +116,6 @@ export const GENERAL_KEYS: PreferenceKey[] = [
   'normalizeFileIcons',
   'displayFeatureTags',
   'datatableItemsCount',
-  'view_dock',
   'primaryColor',
   'docSize',
   'style',

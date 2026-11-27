@@ -29,6 +29,7 @@ export default {
     appTheme: '應用主題',
     appThemeDesc: '整個應用的顏色主題（內建或主題外掛提供）。',
     chooseAccentColor: '選擇強調色',
+    codeThemeAuto: '自動（跟隨應用）',
     codeTheme: '程式碼區塊配色',
     codeThemeDesc: '程式碼區塊與預覽使用的語法高亮配色。',
     displayFeatureTags: '顯示功能標記',

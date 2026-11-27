@@ -25,9 +25,17 @@ const { t, locale } = useI18n();
 const i18nHead = useLocaleHead();
 const config = useRuntimeConfig();
 const preferences = usePreferencesStore();
+const colorMode = useColorMode();
+
+// 'auto' follows the app: dark palette in dark mode, light palette otherwise.
+const effectiveCodeTheme = computed(() => {
+  const chosen = preferences.get('codeTheme').value;
+  if (chosen && chosen !== 'auto') return chosen;
+  return colorMode.value === 'dark' ? 'palenight' : 'github-light';
+});
 
 watchEffect(() => {
-  if (import.meta.client) document.documentElement.dataset.codeTheme = preferences.get('codeTheme').value;
+  if (import.meta.client) document.documentElement.dataset.codeTheme = effectiveCodeTheme.value;
 });
 
 router.beforeEach((to, from) => {
@@ -65,7 +73,7 @@ useHead({
   ],
   htmlAttrs: {
     lang: i18nHead.value.htmlAttrs?.lang,
-    'data-code-theme': preferences.preferences.codeTheme,
+    'data-code-theme': effectiveCodeTheme,
   },
   script: [
     {
