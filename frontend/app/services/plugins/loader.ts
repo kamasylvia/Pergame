@@ -7,6 +7,7 @@
  * the app down with it.
  */
 import { createPluginContext, type PluginHostInfo, type PluginRequest } from './context';
+import { loadPluginThemes, unloadPluginThemes } from './themes';
 import { createUiClient, clearPluginUi, type PluginUiClient } from './ui';
 import { createMarkdownClient } from './markdown';
 import { createEditorClient } from './editor';
@@ -60,7 +61,7 @@ export interface PluginHost {
   /** Load one plugin from a base URL holding `manifest.json` + entry. */
   loadFromUrl(baseUrl: string): Promise<PluginHostEntry>;
   /** Load a manifest that was already fetched (registry/install path). */
-  load(manifest: PluginManifest, entryUrl: string, granted?: string[]): Promise<PluginHostEntry>;
+  load(manifest: PluginManifest, entryUrl: string, granted?: string[], assetBase?: string): Promise<PluginHostEntry>;
   /** Unload by id (no-op when unknown). */
   unload(id: string): Promise<void>;
   /** Unload everything (app teardown / hot reload). */
@@ -102,6 +103,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
     manifest: PluginManifest,
     entryUrl: string,
     granted?: string[],
+    assetBase?: string,
   ): Promise<PluginHostEntry> {
     if (entries.some(e => e.manifest.id === manifest.id)) {
       return { manifest, status: 'failed', error: `plugin '${manifest.id}' is already registered` };
@@ -120,45 +122,55 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
 
     const bag = new DisposableBag();
     try {
-      const module = await loadModule(entryUrl);
-      const Ctor = (module as { default?: unknown }).default;
-      if (typeof Ctor !== 'function') {
-        throw new Error('entry has no default export (expected the Plugin class)');
+      // Themes-only plugins ship no JS: skip the import, still load themes.
+      let instance: PluginInstance | null = null;
+      if (manifest.entry) {
+        const module = await loadModule(entryUrl);
+        const Ctor = (module as { default?: unknown }).default;
+        if (typeof Ctor !== 'function') {
+          throw new Error('entry has no default export (expected the Plugin class)');
+        }
+        instance = new (Ctor as PluginConstructor)();
+        if (typeof instance.onload !== 'function') {
+          throw new Error('default export is not a Plugin (missing onload)');
+        }
+        const track = (disposable: import('../../types/plugin').Disposable) => bag.add(disposable);
+        const ui = (deps.createUi ?? createUiClient)(manifest.id, track);
+        const markdown = createMarkdownClient(track);
+        const editor = createEditorClient(track);
+        const ctx = createPluginContext({
+          manifest,
+          version: HOST_API_VERSION,
+          host: deps.host,
+          request: deps.request,
+          notify: deps.notify,
+          formatClipProgress: deps.formatClipProgress,
+          ui,
+          markdown,
+          editor,
+          granted,
+          onNodesChanged: deps.onNodesChanged,
+        });
+        await instance.onload(ctx);
       }
-      const instance = new (Ctor as PluginConstructor)();
-      if (typeof instance.onload !== 'function') {
-        throw new Error('default export is not a Plugin (missing onload)');
+
+      const effective = granted ?? manifest.capabilities;
+      if (assetBase && effective.includes('themes')) {
+        await loadPluginThemes(manifest, assetBase, fetchText);
       }
-      const track = (disposable: import('../../types/plugin').Disposable) => bag.add(disposable);
-      const ui = (deps.createUi ?? createUiClient)(manifest.id, track);
-      const markdown = createMarkdownClient(track);
-      const editor = createEditorClient(track);
-      const ctx = createPluginContext({
-        manifest,
-        version: HOST_API_VERSION,
-        host: deps.host,
-        request: deps.request,
-        notify: deps.notify,
-        formatClipProgress: deps.formatClipProgress,
-        ui,
-        markdown,
-        editor,
-        granted,
-        onNodesChanged: deps.onNodesChanged,
-      });
-      await instance.onload(ctx);
 
       const loaded: LoadedPlugin = {
         manifest,
         instance,
         dispose: async () => {
           try {
-            await instance.onunload?.();
+            await instance?.onunload?.();
           } catch (err) {
             console.warn(`[plugins] ${manifest.id} onunload threw`, err);
           }
           bag.dispose();
           clearPluginUi(manifest.id);
+          unloadPluginThemes(manifest);
         },
       };
       const entry: PluginHostEntry = { manifest, status: 'loaded', loaded };
@@ -168,6 +180,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       // Isolate: record the failure and reclaim anything the plugin managed to
       // register before it threw, so a bad plugin cannot poison the session.
       bag.dispose();
+      unloadPluginThemes(manifest);
       const reason = err instanceof Error ? err.message : String(err);
       console.error(`[plugins] ${manifest.id} failed to load: ${reason}`, err);
       const entry: PluginHostEntry = { manifest, status: 'failed', error: reason };
@@ -198,7 +211,8 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       entries.push(entry);
       return entry;
     }
-    return load(validated.manifest, joinUrl(baseUrl, validated.manifest.entry));
+    const entryUrl = validated.manifest.entry ? joinUrl(baseUrl, validated.manifest.entry) : '';
+    return load(validated.manifest, entryUrl, undefined, baseUrl);
   }
 
   async function unload(id: string): Promise<void> {

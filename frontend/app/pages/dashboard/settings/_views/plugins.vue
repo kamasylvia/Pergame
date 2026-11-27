@@ -167,7 +167,10 @@ async function remove(plugin: AdminPluginRow) {
   await loadPlugins();
 }
 
-type Host = { unload(id: string): Promise<void>; load(manifest: PluginManifest, entryUrl: string, granted?: string[]): Promise<unknown> };
+type Host = {
+  unload(id: string): Promise<void>;
+  load(manifest: PluginManifest, entryUrl: string, granted?: string[], assetBase?: string): Promise<unknown>;
+};
 const host = () => nuxtApp.$pluginHost as Host | undefined;
 
 async function unloadHosted(id: string) {
@@ -175,7 +178,7 @@ async function unloadHosted(id: string) {
 }
 
 async function reloadHosted(plugin: AdminPluginRow) {
-  await host()?.load(plugin.manifest, `/api/plugins/${plugin.id}/entry`, plugin.granted);
+  await host()?.load(plugin.manifest, `/api/plugins/${plugin.id}/entry`, plugin.granted, `/api/plugins/${plugin.id}/asset`);
 }
 </script>
 

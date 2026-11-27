@@ -122,7 +122,7 @@ export default defineNuxtPlugin(async nuxtApp => {
     for (const row of response.result) {
       // Nothing granted = the user has not approved this plugin yet.
       if (!row.granted.length) continue;
-      const entry = await host.load(row.manifest, row.entry_url, row.granted);
+      const entry = await host.load(row.manifest, row.entry_url, row.granted, `/api/plugins/${row.id}/asset`);
       if (entry.status === 'failed') reportFailure(row.name, entry.error);
     }
   }

@@ -13,7 +13,7 @@
 export const HOST_API_VERSION = 1;
 
 /** Capabilities a manifest may request. `net:<domain>` / `net:*` are open-ended. */
-export const STATIC_CAPABILITIES = ['nodes:read', 'nodes:write', 'ui', 'markdown:render', 'settings'] as const;
+export const STATIC_CAPABILITIES = ['nodes:read', 'nodes:write', 'ui', 'markdown:render', 'settings', 'themes'] as const;
 
 /** One declared capability (`nodes:read`, `net:example.com`, …). */
 export type PluginCapability = string;
@@ -26,9 +26,11 @@ export interface PluginManifest {
   version: string;
   /** Host API major the plugin was written against (string, e.g. "1"). */
   apiVersion: string;
-  /** ESM entry, relative to the plugin root. */
-  entry: string;
+  /** ESM entry, relative to the plugin root. Omit for themes-only plugins. */
+  entry?: string;
   capabilities: PluginCapability[];
+  /** Manifest-declared app themes (pure CSS, served from the plugin root). */
+  themes?: PluginTheme[];
   /** Optional semver floor for the host app version. */
   minHostVersion?: string;
   /** Optional author line shown in the settings list. */
@@ -42,6 +44,18 @@ export interface PluginManifest {
    * so the plugin reads them with `ctx.settings.get(key)`.
    */
   settings?: PluginSettingField[];
+}
+
+/** One manifest-declared app theme. */
+export interface PluginTheme {
+  /** Slug, unique within the plugin (host qualifies it as `plugin:theme`). */
+  id: string;
+  /** Display name in the theme list. */
+  name: string;
+  /** Light-mode declaration file, relative to the plugin root. */
+  file: string;
+  /** Optional dark-mode declaration file (light applies to both when absent). */
+  darkFile?: string;
 }
 
 /** One declarative settings field, rendered as a labelled control. */
@@ -256,6 +270,7 @@ export type PluginConstructor = new () => PluginInstance;
 /** Result of one load attempt, surfaced to the settings UI later (PS-B). */
 export interface LoadedPlugin {
   manifest: PluginManifest;
-  instance: PluginInstance;
+  /** Null for themes-only plugins (no JS entry). */
+  instance: PluginInstance | null;
   dispose: () => Promise<void>;
 }

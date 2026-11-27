@@ -4,7 +4,7 @@
  * The host refuses anything it cannot trust to be well-formed *before* an
  * entry is imported: a bad manifest must never reach `import()`.
  */
-import { HOST_API_VERSION, STATIC_CAPABILITIES, type PluginCapability, type PluginManifest } from '../../types/plugin';
+import { HOST_API_VERSION, STATIC_CAPABILITIES, type PluginCapability, type PluginManifest, type PluginTheme } from '../../types/plugin';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
@@ -18,12 +18,13 @@ function asString(value: unknown): string | undefined {
 }
 
 /**
- * Entry must stay inside the plugin root: a relative `.mjs` path whose
- * segments are plain names (no `.` / `..`, no leading slash, no backslash).
+ * Paths must stay inside the plugin root: a relative path with the given
+ * extension whose segments are plain names (no `.` / `..`, no leading
+ * slash, no backslash).
  */
-function isSafeEntry(entry: string): boolean {
-  if (!entry.endsWith('.mjs') || entry.includes('\\')) return false;
-  return entry
+function isSafeAsset(path: string, ext: '.mjs' | '.css'): boolean {
+  if (!path.endsWith(ext) || path.includes('\\')) return false;
+  return path
     .split('/')
     .every(segment => segment !== '.' && segment !== '..' && /^[A-Za-z0-9._-]+$/.test(segment));
 }
@@ -94,8 +95,55 @@ export function validateManifest(raw: unknown, hostVersion?: string): ManifestRe
     errors.push(`apiVersion ${apiVersion} is not supported (host contract is ${HOST_API_VERSION})`);
   }
 
-  const entry = asString(m.entry) ?? 'main.mjs';
-  if (!isSafeEntry(entry)) errors.push('entry must be a relative .mjs path inside the plugin');
+  const themesRaw = m.themes;
+  const themes: PluginTheme[] = [];
+  if (themesRaw !== undefined && !Array.isArray(themesRaw)) {
+    errors.push('themes must be an array');
+  } else if (Array.isArray(themesRaw)) {
+    themesRaw.forEach((item, i) => {
+      const tag = `themes[${i}]`;
+      if (typeof item !== 'object' || item === null) {
+        errors.push(`${tag} must be an object`);
+        return;
+      }
+      const t = item as Record<string, unknown>;
+      const tid = asString(t.id);
+      if (!tid) {
+        errors.push(`${tag}.id is required`);
+        return;
+      } else if (!ID_RE.test(tid)) {
+        errors.push(`${tag}.id must be a lowercase slug`);
+        return;
+      } else if (themes.some(x => x.id === tid)) {
+        errors.push(`${tag}.id '${tid}' is duplicated`);
+        return;
+      }
+      const tname = asString(t.name);
+      if (!tname) {
+        errors.push(`${tag}.name is required`);
+        return;
+      }
+      const file = asString(t.file);
+      if (!file) {
+        errors.push(`${tag}.file is required`);
+        return;
+      } else if (!isSafeAsset(file, '.css')) {
+        errors.push(`${tag}.file must be a relative .css path inside the plugin`);
+        return;
+      }
+      const darkFile = asString(t.darkFile);
+      if (darkFile && !isSafeAsset(darkFile, '.css')) {
+        errors.push(`${tag}.darkFile must be a relative .css path inside the plugin`);
+        return;
+      }
+      themes.push({ id: tid, name: tname, file, ...(darkFile ? { darkFile } : {}) });
+    });
+  }
+
+  // Themes-only plugins ship no JS: entry may be omitted only then.
+  const entryRaw = asString(m.entry);
+  const entry = entryRaw ?? (themes.length ? undefined : 'main.mjs');
+  if (entry !== undefined && !isSafeAsset(entry, '.mjs')) errors.push('entry must be a relative .mjs path inside the plugin');
 
   const capabilitiesRaw = m.capabilities;
   if (capabilitiesRaw !== undefined && !Array.isArray(capabilitiesRaw)) {
@@ -128,6 +176,7 @@ export function validateManifest(raw: unknown, hostVersion?: string): ManifestRe
       apiVersion: apiVersion!,
       entry,
       capabilities: [...new Set(capabilities)],
+      themes: themes.length ? themes : undefined,
       minHostVersion,
       author: asString(m.author),
       description: asString(m.description),
