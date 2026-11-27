@@ -104,24 +104,9 @@ fn is_semver(version: &str) -> bool {
             .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
-/// A relative `.mjs` path that stays inside the plugin root.
-fn is_safe_entry(entry: &str) -> bool {
-    if !entry.ends_with(".mjs") || entry.contains('\\') {
-        return false;
-    }
-    entry.split('/').all(|segment| {
-        !segment.is_empty()
-            && segment != "."
-            && segment != ".."
-            && segment
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-    })
-}
-
-/// A relative `.css` path that stays inside the plugin root.
-fn is_safe_css(path: &str) -> bool {
-    if !path.ends_with(".css") || path.contains('\\') {
+/// A relative path with the given extension that stays inside the plugin root.
+fn is_safe_asset(path: &str, ext: &str) -> bool {
+    if !path.ends_with(ext) || path.contains('\\') {
         return false;
     }
     path.split('/').all(|segment| {
@@ -243,13 +228,13 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
                 if file.is_empty() {
                     errors.push(format!("{tag}.file is required"));
                     continue;
-                } else if !is_safe_css(&file) {
+                } else if !is_safe_asset(&file, ".css") {
                     errors.push(format!("{tag}.file must be a relative .css path inside the plugin"));
                     continue;
                 }
                 let dark_file = string_field(item, "darkFile");
                 if let Some(d) = &dark_file
-                    && !is_safe_css(d)
+                    && !is_safe_asset(d, ".css")
                 {
                     errors.push(format!(
                         "{tag}.darkFile must be a relative .css path inside the plugin"
@@ -273,7 +258,7 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         None if !themes.is_empty() => String::new(),
         None => "main.mjs".to_string(),
     };
-    if !entry.is_empty() && !is_safe_entry(&entry) {
+    if !entry.is_empty() && !is_safe_asset(&entry, ".mjs") {
         errors.push("entry must be a relative .mjs path inside the plugin".to_string());
     }
 
