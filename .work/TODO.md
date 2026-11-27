@@ -17,6 +17,7 @@
 - [x] **文件夹页设置改右侧栏**:ContainerView 内加右侧面板槽(固定 480,内容 flex 挤),齿轮开面板不再弹窗;浏览器实测面板成型无弹窗。
 - [x] **设置页偶发打不开根修**:用户展开贴出真身 `items is not iterable`(Firefox 报变量名)→ `AppSelect.findSelected` 迭代到 undefined `items`(异步空窗);修组件自卫(`safeItems`,非数组渲空列表＋dev 警告,不再炸整页)。调用方未定位到具体一处(10 余轮无复现),此修覆盖整类。
 - [x] **文件夹 loading 误导**:ContainerView 空数组即判空(抓取中也显示“无文档”插画);加 `loading` prop,三调用页(分类/文档/团队)传抓取态,加载中显示 spinner＋Loading,空才显示 NoContent;三态浏览器实测。另:用户截到的 CSS 报错是编辑中途 HMR 瞬态(已自愈,现状 lint 全绿)。
+- [x] **代码面板留空第三轮**:超长行＋Firefox 复现仍无(累计 7 组配置零复现)。改判滚动条角落:双滚动条交汇的 corner 方块默认亮色,深色面板右下角即浅块。补 `scrollbar-corner: transparent`。待用户确认(滚动代码时浅块不动＝角落,跟着动＝内容区)。
 - [x] **代码面板底部留空跟进**:首修(盒子/底色)后用户称仍有。Chromium×Firefox×明暗×长短六组全量无复现(底边 0px + 底部采样全落 code),改判滚动条:常显滚动条系统下原生亮色 track 横在面板底。pre 加细中性滚动条(Firefox `scrollbar-*`＋webkit 双份,明暗通用)。待用户确认。
 - [x] **插件用户隔离＋全局包**:0017 加 `owner_id`(NULL=全局)＋seq 代理主键,grants/KV 重键到行。用户装自己的(POST /api/plugins,50 上限,artifacts 命名空间隔离),admin 装全局;同 slug 自己优先;用户删号级联清行＋S3。admin 经 `?owner=` 可管任意行。UI:全员安装区、全局复选、scope 徽、owner 门控、fork/全局遮蔽自愈。scratch 库全链实测(isolation/shadow/grants/kill-switch/删号/S3 零残留)+UI 渲染。⚠️ 0017 与旧后端不兼容,须随本批代码同发版。
 - [x] **代码配色分明暗＋插件化**:`codeTheme` 单键拆 `codeThemeLight/Dark`(旧键退役,仅存活 1 天不做迁移),Appearance 双下拉。插件 `codeThemes[]`(18 vars 全必填,值字符集防注入,同 `themes` capability,manifest 内联零抓取),host 动态样式表＋卸载回落。dusk 包加 Ember 配色(v1.1.0)＋docs 教程。浏览器全链实测:安装→授权→双下拉出 Ember→选中 vars 生效→UI 卸载回落 palenight(本地即时＋后端同步)。
