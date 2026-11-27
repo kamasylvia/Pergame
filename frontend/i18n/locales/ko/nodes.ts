@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: '기본적으로 디렉터리 펼치기',
     copyTo: '복사…',
+    createdAt: '생성일',
     deleteSelected: '선택 삭제',
     dontAskAgain: '다시 묻지 않기',
     expandedDepth: '기본 펼침 깊이',
     loadMore: '더 보기',
     maxDepth: '최대 깊이 (0 = 무제한)',
+    modifiedAt: '수정일',
     moveMessage: '"{name}"을(를) "{target}"(으)로 이동하시겠습니까?',
     referencedBy: '참조됨',
     references: '참조',

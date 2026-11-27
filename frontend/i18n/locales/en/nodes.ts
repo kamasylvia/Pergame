@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: 'Expand directories by default',
     copyTo: 'Copy to…',
+    createdAt: 'Created at',
     deleteSelected: 'Delete selected',
     dontAskAgain: "Don't ask again",
     expandedDepth: 'Default expanded depth',
     loadMore: 'Load more',
     maxDepth: 'Maximum depth (0 = unlimited)',
+    modifiedAt: 'Modified at',
     moveMessage: 'Move "{name}" into "{target}"?',
     referencedBy: 'Referenced by',
     references: 'References',

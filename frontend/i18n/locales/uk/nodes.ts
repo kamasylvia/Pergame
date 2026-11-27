@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: 'Розгортати каталоги за замовчуванням',
     copyTo: 'Копіювати до…',
+    createdAt: 'Створено',
     deleteSelected: 'Видалити вибрані',
     dontAskAgain: 'Більше не питати',
     expandedDepth: 'Глибина розгортання за замовчуванням',
     loadMore: 'Завантажити ще',
     maxDepth: 'Максимальна глибина (0 = без обмежень)',
+    modifiedAt: 'Змінено',
     moveMessage: 'Перемістити "{name}" до "{target}"?',
     referencedBy: 'Посилаються',
     references: 'Посилання',

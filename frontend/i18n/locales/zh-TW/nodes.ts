@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: '預設展開目錄',
     copyTo: '複製到…',
+    createdAt: '建立時間',
     deleteSelected: '刪除所選',
     dontAskAgain: '不再詢問',
     expandedDepth: '預設展開層級',
     loadMore: '載入更多',
     maxDepth: '最大目錄層級（0 = 不限）',
+    modifiedAt: '修改時間',
     moveMessage: '將「{name}」移到「{target}」？',
     referencedBy: '被引用自',
     references: '引用',

@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: 'Verzeichnisse standardmäßig erweitern',
     copyTo: 'Kopieren nach…',
+    createdAt: 'Erstellt am',
     deleteSelected: 'Auswahl löschen',
     dontAskAgain: 'Nicht erneut fragen',
     expandedDepth: 'Standard-Erweiterungstiefe',
     loadMore: 'Mehr laden',
     maxDepth: 'Maximale Tiefe (0 = unbegrenzt)',
+    modifiedAt: 'Geändert am',
     moveMessage: '„{name}“ nach „{target}“ verschieben?',
     referencedBy: 'Referenziert von',
     references: 'Verweise',

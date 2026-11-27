@@ -18,8 +18,8 @@
     <div v-if="loading && !children.length" class="tree-loading">{{ t('common.status.loading') }}</div>
     <template v-else-if="children.length">
       <div v-if="showCreated || showUpdated" class="cols-header">
-        <span v-if="showCreated">{{ t('components.filter.created') }}</span>
-        <span v-if="showUpdated">{{ t('components.filter.modified') }}</span>
+      <span v-if="showCreated">{{ t('nodes.directory.createdAt') }}</span>
+      <span v-if="showUpdated">{{ t('nodes.directory.modifiedAt') }}</span>
       </div>
       <ul class="tree-roots">
       <NodeDirectoryTreeRow v-for="child in children" :key="child.id" :node="child" :depth="0" :sort="sort">

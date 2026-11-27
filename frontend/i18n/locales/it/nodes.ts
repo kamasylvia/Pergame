@@ -39,11 +39,13 @@ export default {
   directory: {
     autoExpand: 'Espandi le cartelle per impostazione predefinita',
     copyTo: 'Copia in…',
+    createdAt: 'Creato il',
     deleteSelected: 'Elimina selezionati',
     dontAskAgain: 'Non chiedere più',
     expandedDepth: 'Profondità di espansione predefinita',
     loadMore: 'Carica altri',
     maxDepth: 'Profondità massima (0 = illimitata)',
+    modifiedAt: 'Modificato il',
     moveMessage: 'Spostare "{name}" in "{target}"?',
     referencedBy: 'Referenziato da',
     references: 'Riferimenti',
