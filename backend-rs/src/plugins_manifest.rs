@@ -5,8 +5,9 @@
 //! before `import()`, but a hostile upload never gets that far.
 //!
 //! Rules mirror `frontend/app/services/plugins/manifest.ts` (PS-A):
-//! slug id, semver, matching contract major, capability allow-list, and an
-//! entry that stays inside the plugin root.
+//! slug id, semver, matching contract major, capability allow-list, an
+//! entry that stays inside the plugin root (optional for themes-only
+//! plugins), and validated `themes` declarations.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,13 +16,28 @@ use serde_json::Value;
 pub const HOST_API_VERSION: u32 = 1;
 
 /// Capabilities the host knows how to enforce.
-const STATIC_CAPABILITIES: [&str; 5] = [
+const STATIC_CAPABILITIES: [&str; 6] = [
     "nodes:read",
     "nodes:write",
     "ui",
     "markdown:render",
     "settings",
+    "themes",
 ];
+
+/// One manifest-declared app theme (pure CSS, no JS needed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginTheme {
+    /// Theme slug, unique within the plugin (host qualifies it as `plugin:theme`).
+    pub id: String,
+    /// Display name in the theme list.
+    pub name: String,
+    /// Light-mode declaration file, relative to the plugin root.
+    pub file: String,
+    /// Optional dark-mode declaration file (light applies to both when absent).
+    #[serde(rename = "darkFile", default, skip_serializing_if = "Option::is_none")]
+    pub dark_file: Option<String>,
+}
 
 /// Parsed, validated manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,9 +47,13 @@ pub struct PluginManifest {
     pub version: String,
     #[serde(rename = "apiVersion")]
     pub api_version: String,
+    /// Empty for themes-only plugins (no JS entry).
     pub entry: String,
     #[serde(default)]
     pub capabilities: Vec<String>,
+    /// Manifest-declared app themes (served via the asset route).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub themes: Vec<PluginTheme>,
     #[serde(
         rename = "minHostVersion",
         default,
@@ -90,6 +110,21 @@ fn is_safe_entry(entry: &str) -> bool {
         return false;
     }
     entry.split('/').all(|segment| {
+        !segment.is_empty()
+            && segment != "."
+            && segment != ".."
+            && segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    })
+}
+
+/// A relative `.css` path that stays inside the plugin root.
+fn is_safe_css(path: &str) -> bool {
+    if !path.ends_with(".css") || path.contains('\\') {
+        return false;
+    }
+    path.split('/').all(|segment| {
         !segment.is_empty()
             && segment != "."
             && segment != ".."
@@ -182,8 +217,63 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         ));
     }
 
-    let entry = string_field(raw, "entry").unwrap_or_else(|| "main.mjs".to_string());
-    if !is_safe_entry(&entry) {
+    let mut themes: Vec<PluginTheme> = Vec::new();
+    match raw.get("themes") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(items)) => {
+            for (i, item) in items.iter().enumerate() {
+                let tag = format!("themes[{i}]");
+                let tid = string_field(item, "id").unwrap_or_default();
+                if tid.is_empty() {
+                    errors.push(format!("{tag}.id is required"));
+                    continue;
+                } else if !is_slug(&tid) {
+                    errors.push(format!("{tag}.id must be a lowercase slug"));
+                    continue;
+                } else if themes.iter().any(|t: &PluginTheme| t.id == tid) {
+                    errors.push(format!("{tag}.id '{tid}' is duplicated"));
+                    continue;
+                }
+                let tname = string_field(item, "name").unwrap_or_default();
+                if tname.is_empty() {
+                    errors.push(format!("{tag}.name is required"));
+                    continue;
+                }
+                let file = string_field(item, "file").unwrap_or_default();
+                if file.is_empty() {
+                    errors.push(format!("{tag}.file is required"));
+                    continue;
+                } else if !is_safe_css(&file) {
+                    errors.push(format!("{tag}.file must be a relative .css path inside the plugin"));
+                    continue;
+                }
+                let dark_file = string_field(item, "darkFile");
+                if let Some(d) = &dark_file
+                    && !is_safe_css(d)
+                {
+                    errors.push(format!(
+                        "{tag}.darkFile must be a relative .css path inside the plugin"
+                    ));
+                    continue;
+                }
+                themes.push(PluginTheme {
+                    id: tid,
+                    name: tname,
+                    file,
+                    dark_file,
+                });
+            }
+        }
+        Some(_) => errors.push("themes must be an array".to_string()),
+    }
+
+    // Themes-only plugins ship no JS: entry may be omitted only then.
+    let entry = match string_field(raw, "entry") {
+        Some(e) => e,
+        None if !themes.is_empty() => String::new(),
+        None => "main.mjs".to_string(),
+    };
+    if !entry.is_empty() && !is_safe_entry(&entry) {
         errors.push("entry must be a relative .mjs path inside the plugin".to_string());
     }
 
@@ -223,6 +313,7 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         api_version,
         entry,
         capabilities,
+        themes,
         min_host_version,
         author: string_field(raw, "author"),
         description: string_field(raw, "description"),
@@ -329,5 +420,55 @@ mod tests {
         assert!(!is_slug("-demo"));
         assert!(!is_slug("demo_2"));
         assert!(!is_slug(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn themes_only_manifest_needs_no_entry() {
+        let m = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "capabilities": ["themes"],
+            "themes": [{"id": "mid", "name": "Mid", "file": "mid.css", "darkFile": "mid-dark.css"}]
+        }))
+        .expect("valid");
+        assert!(m.entry.is_empty());
+        assert_eq!(m.themes.len(), 1);
+        assert_eq!(m.themes[0].dark_file.as_deref(), Some("mid-dark.css"));
+    }
+
+    #[test]
+    fn theme_rules() {
+        // missing name
+        let err = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "themes": [{"id": "mid", "file": "mid.css"}]
+        }))
+        .expect_err("must reject");
+        assert!(err.iter().any(|e| e.contains("themes[0].name")), "{err:?}");
+        // traversal + wrong extension
+        for file in ["../evil.css", "a.css/nested.mjs", "x.js"] {
+            let err = validate(&json!({
+                "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+                "themes": [{"id": "mid", "name": "M", "file": file}]
+            }))
+            .expect_err("must reject");
+            assert!(err.iter().any(|e| e.contains("themes[0].file")), "{file}: {err:?}");
+        }
+        // duplicate theme id
+        let err = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "themes": [
+                {"id": "mid", "name": "M", "file": "a.css"},
+                {"id": "mid", "name": "M2", "file": "b.css"}
+            ]
+        }))
+        .expect_err("must reject");
+        assert!(err.iter().any(|e| e.contains("duplicated")), "{err:?}");
+        // non-array
+        let err = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "themes": {"id": "mid"}
+        }))
+        .expect_err("must reject");
+        assert!(err.iter().any(|e| e.contains("themes must be an array")), "{err:?}");
     }
 }

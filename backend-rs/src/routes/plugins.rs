@@ -315,11 +315,27 @@ pub async fn install_plugin(
     let manifest: PluginManifest = plugins_manifest::validate(&raw).map_err(|errors| {
         ApiError::BadRequest(format!("invalid manifest: {}", errors.join("; ")))
     })?;
-    if !files.iter().any(|f| f.path == manifest.entry) {
+    if !manifest.entry.is_empty() && !files.iter().any(|f| f.path == manifest.entry) {
         return Err(ApiError::BadRequest(format!(
             "entry '{}' is missing from the archive",
             manifest.entry
         )));
+    }
+    for theme in &manifest.themes {
+        if !files.iter().any(|f| f.path == theme.file) {
+            return Err(ApiError::BadRequest(format!(
+                "theme '{}' file '{}' is missing from the archive",
+                theme.id, theme.file
+            )));
+        }
+        if let Some(dark) = &theme.dark_file
+            && !files.iter().any(|f| &f.path == dark)
+        {
+            return Err(ApiError::BadRequest(format!(
+                "theme '{}' dark file '{dark}' is missing from the archive",
+                theme.id
+            )));
+        }
     }
 
     let storage = state.storage.as_ref().ok_or_else(|| {
