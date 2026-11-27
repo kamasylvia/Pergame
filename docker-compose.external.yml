@@ -15,6 +15,8 @@
 #   3) 手工建库(backend 只跑 migration,不建库):
 #        docker exec -it <pg容器> psql -U postgres -c 'CREATE DATABASE pergame;'
 #   4) 确认 S3 桶存在(backend 会自动建,但不会改已有桶的归属)
+#   5) web-clipper 的 browser render 通道(可选):需要 camofox-mcp stack 先建好
+#      camofox 网络,再解开下方 backend networks 与顶层 networks 里的两处 camofox 注释
 #
 # 启动:
 #   docker compose -f docker-compose.external.yml up -d
@@ -77,6 +79,7 @@ services:
     networks:
       - default   # 应用网络(top-level 里改名为 pergame)
       - postgres
+      # - camofox   # render 通道直达(容器 DNS 名 camofox-mcp);见前置 5)
 
   # --------------------------------------------------------------- frontend
   frontend:
@@ -104,6 +107,9 @@ networks:
   # 已有的外部网络,pg 容器在其中;compose 不创建也不删除它
   postgres:
     external: true
+  # camofox-mcp / camofox-browser 所在网络(其 stack 创建);见前置 5)
+  #camofox:
+  #  external: true
 
 volumes:
   pergame_cache:
