@@ -26,6 +26,8 @@ export default {
   },
 
   appearance: {
+    appTheme: '앱 테마',
+    appThemeDesc: '앱 전체의 색상 테마(내장 또는 테마 플러그인 제공).',
     chooseAccentColor: '강조 색상 선택',
     codeTheme: '코드 블록 테마',
     codeThemeDesc: '코드 블록과 미리보기에 사용할 구문 강조 팔레트입니다.',

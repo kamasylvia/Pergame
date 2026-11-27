@@ -27,6 +27,8 @@ export default {
   },
 
   appearance: {
+    appTheme: 'App-Theme',
+    appThemeDesc: 'Farbthema für die gesamte App (eingebaut oder aus einem Theme-Plugin).',
     chooseAccentColor: 'Akzentfarbe wählen',
     codeTheme: 'Codeblock-Design',
     codeThemeDesc: 'Syntax-Hervorhebung für Codeblöcke und Vorschauen.',

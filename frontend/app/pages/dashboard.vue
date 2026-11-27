@@ -19,6 +19,7 @@ const { setAppColor, themeColor } = useAppColors();
 const { locale: i18nLocale, loadLocaleMessages } = useI18n();
 const { isLoading } = useAppState();
 useStyleInjection(); // Custom styles for the app and documents
+useAppTheme(); // App chrome theme (built-in or plugin)
 const { initGlobalListeners, destroyGlobalListeners } = useCommandCenter();
 
 const primaryColor = preferences.get('primaryColor');

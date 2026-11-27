@@ -42,6 +42,16 @@ const options = computed(
             ],
           },
           {
+            label: t('settings.appearance.appTheme'),
+            description: t('settings.appearance.appThemeDesc'),
+            type: 'select' as const,
+            key: 'appTheme' as const,
+            choices: appThemeRegistry.value.map(theme => ({
+              label: theme.origin === 'builtin' ? theme.name : `${theme.name} (${theme.originName ?? theme.origin})`,
+              id: theme.id,
+            })),
+          },
+          {
             label: t('settings.appearance.setLanguage'),
             description: t('settings.appearance.setLanguageDesc'),
             type: 'select' as const,

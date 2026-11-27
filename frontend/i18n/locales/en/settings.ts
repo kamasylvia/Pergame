@@ -26,6 +26,8 @@ export default {
   },
 
   appearance: {
+    appTheme: 'App theme',
+    appThemeDesc: 'Color theme for the whole app (built-in or from a theme plugin).',
     chooseAccentColor: 'Choose accent color',
     codeTheme: 'Code block theme',
     codeThemeDesc: 'Syntax highlighting palette used in code blocks and previews.',

@@ -26,6 +26,8 @@ export default {
   },
 
   appearance: {
+    appTheme: '应用主题',
+    appThemeDesc: '整个应用的颜色主题（内置或主题插件提供）。',
     chooseAccentColor: '选择强调色',
     codeTheme: '代码块配色',
     codeThemeDesc: '代码块与代码预览使用的语法高亮配色。',

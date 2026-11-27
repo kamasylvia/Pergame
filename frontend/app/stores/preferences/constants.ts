@@ -21,6 +21,7 @@ export const DEFAULT_PREFERENCES = {
   docSize: 1 as number, // 0 = small, 1 = large
   style: 'default' as 'default' | 'glassmorphism',
   theme: 'pergame' as string,
+  appTheme: 'default' as string, // app chrome theme id (default = built-in, or plugin theme id)
   codeTheme: 'palenight' as string, // syntax palette: palenight | dracula | github-light | solarized-light
   imgbedPrivate: false as boolean, // image host applies to private notes (opt-in)
   documentAutoSave: true as boolean, // Enable automatic saving of documents
@@ -121,6 +122,7 @@ export const GENERAL_KEYS: PreferenceKey[] = [
   'docSize',
   'style',
   'theme',
+  'appTheme',
   'codeTheme',
   'imgbedPrivate',
   'sidebarItems',
