@@ -14,7 +14,7 @@
       <AppButton type="secondary" small @click="download">{{ t('common.actions.download') }}</AppButton>
     </div>
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <pre v-else class="hljs code-panel-body"><code :class="`language-${lang}`" v-html="html" /></pre>
+    <pre v-else class="code-panel-body"><code class="hljs" :class="`language-${lang}`" v-html="html" /></pre>
   </section>
 </template>
 
@@ -119,8 +119,16 @@ function download() {
 .code-panel-body {
   flex: 1;
   margin: 0;
-  padding: 1rem;
+  padding: 0;
   overflow: auto;
+  // The inner code.hljs only covers its content height; paint the pre
+  // itself so short files don't leave a gap below the code.
+  background: var(--code-bg);
   font-size: 0.85rem;
+
+  // Single scroll container on the pre (doc-block parity).
+  code.hljs {
+    overflow-x: visible;
+  }
 }
 </style>
