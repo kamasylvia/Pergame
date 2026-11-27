@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use axum::Json;
 use axum::body::Bytes;
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
@@ -468,16 +468,16 @@ async fn install_inner(
 pub struct PluginPatch {
     pub enabled: bool,
 }
-
-/// Resolve one manageable global row (an admin's own fork is managed
-/// through the user path, like everyone else's).
-async fn global_row(
+/// Resolve one manageable row by scope. Admins address any row here via
+/// `?owner=` (a user uuid, or absent for the global row).
+async fn scoped_row(
     state: &AppState,
     auth: &AuthUser,
     slug: &str,
+    owner: Option<uuid::Uuid>,
 ) -> Result<repo::PluginRow, ApiError> {
     require_admin(auth)?;
-    repo::get_scoped(&state.db, None, slug)
+    repo::get_scoped(&state.db, owner, slug)
         .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))
@@ -495,14 +495,32 @@ async fn own_row(
         .ok_or_else(|| ApiError::NotFound("plugin not found".into()))
 }
 
-/// PATCH /admin/plugins/{id} — enable or disable a global plugin.
+#[derive(Debug, Deserialize)]
+pub struct OwnerQuery {
+    /// Owner uuid, or absent for the global row.
+    pub owner: Option<String>,
+}
+
+fn parse_owner(query: &OwnerQuery) -> Result<Option<uuid::Uuid>, ApiError> {
+    query
+        .owner
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| uuid::Uuid::parse_str(s).map_err(|_| ApiError::BadRequest("invalid owner".into())))
+        .transpose()
+}
+
+/// PATCH /admin/plugins/{id} — enable or disable one row (`?owner=` picks a
+/// user's row, absent picks the global one).
 pub async fn patch_plugin(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
+    Query(query): Query<OwnerQuery>,
     Json(body): Json<PluginPatch>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    patch_inner(&state, &auth, &id, body.enabled, true).await
+    let row = scoped_row(&state, &auth, &id, parse_owner(&query)?).await?;
+    patch_row(&state, &auth, &row, body.enabled).await
 }
 
 /// PATCH /plugins/{id} — enable or disable one of the caller's own plugins.
@@ -512,21 +530,16 @@ pub async fn patch_own_plugin(
     Path(id): Path<String>,
     Json(body): Json<PluginPatch>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    patch_inner(&state, &auth, &id, body.enabled, false).await
+    let row = own_row(&state, &auth, &id).await?;
+    patch_row(&state, &auth, &row, body.enabled).await
 }
 
-async fn patch_inner(
+async fn patch_row(
     state: &AppState,
     auth: &AuthUser,
-    slug: &str,
+    row: &repo::PluginRow,
     enabled: bool,
-    global: bool,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let row = if global {
-        global_row(state, auth, slug).await?
-    } else {
-        own_row(state, auth, slug).await?
-    };
     repo::set_enabled(&state.db, row.seq, enabled, crate::repo::nodes::now_ms())
         .await
         .map_err(ApiError::from)?;
@@ -534,19 +547,22 @@ async fn patch_inner(
         &state.db,
         Some(auth.user_id()),
         "plugin.enable",
-        &format!("plugin {slug} enabled={enabled}"),
+        &format!("plugin {} enabled={enabled}", row.id),
     )
     .await;
-    Ok(ApiOk::ok(json!({ "id": slug, "enabled": enabled })))
+    Ok(ApiOk::ok(json!({ "id": row.id, "enabled": enabled })))
 }
 
-/// DELETE /admin/plugins/{id} — uninstall a global plugin.
+/// DELETE /admin/plugins/{id} — uninstall one row (`?owner=` picks a
+/// user's row, absent picks the global one).
 pub async fn delete_plugin(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<String>,
+    Query(query): Query<OwnerQuery>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    delete_inner(&state, &auth, &id, true).await
+    let row = scoped_row(&state, &auth, &id, parse_owner(&query)?).await?;
+    delete_row(&state, &auth, &row).await
 }
 
 /// DELETE /plugins/{id} — uninstall one of the caller's own plugins.
@@ -555,21 +571,16 @@ pub async fn delete_own_plugin(
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    delete_inner(&state, &auth, &id, false).await
+    let row = own_row(&state, &auth, &id).await?;
+    delete_row(&state, &auth, &row).await
 }
 
 /// Uninstall one row (artifacts, grants and KV go too).
-async fn delete_inner(
+async fn delete_row(
     state: &AppState,
     auth: &AuthUser,
-    slug: &str,
-    global: bool,
+    row: &repo::PluginRow,
 ) -> Result<ApiOk<serde_json::Value>, ApiError> {
-    let row = if global {
-        global_row(state, auth, slug).await?
-    } else {
-        own_row(state, auth, slug).await?
-    };
     repo::delete(&state.db, row.seq).await.map_err(ApiError::from)?;
     if let Some(storage) = state.storage.as_ref() {
         storage.delete_prefix(&row.artifact_prefix).await;
@@ -578,10 +589,10 @@ async fn delete_inner(
         &state.db,
         Some(auth.user_id()),
         "plugin.uninstall",
-        &format!("uninstalled plugin {slug}"),
+        &format!("uninstalled plugin {}", row.id),
     )
     .await;
-    Ok(ApiOk::ok(json!({ "id": slug, "deleted": true })))
+    Ok(ApiOk::ok(json!({ "id": row.id, "deleted": true })))
 }
 
 #[derive(Debug, Deserialize)]
