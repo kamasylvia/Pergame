@@ -189,6 +189,32 @@ const toggle = (id: string) => {
 const selected = ref(new Set<string>());
 const anchorKey = ref<string | null>(null);
 
+// Right-click bridge (injected by SidebarItem rows): the context menu acts on
+// the whole multi-selection when the right-clicked row belongs to it, and
+// collapses the selection to that row otherwise (Finder/VSCode behavior).
+// Returns the selected nodes, or [] when collapsed to a single row.
+provide('sidebarTreeSelection', {
+  contextNodes(id: string): Node[] {
+    const rows = flatRows.value.filter((r): r is DataRow => !r.loading && selected.value.has(r.key));
+    if (rows.some(r => r.item.id === id)) {
+      const seen = new Set<string>();
+      const out: Node[] = [];
+      for (const r of rows) {
+        if (seen.has(r.item.data.id)) continue;
+        seen.add(r.item.data.id);
+        out.push(r.item.data);
+      }
+      return out;
+    }
+    const row = flatRows.value.find((r): r is DataRow => !r.loading && r.item.id === id);
+    if (row) {
+      selected.value = new Set([row.key]);
+      anchorKey.value = row.key;
+    }
+    return [];
+  },
+});
+
 function onRowClick(event: MouseEvent, key: string, flatIndex: number) {
   const row = flatRows.value[flatIndex];
   if (!row || row.loading || row.key !== key) return;

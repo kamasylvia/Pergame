@@ -32,6 +32,7 @@ export default {
     noDocuments: '문서를 찾을 수 없습니다',
     noDocumentsDescription: '이 카테고리에는 문서가 없습니다',
     noWorkspaces: '워크스페이스 또는 카테고리를 찾을 수 없습니다',
+    recentTab: '최근',
     searchPlaceholder: '워크스페이스 검색...',
     title: '워크스페이스 및 카테고리',
   },

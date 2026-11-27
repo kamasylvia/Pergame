@@ -59,7 +59,7 @@ import CreateCategoryModal from '../Modals/CreateCategory.vue';
 import type { Node } from '~/stores';
 import { nodeFullPath, resolveNodeLink } from '~/helpers/node';
 
-const props = defineProps<{ node: Node; contextMenu?: boolean; linkId?: string }>();
+const props = defineProps<{ node: Node; nodes?: Node[]; contextMenu?: boolean; linkId?: string }>();
 const emit = defineEmits(['close']);
 
 const nodeStore = useNodesStore();
@@ -117,14 +117,17 @@ async function action(name: string) {
     case 'duplicate':
       nodeStore.duplicate(props.node);
       break;
-    case 'delete':
+    case 'delete': {
+      const targets = props.nodes?.length ? props.nodes : [props.node];
+      const deletingOpen = typeof route.params?.id === 'string' && targets.some(n => n.id === route.params.id);
       modals.add(
         new Modal(shallowRef(NodeDeleteModal), {
-          props: { node: props.node, redirectTo: route.params?.id === props.node.id ? '/dashboard' : undefined },
+          props: { ...(targets.length > 1 ? { nodes: targets } : { node: targets[0] }), redirectTo: deletingOpen ? '/dashboard' : undefined },
           size: 'small',
         }),
       );
       break;
+    }
     case 'copyLink':
       navigator.clipboard.writeText(`${window.location.origin}${resolveNodeLink(props.node)}`);
       break;

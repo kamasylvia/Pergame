@@ -32,6 +32,7 @@ export default {
     noDocuments: 'Es wurden keine Dokumente gefunden',
     noDocumentsDescription: 'Es gibt keine Dokumente in dieser Kategorie',
     noWorkspaces: 'Es wurde kein Arbeitsbereich und keine Kategorie gefunden',
+    recentTab: 'Zuletzt',
     searchPlaceholder: 'Einen Arbeitsbereich suchen...',
     title: 'Arbeitsbereiche & Kategorien',
   },

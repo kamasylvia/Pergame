@@ -6,7 +6,9 @@
     <Sidebar />
     <MediumView>
       <Navbar />
-      <NuxtPage />
+      <div id="dashboard-scroll" class="dashboard-scroll">
+        <NuxtPage />
+      </div>
     </MediumView>
   </div>
 </template>
@@ -79,5 +81,20 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+// Page scroller: Navbar stays above it and never scrolls. TOC active-heading,
+// BackToTop and anchor scroll-padding all target this element (not #app).
+.dashboard-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-padding-top: 70px;
+}
+
+@media print {
+  .dashboard-scroll {
+    overflow: visible;
+  }
 }
 </style>

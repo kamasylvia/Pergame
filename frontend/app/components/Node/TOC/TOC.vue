@@ -106,7 +106,8 @@ const headers = computed(() => getHTMLHeaders());
 const headers_tree = computed(() => buildTree(getHeaders(headers.value)));
 
 onMounted(() => {
-  appElement.value = document.getElementById('app');
+  // dashboard-scroll is the page scroller (Navbar sits above it, #app no longer scrolls in dashboard).
+  appElement.value = document.getElementById('dashboard-scroll');
   appElement.value?.addEventListener('scroll', updateActiveHeader, { passive: true });
 });
 onBeforeUnmount(() => appElement.value?.removeEventListener('scroll', updateActiveHeader));
@@ -146,7 +147,8 @@ function updateActiveHeader() {
   flex-direction: column;
   gap: 32px;
   width: 280px;
-  max-height: calc(100vh - 80px);
+  // 40px top + 56px navbar above the scroller; 16px above the fold.
+  max-height: calc(100vh - 112px);
   padding: 0 24px;
   overflow-y: auto;
 }

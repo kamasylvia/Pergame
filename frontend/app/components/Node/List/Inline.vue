@@ -19,7 +19,7 @@
           d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
         />
       </svg>
-      <span class="date">{{ shortDate(document.updated_timestamp) }}</span>
+      <span class="date">{{ shortDate(displayDate) }}</span>
     </footer>
   </div>
 </template>
@@ -29,13 +29,15 @@ import DeleteDocumentModal from '~/components/Node/Modals/Delete.vue';
 import NodeContextMenu from '~/components/Node/Action/ContextMenu.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ document: Node }>();
+const props = defineProps<{ document: Node; showViewed?: boolean }>();
 
 const categoriesStore = useNodesStore();
 const userStore = useUserStore();
 
 const { shortDate } = useDateFormatters();
 const { getAppAccent } = useAppColors();
+const viewedTimestamp = computed(() => (props.document as unknown as { viewed_timestamp?: number }).viewed_timestamp);
+const displayDate = computed(() => (props.showViewed && viewedTimestamp.value ? viewedTimestamp.value : props.document.updated_timestamp));
 const modals = useModal();
 const contextMenu = useContextMenu();
 
@@ -59,23 +61,11 @@ const openContextMenu = (event: MouseEvent) => {
   display: flex;
   flex-direction: column;
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  background: var(--surface-base);
+  border-bottom: 1px solid var(--border);
   transition: background $transition-fast ease;
 
-  &:first-child {
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
-  }
-
   &:last-child {
-    border-bottom: 1px solid var(--border);
-    border-radius: 0 0 var(--radius-md) var(--radius-md);
-  }
-
-  &:only-child {
-    border-bottom: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-bottom: none;
   }
 
   &:hover {

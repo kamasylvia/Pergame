@@ -266,13 +266,13 @@ watch(documentId, () => {
 
 .doc-side {
   position: sticky;
-  top: 70px;
+  top: 14px;
   // Grow into freed space (hidden sidebar, wide screens); never squeeze
   // the doc below its basis, never collapse below usable width.
   flex: 1 1 560px;
   min-width: 380px;
-  // 70px clears the navbar; only 16px below (a symmetric 70px read as a
-  // gap under the panel).
+  // The scroller starts below the navbar, so 14px breathing room suffices
+  // (was 70px against the viewport); height keeps 16px above the fold.
   height: calc(100vh - 86px);
   margin-left: 20px;
 }

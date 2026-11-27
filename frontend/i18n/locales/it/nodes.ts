@@ -32,6 +32,7 @@ export default {
     noDocuments: 'Nessun documento trovato',
     noDocumentsDescription: 'Non ci sono documenti in questa categoria',
     noWorkspaces: 'Nessuna area di lavoro o categoria trovata',
+    recentTab: 'Recenti',
     searchPlaceholder: "Cerca un'area di lavoro...",
     title: 'Aree di lavoro e Categorie',
   },

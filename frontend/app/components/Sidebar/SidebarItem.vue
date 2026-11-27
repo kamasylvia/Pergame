@@ -57,6 +57,8 @@ const { getAppAccent } = useAppColors();
 const { isMobile } = useDevice();
 const contextMenu = useContextMenu();
 const mark = useMark();
+// Multi-selection bridge from the enclosing VirtualTree (null outside the file tree).
+const treeSelection = inject<{ contextNodes: (id: string) => Node[] } | null>('sidebarTreeSelection', null);
 
 const props = defineProps<{ item: SidebarItem; level: number }>();
 const isDragOver = ref<boolean>(false);
@@ -90,8 +92,10 @@ const onClick = (m: MouseEvent) => {
 
 function openContextMenu(event: MouseEvent) {
   if (props.item.data.role === -1) return; // Prevent context menu on nav items
+  const node = props.item.data as Node;
+  const selected = treeSelection?.contextNodes(props.item.id) ?? [];
   contextMenu.open(shallowRef(NodeContextMenu), event, {
-    props: { contextMenu: true, node: props.item.data as Node, linkId: (props.item as TreeItem<Node>).linkId },
+    props: { contextMenu: true, node, nodes: selected.length > 1 ? selected : undefined, linkId: (props.item as TreeItem<Node>).linkId },
   });
 }
 

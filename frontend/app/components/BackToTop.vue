@@ -3,17 +3,20 @@
 </template>
 
 <script setup lang="ts">
+// Dashboard pages scroll inside #dashboard-scroll (window never scrolls), so both
+// the visibility probe and the jump target that element. Previously window-based (dead).
+const scroller = () => document.getElementById('dashboard-scroll');
 const scrollTop = ref(0);
-const getScrollTop = () => window.scrollY || 0;
-const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+const getScrollTop = () => scroller()?.scrollTop || 0;
+const scrollToTop = () => scroller()?.scrollTo({ top: 0, behavior: 'smooth' });
 const show = computed(() => scrollTop.value > 300);
 const onScroll = () => (scrollTop.value = getScrollTop());
 
 onMounted(() => {
   scrollTop.value = getScrollTop();
-  document.addEventListener('scroll', onScroll);
+  scroller()?.addEventListener('scroll', onScroll, { passive: true });
 });
-onUnmounted(() => document.removeEventListener('scroll', onScroll));
+onUnmounted(() => scroller()?.removeEventListener('scroll', onScroll));
 </script>
 
 <style scoped lang="scss">

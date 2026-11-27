@@ -24,7 +24,7 @@
         <span>{{ shortDate(node.created_timestamp) }}</span>
       </div>
       <div class="footer-item">
-        <span>Updated : {{ shortDate(node.updated_timestamp) }}</span>
+        <span>{{ useViewedDate ? t('nodes.container.recentTab') : 'Updated' }} : {{ shortDate(displayDate) }}</span>
       </div>
     </footer>
   </div>
@@ -34,13 +34,17 @@
 import NodeContextMenu from '~/components/Node/Action/ContextMenu.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ node: Node }>();
+const props = defineProps<{ node: Node; showViewed?: boolean }>();
 
 const nodesStore = useNodesStore();
 const userStore = useUserStore();
 
 const { shortDate } = useDateFormatters();
 const { getAppAccent } = useAppColors();
+const { t } = useI18nT();
+const viewedTimestamp = computed(() => (props.node as unknown as { viewed_timestamp?: number }).viewed_timestamp);
+const useViewedDate = computed(() => props.showViewed && viewedTimestamp.value != null);
+const displayDate = computed(() => (useViewedDate.value && viewedTimestamp.value != null ? viewedTimestamp.value : props.node.updated_timestamp));
 const contextMenu = useContextMenu();
 
 userStore.fetchPublicUser(props.node.user_id);

@@ -2,7 +2,8 @@
   <div :class="{ 'sidebar-mask': isMobile && isOpened }" />
   <Resizable>
     <Dock v-if="!isMobile" />
-    <div ref="scroller" class="sidebar" :class="{ compact: compactMode }">
+    <div ref="sidebarRoot" class="sidebar" :class="{ compact: compactMode }">
+      <div class="sidebar-fixed">
       <section class="header">
         <span class="name">
           <IconApp />
@@ -42,9 +43,11 @@
       <SidebarWorkspaces :workspaces="workspaces" :teams="teams" />
       <CollapseItem v-for="item in navigationItems(sidebarItemsPrefs)" :key="item.id" :item="item" :root="true" />
       <hr style="width: 100%; margin: 5px 0" />
-
-      <VirtualTree v-if="tree.length" ref="virtualTree" :items="tree" :scroller="scroller" />
+      </div>
+      <div ref="scroller" class="sidebar-tree">
+      <VirtualTree v-if="tree.length" ref="virtualTree" :items="tree" :scroller="treeScroller" />
       <SidebarSkeleton v-else :is-loading="isLoading" />
+      </div>
     </div>
   </Resizable>
 </template>
@@ -77,6 +80,10 @@ const compactMode = preferences.get('compactMode');
 const sidebarItemsPrefs = preferences.get('sidebarItems');
 const route = useRoute();
 const scroller = ref<HTMLElement | null>(null);
+const sidebarRoot = ref<HTMLElement | null>(null);
+// Mobile keeps the legacy whole-sidebar scroll, so the virtual list tracks the
+// outer box there and the inner tree scroller on desktop.
+const treeScroller = computed(() => (isMobile.value ? sidebarRoot.value : scroller.value));
 const virtualTree = ref<{
   ensureVisible: (id: string) => Promise<boolean>;
   isRowInViewport: (id: string) => boolean;
@@ -247,12 +254,24 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .sidebar {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-height: 100%;
   padding: 0.5rem 0.2rem 0.5rem 0.5rem;
   font-family: $font-ui;
   background: var(--surface-base);
   backdrop-filter: var(--backdrop-blur) var(--backdrop-saturate);
+  overflow: hidden;
+}
+
+.sidebar-fixed {
+  flex-shrink: 0;
+}
+
+.sidebar-tree {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
 
@@ -357,4 +376,21 @@ input {
   height: 100vh;
   background-color: var(--overlay-backdrop);
 }
+
+@media (width < 768px) {
+  .sidebar {
+    display: block;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .sidebar::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+
+  .sidebar-tree {
+    overflow: visible;
+  }
+}
+
 </style>

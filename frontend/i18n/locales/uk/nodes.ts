@@ -32,6 +32,7 @@ export default {
     noDocuments: 'Документів не знайдено',
     noDocumentsDescription: 'У цій категорії немає документів',
     noWorkspaces: 'Просторів або категорій не знайдено',
+    recentTab: 'Нещодавні',
     searchPlaceholder: 'Шукати простір...',
     title: 'Простори та категорії',
   },

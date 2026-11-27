@@ -24,6 +24,7 @@ export interface SearchOptions {
   kanbanAssignStatus?: 'assigned' | 'unassigned' | 'all';
   boardId?: string;
   assignedUserId?: string;
+  sort?: boolean;
 }
 
 export interface FlatParams {
@@ -211,8 +212,8 @@ export const useNodesStore = defineStore('nodes', () => {
       return true;
     });
 
-    // --- Sort results ---
-    return filtered.sort(sortNodes);
+    // --- Sort results (skipped when the caller owns the order, e.g. DQL recent) ---
+    return options.sort === false ? filtered : filtered.sort(sortNodes);
   };
 
   /** Fetch one full row by id (deep links, link names, refresh-after-write). Merges, returns the live row. */

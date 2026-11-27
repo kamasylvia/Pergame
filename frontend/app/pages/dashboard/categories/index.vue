@@ -10,7 +10,7 @@
       </NuxtLink>
     </Teleport>
 
-    <div style="padding-bottom: 10px">
+    <div class="cat-search">
       <input v-model="filter" :placeholder="t('nodes.container.searchPlaceholder')" />
     </div>
     <div v-for="workspace in filteredItems" :key="workspace.id" class="workspace">
@@ -66,14 +66,21 @@ function deleteNode(node: TreeItem<Node>) {
   flex-direction: column;
   width: 100%;
   margin-bottom: 16px;
-  padding: 5px 15px;
-  border: var(--border) 1px solid;
-  border-radius: var(--radius-lg);
+  padding: 5px 0;
 }
 
 .wp-name {
   font-size: 15px;
   font-weight: bold;
+}
+
+.cat-search {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 8px;
+  padding: 8px 0;
+  background: var(--body-fixed);
 }
 
 input {

@@ -45,6 +45,48 @@ html[data-code-theme='dracula'] {
 	--code-tag: #ff79c6;
 }
 
+html[data-code-theme='tokyo-night'] {
+	--code-bg: #1a1b26;
+	--code-fg: #c0caf5;
+	--code-comment: #565f89;
+	--code-keyword: #bb9af7;
+	--code-type: #7aa2f7;
+	--code-literal: #ff9e64;
+	--code-attr: #e0af68;
+	--code-number: #ff9e64;
+	--code-string: #9ece6a;
+	--code-function: #7aa2f7;
+	--code-class: #e0af68;
+	--code-variable: #c0caf5;
+	--code-operator: #89ddff;
+	--code-section: #7aa2f7;
+	--code-addition: #9ece6a;
+	--code-deletion: #f7768e;
+	--code-meta: #89ddff;
+	--code-tag: #f7768e;
+}
+
+html[data-code-theme='nord'] {
+	--code-bg: #2e3440;
+	--code-fg: #d8dee9;
+	--code-comment: #4c566a;
+	--code-keyword: #81a1c1;
+	--code-type: #8fbcbb;
+	--code-literal: #b48ead;
+	--code-attr: #8fbcbb;
+	--code-number: #b48ead;
+	--code-string: #a3be8c;
+	--code-function: #88c0d0;
+	--code-class: #8fbcbb;
+	--code-variable: #d8dee9;
+	--code-operator: #81a1c1;
+	--code-section: #88c0d0;
+	--code-addition: #a3be8c;
+	--code-deletion: #bf616a;
+	--code-meta: #88c0d0;
+	--code-tag: #81a1c1;
+}
+
 html[data-code-theme='github-light'] {
 	--code-bg: #f6f8fa;
 	--code-fg: #24292f;
@@ -85,6 +127,48 @@ html[data-code-theme='solarized-light'] {
 	--code-deletion: #dc322f;
 	--code-meta: #268bd2;
 	--code-tag: #268bd2;
+}
+
+html[data-code-theme='one-light'] {
+	--code-bg: #fafafa;
+	--code-fg: #383a42;
+	--code-comment: #a0a1a7;
+	--code-keyword: #a626a4;
+	--code-type: #c18401;
+	--code-literal: #0184bc;
+	--code-attr: #986801;
+	--code-number: #986801;
+	--code-string: #50a14f;
+	--code-function: #4078f2;
+	--code-class: #c18401;
+	--code-variable: #e45649;
+	--code-operator: #0184bc;
+	--code-section: #4078f2;
+	--code-addition: #50a14f;
+	--code-deletion: #e45649;
+	--code-meta: #4078f2;
+	--code-tag: #e45649;
+}
+
+html[data-code-theme='catppuccin-latte'] {
+	--code-bg: #eff1f5;
+	--code-fg: #4c4f69;
+	--code-comment: #9ca0b0;
+	--code-keyword: #8839ef;
+	--code-type: #df8e1d;
+	--code-literal: #fe640b;
+	--code-attr: #1e66f5;
+	--code-number: #fe640b;
+	--code-string: #40a02b;
+	--code-function: #1e66f5;
+	--code-class: #df8e1d;
+	--code-variable: #dc8a78;
+	--code-operator: #179299;
+	--code-section: #1e66f5;
+	--code-addition: #40a02b;
+	--code-deletion: #d20f39;
+	--code-meta: #1e66f5;
+	--code-tag: #8839ef;
 }
 
 /* Block code */

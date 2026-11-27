@@ -95,6 +95,11 @@ export function recentSource(containerId: string): string {
   return `TABLE name, updated_timestamp, viewed_timestamp FROM "id:${containerId}" WHERE role = 3 SORT viewed_timestamp DESC LIMIT 10`;
 }
 
+/** Global recently-viewed docs (no FROM clause; backend FROM is optional). */
+export function globalRecentSource(): string {
+  return `TABLE name, updated_timestamp, viewed_timestamp WHERE role = 3 SORT viewed_timestamp DESC LIMIT 100`;
+}
+
 /** Run a DQL query against the nodes/query endpoint. */
 export async function runDqlQuery(apiBase: string, source: string): Promise<QueryResult> {
   const resp = await fetch(`${apiBase}/api/nodes/query`, {

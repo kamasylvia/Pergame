@@ -32,6 +32,7 @@ export default {
     noDocuments: 'Aucun document trouvé',
     noDocumentsDescription: "Il n'y a aucun document dans cette catégorie",
     noWorkspaces: 'Aucun espace de travail ou catégorie trouvé',
+    recentTab: 'Récents',
     searchPlaceholder: 'Rechercher un espace de travail...',
     title: 'Espaces de travail & Catégories',
   },

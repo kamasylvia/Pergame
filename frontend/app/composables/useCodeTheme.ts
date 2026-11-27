@@ -26,8 +26,12 @@ const SHEET_ID = 'code-theme-plugins';
 export const codeThemeRegistry = ref<CodePaletteSource[]>([
   { id: 'palenight', name: 'Palenight', origin: 'builtin' },
   { id: 'dracula', name: 'Dracula', origin: 'builtin' },
+  { id: 'tokyo-night', name: 'Tokyo Night', origin: 'builtin' },
+  { id: 'nord', name: 'Nord', origin: 'builtin' },
   { id: 'github-light', name: 'GitHub Light', origin: 'builtin' },
   { id: 'solarized-light', name: 'Solarized Light', origin: 'builtin' },
+  { id: 'one-light', name: 'One Light', origin: 'builtin' },
+  { id: 'catppuccin-latte', name: 'Catppuccin Latte', origin: 'builtin' },
 ]);
 
 export function registerCodePalette(palette: CodePaletteSource): void {

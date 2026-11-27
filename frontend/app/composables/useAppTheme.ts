@@ -14,6 +14,12 @@
  */
 import forestLight from '~/themes/forest-light.css?raw';
 import forestDark from '~/themes/forest-dark.css?raw';
+import oceanLight from '~/themes/ocean-light.css?raw';
+import oceanDark from '~/themes/ocean-dark.css?raw';
+import roseLight from '~/themes/rose-light.css?raw';
+import roseDark from '~/themes/rose-dark.css?raw';
+import slateLight from '~/themes/slate-light.css?raw';
+import slateDark from '~/themes/slate-dark.css?raw';
 
 export interface AppThemeSource {
   id: string;
@@ -33,6 +39,9 @@ const PRIMARY_RE = /--primary(-dark|-bg|-border)?\s*:\s*[^;]+;/g;
 export const appThemeRegistry = ref<AppThemeSource[]>([
   { id: 'default', name: 'Default', origin: 'builtin', light: '', dark: '' },
   { id: 'forest', name: 'Forest', origin: 'builtin', light: forestLight, dark: forestDark },
+  { id: 'ocean', name: 'Ocean', origin: 'builtin', light: oceanLight, dark: oceanDark },
+  { id: 'rose', name: 'Rose', origin: 'builtin', light: roseLight, dark: roseDark },
+  { id: 'slate', name: 'Slate', origin: 'builtin', light: slateLight, dark: slateDark },
 ]);
 
 export function registerAppTheme(theme: AppThemeSource): void {

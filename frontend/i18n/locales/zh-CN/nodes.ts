@@ -32,6 +32,7 @@ export default {
     noDocuments: '找不到文档',
     noDocumentsDescription: '此分类中没有任何文档',
     noWorkspaces: '找不到工作区或分类',
+    recentTab: '最近浏览',
     searchPlaceholder: '搜索工作区...',
     title: '工作区与分类',
   },

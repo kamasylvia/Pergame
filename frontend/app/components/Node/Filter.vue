@@ -28,7 +28,7 @@
           </div>
 
           <!-- Sort & Match -->
-          <div class="row">
+          <div v-if="!props.disableSort" class="row">
             <label class="row">
               <input v-model="sortOrder" type="radio" value="ascending" />
               <span>{{ t('components.filter.ascending') }}</span>
@@ -41,7 +41,7 @@
           </div>
 
           <div class="row">
-            <div style="flex: 1">
+            <div v-if="!props.disableSort" style="flex: 1">
               <label>{{ t('components.filter.sort') }}</label>
               <AppSelect v-model="sortKey" :items="SORT_OPTIONS" />
             </div>
@@ -92,7 +92,7 @@ import { parseTags } from '~/helpers/node';
 import type { Node, SearchOptions } from '~/stores';
 import type { KanbanMetadata } from '../Kanban/Board.vue';
 
-const props = defineProps<{ nodes: Node[]; boardId?: string; total?: number }>();
+const props = defineProps<{ nodes: Node[]; boardId?: string; total?: number; disableSort?: boolean }>();
 const totalCount = computed(() => props.total ?? props.nodes.length);
 const emit = defineEmits<{ (e: 'update:nodes', v: Node[]): void }>();
 
@@ -154,7 +154,7 @@ const assignedUserOptions = computed(() => {
   });
 });
 
-const filtered = computed(() => store.search(options.value, props.nodes));
+const filtered = computed(() => store.search({ ...options.value, sort: props.disableSort ? false : undefined }, props.nodes));
 
 const updatePanelPosition = () => {
   if (!root.value) return;

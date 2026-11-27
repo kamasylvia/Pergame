@@ -19,7 +19,7 @@
     </Teleport>
     <Teleport to="#navbar-actions">
       <AppBtnIcon v-if="view == 'kanban'" nav icon="reset" :tooltip="t('nodes.actions.resetBoard')" @click="resetKanban" />
-      <NodeFilter :nodes="nodes" :total="total" :board-id="view === 'kanban' ? parent?.id : undefined" @update:nodes="filteredNodes = $event" />
+      <NodeFilter :nodes="nodes" :total="total" :board-id="view === 'kanban' ? parent?.id : undefined" :disable-sort="props.disableSort" @update:nodes="filteredNodes = $event" />
       <AppBtnIcon
         v-if="parent?.shared && parent.user_id != connectedId"
         nav
@@ -70,12 +70,12 @@
 
       <!-- Table/List View -->
       <div v-else-if="view === 'table'" class="line-container">
-        <NodeListInline v-for="document of filteredNodes" :key="document.id" :document="document" class="line-item" />
+        <NodeListInline v-for="document of filteredNodes" :key="document.id" :document="document" :show-viewed="props.showViewed" class="line-item" />
       </div>
 
       <!-- Grid View -->
       <div v-else-if="view === 'list'" class="document-grid">
-        <NodeCard v-for="document in filteredNodes" :key="document.id" :node="document" />
+        <NodeCard v-for="document in filteredNodes" :key="document.id" :node="document" :show-viewed="props.showViewed" />
       </div>
 
       <!-- Kanban View -->
@@ -117,7 +117,7 @@ import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
 
-const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string; total?: number; loading?: boolean }>();
+const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string; total?: number; loading?: boolean; disableSort?: boolean; showViewed?: boolean }>();
 const total = computed(() => props.total ?? props.nodes.length);
 
 const nodesStore = useNodesStore();
@@ -222,7 +222,7 @@ function createDocumentInColumn(columnId: string) {
 
 .doc-side {
   position: sticky;
-  top: 70px;
+  top: 14px;
   flex: 0 1 480px;
   min-width: 340px;
   height: calc(100vh - 140px);

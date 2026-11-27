@@ -32,6 +32,7 @@ export default {
     noDocuments: 'No documents found',
     noDocumentsDescription: 'There are no documents in this category',
     noWorkspaces: 'No workspace or category found',
+    recentTab: 'Recent',
     searchPlaceholder: 'Search a workspace...',
     title: 'Workspaces & Categories',
   },
