@@ -271,7 +271,9 @@ watch(documentId, () => {
   // the doc below its basis, never collapse below usable width.
   flex: 1 1 560px;
   min-width: 380px;
-  height: calc(100vh - 140px);
+  // 70px clears the navbar; only 16px below (a symmetric 70px read as a
+  // gap under the panel).
+  height: calc(100vh - 86px);
   margin-left: 20px;
 }
 </style>
