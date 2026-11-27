@@ -39,6 +39,23 @@ pub struct PluginTheme {
     pub dark_file: Option<String>,
 }
 
+/// The 18 `--code-*` slots a palette must fill (mirrors code-hljs.scss).
+pub const CODE_VAR_NAMES: [&str; 18] = [
+    "bg", "fg", "comment", "keyword", "type", "literal", "attr", "number", "string", "function",
+    "class", "variable", "operator", "section", "addition", "deletion", "meta", "tag",
+];
+
+/// One manifest-declared code palette (inline vars, no files needed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginCodeTheme {
+    /// Palette slug, unique within the plugin (host qualifies it as `plugin:code`).
+    pub id: String,
+    /// Display name in the palette list.
+    pub name: String,
+    /// All 19 code vars (`bg` → `--code-bg`, …).
+    pub vars: std::collections::HashMap<String, String>,
+}
+
 /// Parsed, validated manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
@@ -54,6 +71,9 @@ pub struct PluginManifest {
     /// Manifest-declared app themes (served via the asset route).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub themes: Vec<PluginTheme>,
+    /// Manifest-declared code palettes (inline vars, no files).
+    #[serde(rename = "codeThemes", default, skip_serializing_if = "Vec::is_empty")]
+    pub code_themes: Vec<PluginCodeTheme>,
     #[serde(
         rename = "minHostVersion",
         default,
@@ -116,6 +136,18 @@ fn is_safe_asset(path: &str, ext: &str) -> bool {
             && segment
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    })
+}
+
+/// A CSS var value that cannot break out of its declaration: short,
+/// colors/functions only — no `;{}` (breakout), no `@` (at-rules), no
+/// `<>` (markup), no quotes/backslash (string games), no `!` (!important).
+fn is_safe_css_value(value: &str) -> bool {
+    if value.is_empty() || value.len() > 64 {
+        return false;
+    }
+    value.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '#' | '(' | ')' | ',' | '.' | '%' | '/' | '+' | '-' | '*' | '_' | ' ')
     })
 }
 
@@ -252,10 +284,77 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         Some(_) => errors.push("themes must be an array".to_string()),
     }
 
+    let mut code_themes: Vec<PluginCodeTheme> = Vec::new();
+    match raw.get("codeThemes") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(items)) => {
+            for (i, item) in items.iter().enumerate() {
+                let tag = format!("codeThemes[{i}]");
+                let tid = string_field(item, "id").unwrap_or_default();
+                if tid.is_empty() {
+                    errors.push(format!("{tag}.id is required"));
+                    continue;
+                } else if !is_slug(&tid) {
+                    errors.push(format!("{tag}.id must be a lowercase slug"));
+                    continue;
+                } else if code_themes.iter().any(|t: &PluginCodeTheme| t.id == tid) {
+                    errors.push(format!("{tag}.id '{tid}' is duplicated"));
+                    continue;
+                }
+                let tname = string_field(item, "name").unwrap_or_default();
+                if tname.is_empty() {
+                    errors.push(format!("{tag}.name is required"));
+                    continue;
+                }
+                let mut vars = std::collections::HashMap::new();
+                let mut vars_ok = true;
+                match item.get("vars") {
+                    Some(Value::Object(map)) => {
+                        for name in CODE_VAR_NAMES {
+                            match map.get(name).and_then(Value::as_str).map(str::trim) {
+                                Some(v) if !v.is_empty() => {
+                                    if !is_safe_css_value(v) {
+                                        errors.push(format!("{tag}.vars.{name} is not a safe CSS value"));
+                                        vars_ok = false;
+                                    } else {
+                                        vars.insert(name.to_string(), v.to_string());
+                                    }
+                                }
+                                _ => {
+                                    errors.push(format!("{tag}.vars.{name} is required"));
+                                    vars_ok = false;
+                                }
+                            }
+                        }
+                        for key in map.keys() {
+                            if !CODE_VAR_NAMES.contains(&key.as_str()) {
+                                errors.push(format!("{tag}.vars.{key} is not a known code var"));
+                                vars_ok = false;
+                            }
+                        }
+                    }
+                    _ => {
+                        errors.push(format!("{tag}.vars must be an object"));
+                        vars_ok = false;
+                    }
+                }
+                if !vars_ok {
+                    continue;
+                }
+                code_themes.push(PluginCodeTheme {
+                    id: tid,
+                    name: tname,
+                    vars,
+                });
+            }
+        }
+        Some(_) => errors.push("codeThemes must be an array".to_string()),
+    }
+
     // Themes-only plugins ship no JS: entry may be omitted only then.
     let entry = match string_field(raw, "entry") {
         Some(e) => e,
-        None if !themes.is_empty() => String::new(),
+        None if !themes.is_empty() || !code_themes.is_empty() => String::new(),
         None => "main.mjs".to_string(),
     };
     if !entry.is_empty() && !is_safe_asset(&entry, ".mjs") {
@@ -299,6 +398,7 @@ pub fn validate(raw: &Value) -> Result<PluginManifest, Vec<String>> {
         entry,
         capabilities,
         themes,
+        code_themes,
         min_host_version,
         author: string_field(raw, "author"),
         description: string_field(raw, "description"),
@@ -455,5 +555,74 @@ mod tests {
         }))
         .expect_err("must reject");
         assert!(err.iter().any(|e| e.contains("themes must be an array")), "{err:?}");
+    }
+
+    fn full_code_vars() -> serde_json::Value {
+        let mut map = serde_json::Map::new();
+        for name in CODE_VAR_NAMES {
+            map.insert(name.to_string(), serde_json::Value::String("#112233".to_string()));
+        }
+        serde_json::Value::Object(map)
+    }
+
+    #[test]
+    fn code_themes_only_manifest_needs_no_entry() {
+        let m = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "capabilities": ["themes"],
+            "codeThemes": [{"id": "rose", "name": "Rose", "vars": full_code_vars()}]
+        }))
+        .expect("valid");
+        assert!(m.entry.is_empty());
+        assert_eq!(m.code_themes.len(), 1);
+        assert_eq!(m.code_themes[0].vars.len(), 18);
+    }
+
+    #[test]
+    fn code_theme_rules() {
+        // missing var
+        let mut vars = full_code_vars();
+        vars.as_object_mut().unwrap().remove("bg");
+        let err = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "codeThemes": [{"id": "rose", "name": "R", "vars": vars}]
+        }))
+        .expect_err("must reject");
+        assert!(err.iter().any(|e| e.contains("codeThemes[0].vars.bg is required")), "{err:?}");
+        // unknown var
+        let mut vars = full_code_vars();
+        vars.as_object_mut().unwrap().insert("evil".to_string(), json!("#fff"));
+        let err = validate(&json!({
+            "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+            "codeThemes": [{"id": "rose", "name": "R", "vars": vars}]
+        }))
+        .expect_err("must reject");
+        assert!(err.iter().any(|e| e.contains("not a known code var")), "{err:?}");
+        // declaration breakout attempts
+        for evil in [
+            "#fff; --x: red",
+            "red } html { display: none",
+            "url(http://evil.test/x)",
+            "red !important",
+        ] {
+            let mut vars = full_code_vars();
+            vars.as_object_mut().unwrap().insert("fg".to_string(), json!(evil));
+            let err = validate(&json!({
+                "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+                "codeThemes": [{"id": "rose", "name": "R", "vars": vars}]
+            }))
+            .expect_err("must reject");
+            assert!(err.iter().any(|e| e.contains("not a safe CSS value")), "{evil}: {err:?}");
+        }
+        // functional color notations pass
+        for ok in ["#abc", "#aabbcc", "#aabbccdd", "rgb(1, 2, 3)", "rgba(1,2,3,0.5)", "hsl(0 0% 0% / 50%)", "red"] {
+            let mut vars = full_code_vars();
+            vars.as_object_mut().unwrap().insert("fg".to_string(), json!(ok));
+            validate(&json!({
+                "id": "demo", "name": "D", "version": "0.1.0", "apiVersion": "1",
+                "codeThemes": [{"id": "rose", "name": "R", "vars": vars}]
+            }))
+            .expect("valid");
+        }
     }
 }
