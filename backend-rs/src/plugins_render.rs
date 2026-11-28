@@ -524,7 +524,7 @@ struct CliPageState {
 pub async fn render_page_builtin(
     cli_path: &str,
     url: &str,
-    wait_selector: Option<&str>,
+    _wait_selector: Option<&str>,
     html_selector: Option<&str>,
     cookie: Option<&str>,
     wait_seconds: u64,

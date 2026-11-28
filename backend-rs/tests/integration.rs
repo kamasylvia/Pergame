@@ -176,27 +176,6 @@ async fn cleanup_user(user_id: &str) {
     }
 }
 
-/// Raw row removal for paths the API deliberately forbids (index files are
-/// locked server-side, issue #4). Used to reproduce pre-feature folders.
-async fn db_delete_node(id: &str) {
-    let host = std::env::var("DATABASE_HOST").expect("DATABASE_HOST");
-    let port = std::env::var("DATABASE_PORT").unwrap_or_else(|_| "5432".into());
-    let db = std::env::var("DATABASE_NAME").expect("DATABASE_NAME");
-    let user = std::env::var("DATABASE_USER").expect("DATABASE_USER");
-    let pass = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD");
-    let dsn = format!("postgresql://{user}:{pass}@{host}:{port}/{db}");
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&dsn)
-        .await
-        .expect("test database connection");
-    sqlx::query("DELETE FROM nodes WHERE id = $1")
-        .bind(id.parse::<uuid::Uuid>().expect("node uuid"))
-        .execute(&pool)
-        .await
-        .expect("delete node row");
-}
-
 async fn signup_and_login_tagged(client: &Client, tag: &str) -> (String, String) {
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

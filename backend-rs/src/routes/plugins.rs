@@ -1098,13 +1098,11 @@ pub async fn render_page(
                 tokio::time::timeout(std::time::Duration::from_secs(budget), fut).await
             }
             _ => {
-                // Engine is normalized above, so external_config is always
-                // Some here; unwrap_or_else keeps a hostile KV value from
-                // panicking the render task instead of failing the job.
-                let config = external_config.unwrap_or_else(|| {
-                    crate::plugins_render::CamoufoxConfig::from_kv(&map)
-                        .expect("external engine selected but camoufox_url missing")
-                });
+                // `external_config` is Some whenever engine != "builtin" (a
+                // missing camoufox_url 400s before the task spawns).
+                let Some(config) = external_config else {
+                    unreachable!("engine is normalized; external arm implies config")
+                };
                 let budget = wait_seconds + 240;
                 let fut = crate::plugins_render::render_page(
                     config,
