@@ -40,7 +40,7 @@ const items = [
   { label: 'CDN', icon: 'cdn', to: '/dashboard/cdn' },
   { label: 'Import', icon: 'import', to: '/dashboard/import', mark: 'new-imports' },
   { label: 'Diagrams', icon: 'format/diagrams', to: '/dashboard/cdn/diagram' },
-  { label: 'Trash', icon: 'archive', to: '/dashboard/trash' },
+  { label: 'Trash', icon: 'delete', to: '/dashboard/trash' },
   { label: 'Admin', icon: 'users', to: '/dashboard/admin', adminOnly: true },
 ];
 

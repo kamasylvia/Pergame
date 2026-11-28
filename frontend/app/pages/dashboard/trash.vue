@@ -1,6 +1,6 @@
 <template>
   <div class="page-card">
-    <Teleport to="#navbar-title"><Icon name="archive" display="lg" />{{ t('trash.title') }}</Teleport>
+    <Teleport to="#navbar-title"><Icon name="delete" display="lg" />{{ t('trash.title') }}</Teleport>
 
     <Teleport to="#navbar-actions">
       <AppButton :disabled="loading" type="secondary" @click="reload">{{ t('trash.refresh') }}</AppButton>
