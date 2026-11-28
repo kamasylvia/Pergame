@@ -12,9 +12,10 @@ Organize, search, share and export your notes from any device, even offline.
 [![GitHub Repo stars](https://img.shields.io/github/stars/kamasylvia/Pergame?style=for-the-badge)](https://github.com/kamasylvia/Pergame/stargazers)
 [![GitHub release](https://img.shields.io/github/v/release/kamasylvia/Pergame?style=for-the-badge)](https://github.com/kamasylvia/Pergame/releases)
 [![GitHub license](https://img.shields.io/github/license/kamasylvia/Pergame?style=for-the-badge)](https://github.com/kamasylvia/Pergame/blob/main/LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/UPsEg6egPj)
 
 </div>
+
+> **Fork note:** Pergame is a friendly fork of [Alexandrie](https://github.com/Smaug6739/Alexandrie) by Smaug6739, kept for personal use and professional workflows. Upstream copyright and sponsorship links are preserved; see [How Pergame differs](#how-pergame-differs) for what changed.
 
 ## Why Pergame?
 
@@ -24,7 +25,21 @@ Pergame is an open-source self-hosted wiki and knowledge management platform bui
 - **Advanced Markdown Engine:** Native support for LaTeX, custom containers, interactive checkboxes, frames, snippets, and integrated diagram building.
 - **Granular Organization:** Multi-tenant architecture supporting Teams, Workspaces, Categories, and nested Documents.
 - **Offline-First PWA:** Install on any desktop or mobile device with full offline capabilities and seamless synchronization.
-- **Production Ready:** Built-in OpenID Connect (OIDC) SSO providers, automated full-system backup/restore pipelines, and a robust media storage architecture.
+- **Production Ready:** Built-in OpenID Connect (OIDC) SSO providers, automated backup/restore pipelines, and a robust media storage architecture.
+
+## How Pergame differs
+
+What the fork changed on top of Alexandrie:
+
+- **Rust backend + PostgreSQL:** The Go/MySQL server was rewritten in Rust (Axum + sqlx/Toasty) on PostgreSQL, with SQL migrations shipped inside the binary.
+- **Plugin system:** Sandboxed frontend plugins with a capability model (commands, ribbons, Markdown extensions, KV, settings UI), an admin registry, and official plugins (daily note, recent files, web clipper).
+- **MCP server:** A built-in Model Context Protocol endpoint so AI assistants can browse the tree and read notes and files.
+- **Dataview queries:** A small DQL engine (`TABLE/LIST … FROM … WHERE … SORT … LIMIT`) powering `dataview` code blocks, container overviews, and recently-viewed tables.
+- **Themes:** Switchable app-chrome themes plus per-mode syntax palettes, built in or contributed by plugins.
+- **Navigation:** Lazy directory tree with backlinks, drag-to-reorder and bulk ops, a global Recently-viewed tab, and a sticky navbar/sidebar layout.
+- **Backup & trash:** Portable ZIP snapshots to per-user S3/WebDAV targets with scheduled runs, plus a trash bin with retention sweeps.
+- **Private storage by default:** Buckets stay private; reads go through the backend with auth, range support, disk cache and ETag revalidation. Object-store settings use neutral `S3_*` names (RustFS, MinIO, Garage, QuObjects, AWS).
+- **Release pipeline:** Versioned `linux/amd64` images on GHCR, deployed by pulling (no build on the server); an external compose file reuses existing PostgreSQL and S3 instead of starting new ones.
 
 ## Core Features
 
@@ -94,10 +109,12 @@ docker compose up -d
 
 Open <http://localhost:8200> to create your primary owner account.
 
+Already run PostgreSQL and S3? Use `docker-compose.external.yml` instead: it starts only the app and plugs into your existing services (all settings inline, no `.env` needed).
+
 For advanced local development guidelines and technical architecture details, please refer to [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/kamasylvia">kamasylvia</a> and contributors.</sub>
+  <sub>Built with ❤️ by <a href="https://github.com/kamasylvia">kamasylvia</a> and contributors. Upstream project: <a href="https://github.com/Smaug6739/Alexandrie">Alexandrie</a>.</sub>
 </div>
